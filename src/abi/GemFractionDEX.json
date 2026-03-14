@@ -1,0 +1,526 @@
+{
+  "contractName": "GemFractionDEX",
+  "address": "0xDBcEbf6A85857be12b91FE685685d43C64E7823a",
+  "network": "opBNB",
+  "chainId": 204,
+  "deployedAt": "2026-03-09",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "_dctToken",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "_fractionalGem",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "_marketingWallet",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "_referralPool",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "constructor"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "lotId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "fractions",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "priceDCT",
+          "type": "uint256"
+        }
+      ],
+      "name": "createSellOrder",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "orderId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "fractions",
+          "type": "uint256"
+        }
+      ],
+      "name": "fillSellOrder",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "orderId",
+          "type": "uint256"
+        }
+      ],
+      "name": "cancelSellOrder",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "orderId",
+          "type": "uint256"
+        }
+      ],
+      "name": "emergencyCancelOrder",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "id",
+          "type": "uint256"
+        }
+      ],
+      "name": "sellOrders",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "orderId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "lotId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "address",
+          "name": "seller",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "fractions",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "pricePerFractionDCT",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bool",
+          "name": "active",
+          "type": "bool"
+        },
+        {
+          "internalType": "uint64",
+          "name": "createdAt",
+          "type": "uint64"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "lotId",
+          "type": "uint256"
+        }
+      ],
+      "name": "getActiveSellOrders",
+      "outputs": [
+        {
+          "internalType": "tuple[]",
+          "name": "",
+          "type": "tuple[]",
+          "components": [
+            {
+              "internalType": "uint256",
+              "name": "orderId",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "lotId",
+              "type": "uint256"
+            },
+            {
+              "internalType": "address",
+              "name": "seller",
+              "type": "address"
+            },
+            {
+              "internalType": "uint256",
+              "name": "fractions",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "pricePerFractionDCT",
+              "type": "uint256"
+            },
+            {
+              "internalType": "bool",
+              "name": "active",
+              "type": "bool"
+            },
+            {
+              "internalType": "uint64",
+              "name": "createdAt",
+              "type": "uint64"
+            }
+          ]
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "id",
+          "type": "uint256"
+        }
+      ],
+      "name": "getOrder",
+      "outputs": [
+        {
+          "internalType": "tuple",
+          "name": "",
+          "type": "tuple",
+          "components": [
+            {
+              "internalType": "uint256",
+              "name": "orderId",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "lotId",
+              "type": "uint256"
+            },
+            {
+              "internalType": "address",
+              "name": "seller",
+              "type": "address"
+            },
+            {
+              "internalType": "uint256",
+              "name": "fractions",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "pricePerFractionDCT",
+              "type": "uint256"
+            },
+            {
+              "internalType": "bool",
+              "name": "active",
+              "type": "bool"
+            },
+            {
+              "internalType": "uint64",
+              "name": "createdAt",
+              "type": "uint64"
+            }
+          ]
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "orderCount",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "TRADE_FEE_BP",
+      "outputs": [
+        {
+          "internalType": "uint16",
+          "name": "",
+          "type": "uint16"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "MIN_ORDER_PRICE",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "w",
+          "type": "address"
+        }
+      ],
+      "name": "setMarketingWallet",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "r",
+          "type": "address"
+        }
+      ],
+      "name": "setReferralPool",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "name": "recoverStuckTokens",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "pause",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "unpause",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "owner",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "newOwner",
+          "type": "address"
+        }
+      ],
+      "name": "transferOwnership",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bytes",
+          "name": "",
+          "type": "bytes"
+        }
+      ],
+      "name": "onERC1155Received",
+      "outputs": [
+        {
+          "internalType": "bytes4",
+          "name": "",
+          "type": "bytes4"
+        }
+      ],
+      "stateMutability": "pure",
+      "type": "function"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "orderId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "internalType": "uint256",
+          "name": "lotId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "internalType": "address",
+          "name": "seller",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "internalType": "uint256",
+          "name": "fractions",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "price",
+          "type": "uint256"
+        }
+      ],
+      "name": "SellOrderCreated",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "orderId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "internalType": "address",
+          "name": "buyer",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "internalType": "uint256",
+          "name": "fractions",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "dctPaid",
+          "type": "uint256"
+        }
+      ],
+      "name": "SellOrderFilled",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "orderId",
+          "type": "uint256",
+          "indexed": true
+        }
+      ],
+      "name": "SellOrderCancelled",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "previousOwner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "internalType": "address",
+          "name": "newOwner",
+          "type": "address",
+          "indexed": true
+        }
+      ],
+      "name": "OwnershipTransferred",
+      "type": "event"
+    }
+  ]
+}
