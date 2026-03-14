@@ -1,0 +1,1648 @@
+{
+  "contractName": "FractionalGem",
+  "address": "0x42EF377d9BD455FCa7298a55798C2c083507E65B",
+  "network": "opBNB",
+  "chainId": 204,
+  "deployedAt": "2026-03-09",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "_dctToken",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "_usdt",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "_privateMailbox",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "_referralPool",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "_supplierWallet",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "_marketingWallet",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "_authorWallet",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "_techWallet",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "constructor"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "caratX100",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "costNoCert",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "costCert",
+          "type": "uint256"
+        }
+      ],
+      "name": "setPriceEntry",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "caratX100",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bool",
+          "name": "cert",
+          "type": "bool"
+        }
+      ],
+      "name": "getClubPrice",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "caratX100",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bool",
+          "name": "cert",
+          "type": "bool"
+        }
+      ],
+      "name": "getWholesalePrice",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "caratX100",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bool",
+          "name": "cert",
+          "type": "bool"
+        }
+      ],
+      "name": "getMarketPrice",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "c",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bool",
+          "name": "cert",
+          "type": "bool"
+        }
+      ],
+      "name": "getPriceInfo",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "cost",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "club",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "ws",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "mkt",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "getRegisteredCarats",
+      "outputs": [
+        {
+          "internalType": "uint256[]",
+          "name": "",
+          "type": "uint256[]"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "gemId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint16",
+          "name": "caratX100",
+          "type": "uint16"
+        },
+        {
+          "internalType": "string",
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "internalType": "string",
+          "name": "imageURI",
+          "type": "string"
+        },
+        {
+          "internalType": "bool",
+          "name": "certified",
+          "type": "bool"
+        },
+        {
+          "internalType": "uint8",
+          "name": "certLab",
+          "type": "uint8"
+        },
+        {
+          "internalType": "string",
+          "name": "certNumber",
+          "type": "string"
+        },
+        {
+          "internalType": "uint256",
+          "name": "totalFractions",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "fractionPriceDCT",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint16",
+          "name": "stakingAPR",
+          "type": "uint16"
+        },
+        {
+          "internalType": "uint256",
+          "name": "stakingDays",
+          "type": "uint256"
+        },
+        {
+          "internalType": "address",
+          "name": "lotSupplier",
+          "type": "address"
+        }
+      ],
+      "name": "createLot",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "lotId",
+          "type": "uint256"
+        }
+      ],
+      "name": "startFundraising",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "lotId",
+          "type": "uint256"
+        }
+      ],
+      "name": "buyWholeGem",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "purchaseId",
+          "type": "uint256"
+        }
+      ],
+      "name": "requestDelivery",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "lotId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "name": "buyFractions",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "lotId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "jewelryCost",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint8",
+          "name": "mode",
+          "type": "uint8"
+        }
+      ],
+      "name": "requestJewelryProduction",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "lotId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "amountUSDT",
+          "type": "uint256"
+        }
+      ],
+      "name": "fundJewelryProduction",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "lotId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "profitUSDT",
+          "type": "uint256"
+        }
+      ],
+      "name": "addCycleProfit",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "lotId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "amountUSDT",
+          "type": "uint256"
+        }
+      ],
+      "name": "fundStakingReserve",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "lotId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "address",
+          "name": "user",
+          "type": "address"
+        }
+      ],
+      "name": "getClaimableStaking",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "lotId",
+          "type": "uint256"
+        }
+      ],
+      "name": "claimStaking",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "lotId",
+          "type": "uint256"
+        }
+      ],
+      "name": "voteForSale",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "lotId",
+          "type": "uint256"
+        }
+      ],
+      "name": "forceForSale",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "lotId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "saleAmountUSDT",
+          "type": "uint256"
+        }
+      ],
+      "name": "confirmSale",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "lotId",
+          "type": "uint256"
+        }
+      ],
+      "name": "claimSaleProceeds",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "lotId",
+          "type": "uint256"
+        }
+      ],
+      "name": "emergencyClaimStaking",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "p",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "amt",
+          "type": "uint256"
+        },
+        {
+          "internalType": "string",
+          "name": "reason",
+          "type": "string"
+        }
+      ],
+      "name": "emergencyRefundToPartner",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "getLotCount",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "id",
+          "type": "uint256"
+        }
+      ],
+      "name": "getLotInfo",
+      "outputs": [
+        {
+          "internalType": "tuple",
+          "name": "l",
+          "type": "tuple",
+          "components": [
+            {
+              "internalType": "uint256",
+              "name": "gemId",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint16",
+              "name": "caratX100",
+              "type": "uint16"
+            },
+            {
+              "internalType": "string",
+              "name": "name",
+              "type": "string"
+            },
+            {
+              "internalType": "string",
+              "name": "imageURI",
+              "type": "string"
+            },
+            {
+              "internalType": "uint8",
+              "name": "certLab",
+              "type": "uint8"
+            },
+            {
+              "internalType": "string",
+              "name": "certNumber",
+              "type": "string"
+            },
+            {
+              "internalType": "bool",
+              "name": "certified",
+              "type": "bool"
+            },
+            {
+              "internalType": "uint256",
+              "name": "costPrice",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "clubPrice",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "wholesalePrice",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "totalFractions",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "soldFractions",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "fractionPriceDCT",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint8",
+              "name": "mode",
+              "type": "uint8"
+            },
+            {
+              "internalType": "uint16",
+              "name": "stakingAPR",
+              "type": "uint16"
+            },
+            {
+              "internalType": "uint64",
+              "name": "stakingStartedAt",
+              "type": "uint64"
+            },
+            {
+              "internalType": "uint256",
+              "name": "stakingDays",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "totalCycleProfit",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint8",
+              "name": "cyclesCompleted",
+              "type": "uint8"
+            },
+            {
+              "internalType": "uint256",
+              "name": "jewelryCost",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "jewelryFunded",
+              "type": "uint256"
+            },
+            {
+              "internalType": "bool",
+              "name": "jewelryActive",
+              "type": "bool"
+            },
+            {
+              "internalType": "uint256",
+              "name": "saleAmountUSDT",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint8",
+              "name": "status",
+              "type": "uint8"
+            },
+            {
+              "internalType": "address",
+              "name": "lotSupplier",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "lotOriginator",
+              "type": "address"
+            }
+          ]
+        },
+        {
+          "internalType": "uint256",
+          "name": "sr",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "tv",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "id",
+          "type": "uint256"
+        },
+        {
+          "internalType": "address",
+          "name": "u",
+          "type": "address"
+        }
+      ],
+      "name": "getUserLotInfo",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "fr",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "cl",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bool",
+          "name": "v",
+          "type": "bool"
+        },
+        {
+          "internalType": "uint256",
+          "name": "pct",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "id",
+          "type": "uint256"
+        }
+      ],
+      "name": "getLotCostPrice",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "id",
+          "type": "uint256"
+        }
+      ],
+      "name": "getLotOriginator",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "id",
+          "type": "uint256"
+        }
+      ],
+      "name": "getLotCyclesCompleted",
+      "outputs": [
+        {
+          "internalType": "uint8",
+          "name": "",
+          "type": "uint8"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "id",
+          "type": "uint256"
+        }
+      ],
+      "name": "getLotStatus",
+      "outputs": [
+        {
+          "internalType": "uint8",
+          "name": "",
+          "type": "uint8"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "holderFractions",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "stakingReserveUSDT",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "directPurchaseCount",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "directPurchaseBuyer",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "directPurchaseLot",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "directPurchaseDeliveryRequested",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "jewelryInvestment",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "lotCount",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "MAX_CYCLES",
+      "outputs": [
+        {
+          "internalType": "uint8",
+          "name": "",
+          "type": "uint8"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "VERSION",
+      "outputs": [
+        {
+          "internalType": "string",
+          "name": "",
+          "type": "string"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "account",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "id",
+          "type": "uint256"
+        }
+      ],
+      "name": "balanceOf",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address[]",
+          "name": "accounts",
+          "type": "address[]"
+        },
+        {
+          "internalType": "uint256[]",
+          "name": "ids",
+          "type": "uint256[]"
+        }
+      ],
+      "name": "balanceOfBatch",
+      "outputs": [
+        {
+          "internalType": "uint256[]",
+          "name": "",
+          "type": "uint256[]"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "operator",
+          "type": "address"
+        },
+        {
+          "internalType": "bool",
+          "name": "approved",
+          "type": "bool"
+        }
+      ],
+      "name": "setApprovalForAll",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "account",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "operator",
+          "type": "address"
+        }
+      ],
+      "name": "isApprovedForAll",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "from",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "id",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bytes",
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "name": "safeTransferFrom",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "from",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256[]",
+          "name": "ids",
+          "type": "uint256[]"
+        },
+        {
+          "internalType": "uint256[]",
+          "name": "amounts",
+          "type": "uint256[]"
+        },
+        {
+          "internalType": "bytes",
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "name": "safeBatchTransferFrom",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "s",
+          "type": "address"
+        }
+      ],
+      "name": "setShowcaseContract",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "w",
+          "type": "address"
+        }
+      ],
+      "name": "setSupplierWallet",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "w",
+          "type": "address"
+        }
+      ],
+      "name": "setMarketingWallet",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "w",
+          "type": "address"
+        }
+      ],
+      "name": "setAuthorWallet",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "w",
+          "type": "address"
+        }
+      ],
+      "name": "setTechWallet",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "p",
+          "type": "address"
+        }
+      ],
+      "name": "setReferralPool",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "m",
+          "type": "address"
+        }
+      ],
+      "name": "setPrivateMailbox",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "pause",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "unpause",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "owner",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "newOwner",
+          "type": "address"
+        }
+      ],
+      "name": "transferOwnership",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "lotId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "internalType": "uint16",
+          "name": "caratX100",
+          "type": "uint16"
+        },
+        {
+          "internalType": "bool",
+          "name": "certified",
+          "type": "bool"
+        }
+      ],
+      "name": "LotCreated",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "lotId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "internalType": "uint8",
+          "name": "newStatus",
+          "type": "uint8"
+        }
+      ],
+      "name": "LotStatusChanged",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "purchaseId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "internalType": "uint256",
+          "name": "lotId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "internalType": "address",
+          "name": "buyer",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "internalType": "uint256",
+          "name": "clubPrice",
+          "type": "uint256"
+        }
+      ],
+      "name": "DirectPurchase",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "purchaseId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "internalType": "address",
+          "name": "buyer",
+          "type": "address",
+          "indexed": true
+        }
+      ],
+      "name": "DeliveryRequested",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "lotId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "internalType": "address",
+          "name": "buyer",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "internalType": "uint256",
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "dctPaid",
+          "type": "uint256"
+        }
+      ],
+      "name": "FractionsPurchased",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "lotId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "internalType": "address",
+          "name": "user",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "internalType": "uint256",
+          "name": "amountUSDT",
+          "type": "uint256"
+        }
+      ],
+      "name": "StakingClaimed",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "lotId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "internalType": "uint256",
+          "name": "cost",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint8",
+          "name": "mode",
+          "type": "uint8"
+        }
+      ],
+      "name": "JewelryRequested",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "lotId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "internalType": "address",
+          "name": "funder",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "internalType": "uint256",
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "name": "JewelryFunded",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "lotId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "internalType": "uint256",
+          "name": "saleAmountUSDT",
+          "type": "uint256"
+        }
+      ],
+      "name": "LotSold",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "lotId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "internalType": "uint256",
+          "name": "amountUSDT",
+          "type": "uint256"
+        }
+      ],
+      "name": "StakingFunded",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "partner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "internalType": "uint256",
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "internalType": "string",
+          "name": "reason",
+          "type": "string"
+        }
+      ],
+      "name": "EmergencyRefund",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "operator",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "internalType": "address",
+          "name": "from",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "internalType": "address",
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "internalType": "uint256",
+          "name": "id",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "value",
+          "type": "uint256"
+        }
+      ],
+      "name": "TransferSingle",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "operator",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "internalType": "address",
+          "name": "from",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "internalType": "address",
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "internalType": "uint256[]",
+          "name": "ids",
+          "type": "uint256[]"
+        },
+        {
+          "internalType": "uint256[]",
+          "name": "values",
+          "type": "uint256[]"
+        }
+      ],
+      "name": "TransferBatch",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "account",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "internalType": "address",
+          "name": "operator",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "internalType": "bool",
+          "name": "approved",
+          "type": "bool"
+        }
+      ],
+      "name": "ApprovalForAll",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "previousOwner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "internalType": "address",
+          "name": "newOwner",
+          "type": "address",
+          "indexed": true
+        }
+      ],
+      "name": "OwnershipTransferred",
+      "type": "event"
+    }
+  ]
+}
