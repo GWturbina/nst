@@ -107,10 +107,6 @@ export const LEVEL_BACKGROUNDS = [
   { file: 'bg-empire.jpg',   overlay: 'rgba(20,15,0,0.30)',   glow: 'rgba(255,215,0,0.35)'   },
 ];
 
-export const LEADERBOARD = [
-  { name:'Александр К.', avatar:'👨‍💼', level:8, dct:4523, refs:12 },
-  { name:'Марина В.', avatar:'👩‍🔬', level:7, dct:3810, refs:9 },
-  { name:'Дмитрий С.', avatar:'🧔', level:6, dct:2750, refs:15 },
-  { name:'Елена П.', avatar:'👩‍💻', level:5, dct:1980, refs:7 },
-  { name:'Игорь М.', avatar:'👨‍🚀', level:5, dct:1820, refs:11 },
-];
+// FIX #13: Лидерборд загружается из /api/tournaments (dc_tournaments)
+// Статичные данные убраны — в production используются реальные данные
+export const LEADERBOARD = [];
