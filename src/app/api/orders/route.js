@@ -8,6 +8,7 @@
  */
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { verifyWallet } from '@/lib/authHelper'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY
@@ -53,6 +54,12 @@ export async function POST(request) {
   try {
     const body = await request.json()
     const { wallet, params } = body
+
+    // FIX #7: Проверка подписи кошелька
+    const verified = await verifyWallet(body)
+    if (!verified) {
+      return NextResponse.json({ ok: false, error: 'Неверная подпись кошелька' }, { status: 401 })
+    }
 
     // Валидация кошелька
     if (!wallet || !/^0x[a-fA-F0-9]{40}$/.test(wallet)) {
@@ -141,6 +148,12 @@ export async function PATCH(request) {
   try {
     const body = await request.json()
     const { orderId, newStatus, adminWallet, note } = body
+
+    // FIX #7: Проверка подписи кошелька админа
+    const verified = await verifyWallet(body, 'adminWallet')
+    if (!verified) {
+      return NextResponse.json({ ok: false, error: 'Неверная подпись кошелька' }, { status: 401 })
+    }
 
     // Валидация
     if (!adminWallet || !/^0x[a-fA-F0-9]{40}$/.test(adminWallet)) {
