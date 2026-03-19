@@ -7,8 +7,10 @@
  * 
  * FIX #5: linkOrderToBlockchain, linkOrderToLot, addAdminNote, addAdmin, removeAdmin
  *         теперь через серверный API /api/admin (service_role), а не через anon Supabase
+ * FIX #7: Все мутирующие запросы через authFetch (подпись кошелька)
  */
 import supabase from './supabase'
+import { authFetch } from './authClient'
 
 // ═══════════════════════════════════════════════════
 // ПАРТНЁР — Создание и просмотр заказов
@@ -23,10 +25,9 @@ import supabase from './supabase'
 export async function createOrder(wallet, params) {
   // FIX C2+C3+M4: Заказы создаются через серверный API (rate-limit + валидация)
   try {
-    const res = await fetch('/api/orders', {
+    const res = await authFetch('/api/orders', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ wallet, params }),
+      body: { wallet, params },
     })
     const data = await res.json()
     if (!res.ok || !data.ok) {
@@ -114,10 +115,9 @@ export async function getOrderCounts() {
  */
 export async function updateOrderStatus(orderId, newStatus, adminWallet, note = '') {
   try {
-    const res = await fetch('/api/orders', {
+    const res = await authFetch('/api/orders', {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ orderId, newStatus, adminWallet, note }),
+      body: { orderId, newStatus, adminWallet, note },
     })
     const data = await res.json()
     if (!res.ok || !data.ok) {
@@ -135,10 +135,9 @@ export async function updateOrderStatus(orderId, newStatus, adminWallet, note = 
  */
 export async function linkOrderToBlockchain(orderId, gemId, purchaseId, adminWallet) {
   try {
-    const res = await fetch('/api/admin', {
+    const res = await authFetch('/api/admin', {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'link_blockchain', orderId, gemId, purchaseId, adminWallet }),
+      body: { action: 'link_blockchain', orderId, gemId, purchaseId, adminWallet },
     })
     const data = await res.json()
     if (!res.ok || !data.ok) return { ok: false, error: data.error || 'Ошибка' }
@@ -154,10 +153,9 @@ export async function linkOrderToBlockchain(orderId, gemId, purchaseId, adminWal
  */
 export async function linkOrderToLot(orderId, lotId, adminWallet) {
   try {
-    const res = await fetch('/api/admin', {
+    const res = await authFetch('/api/admin', {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'link_lot', orderId, lotId, adminWallet }),
+      body: { action: 'link_lot', orderId, lotId, adminWallet },
     })
     const data = await res.json()
     if (!res.ok || !data.ok) return { ok: false, error: data.error || 'Ошибка' }
@@ -173,10 +171,9 @@ export async function linkOrderToLot(orderId, lotId, adminWallet) {
  */
 export async function addAdminNote(orderId, adminWallet, note) {
   try {
-    const res = await fetch('/api/admin', {
+    const res = await authFetch('/api/admin', {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'add_note', orderId, note, adminWallet }),
+      body: { action: 'add_note', orderId, note, adminWallet },
     })
     const data = await res.json()
     if (!res.ok || !data.ok) return { ok: false, error: data.error || 'Ошибка' }
@@ -283,10 +280,9 @@ export async function getAllAdmins() {
  */
 export async function addAdmin(wallet, role, name, maxAmount = 0, adminWallet) {
   try {
-    const res = await fetch('/api/admin', {
+    const res = await authFetch('/api/admin', {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'add_admin', wallet, role, name, maxAmount, adminWallet }),
+      body: { action: 'add_admin', wallet, role, name, maxAmount, adminWallet },
     })
     const data = await res.json()
     if (!res.ok || !data.ok) return { ok: false, error: data.error || 'Ошибка' }
@@ -302,10 +298,9 @@ export async function addAdmin(wallet, role, name, maxAmount = 0, adminWallet) {
  */
 export async function removeAdmin(wallet, adminWallet) {
   try {
-    const res = await fetch('/api/admin', {
+    const res = await authFetch('/api/admin', {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'remove_admin', wallet, adminWallet }),
+      body: { action: 'remove_admin', wallet, adminWallet },
     })
     const data = await res.json()
     if (!res.ok || !data.ok) return { ok: false, error: data.error || 'Ошибка' }
