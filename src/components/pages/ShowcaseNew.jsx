@@ -19,6 +19,7 @@ import { getUserLevel } from '@/lib/contracts'
 import { getAdminRole } from '@/lib/dcOrders'
 import { formatUSD } from '@/lib/gemCatalog'
 import { uploadShowcaseFile, compressImage } from '@/lib/showcaseStorage'
+import { authFetch } from '@/lib/authClient'
 
 const CATEGORIES = [
   { id: 'all',     label: 'Все' },
@@ -87,13 +88,12 @@ export default function ShowcaseNew() {
     setTxPending(true)
 
     try {
-      const res = await fetch('/api/showcase', {
+      const res = await authFetch('/api/showcase', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           wallet, type: tab, ...form,
           retailPrice: parseFloat(form.retailPrice) || parseFloat(form.clubPrice) * 2,
-        })
+        }
       })
       const data = await res.json()
       if (data.ok) {
@@ -111,13 +111,12 @@ export default function ShowcaseNew() {
     if (!sellModal || !buyerAddress) return
     setTxPending(true)
     try {
-      const res = await fetch('/api/showcase', {
+      const res = await authFetch('/api/showcase', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           id: sellModal.id, wallet, action: 'sell',
           buyerWallet: buyerAddress, deliveryAddress,
-        })
+        }
       })
       const data = await res.json()
       if (data.ok) {
@@ -135,10 +134,9 @@ export default function ShowcaseNew() {
   const handleHide = async (id) => {
     setTxPending(true)
     try {
-      const res = await fetch('/api/showcase', {
+      const res = await authFetch('/api/showcase', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, wallet, newStatus: 'hidden' })
+        body: { id, wallet, newStatus: 'hidden' }
       })
       const data = await res.json()
       if (data.ok) { addNotification('✅ Снято с витрины'); reload() }
