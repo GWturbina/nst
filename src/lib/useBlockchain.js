@@ -48,10 +48,14 @@ async function refreshDataForAddress(address) {
     try {
       const tokenInfo = await getDCTTokenInfo()
       if (tokenInfo) {
-        store.updateDCT(prev => ({
-          ...prev,
+        // FIX #8: updateDCT ожидает объект, не функцию
+        const current = store
+        store.updateDCT({
+          total: current.dct || 0,
+          locked: current.dctLocked || 0,
+          free: current.dctFree || 0,
           price: tokenInfo.price,
-        }))
+        })
       }
     } catch {}
 
