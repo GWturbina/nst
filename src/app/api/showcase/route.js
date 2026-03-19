@@ -6,6 +6,9 @@
  * PATCH  — обновить (статус, цена, продажа)
  * DELETE — удалить (только свои или админ)
  *
+ * FIX #2: Серверная проверка GW уровня через RPC (не доверяем фронтенду)
+ * FIX #3: AES-256-GCM шифрование адреса доставки вместо Base64
+ *
  * МАРКЕТИНГ ПРИ ПРОДАЖЕ (15% от маржи):
  *   5% — продавцу
  *   2% — авторские
@@ -15,6 +18,7 @@
  */
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import crypto from 'crypto'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY
@@ -22,6 +26,75 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY
 const supabase = supabaseUrl && supabaseServiceKey
   ? createClient(supabaseUrl, supabaseServiceKey)
   : null
+
+// ═══ FIX #3: AES-256-GCM шифрование ═══
+const ENCRYPTION_KEY = process.env.DELIVERY_ENCRYPTION_KEY || '' // 64 hex chars = 32 bytes
+
+function encryptAddress(plaintext) {
+  if (!ENCRYPTION_KEY || ENCRYPTION_KEY.length < 64) {
+    // Fallback — но логируем предупреждение
+    console.warn('DELIVERY_ENCRYPTION_KEY не задан или короткий! Адрес НЕ зашифрован.')
+    return Buffer.from(plaintext).toString('base64')
+  }
+  const key = Buffer.from(ENCRYPTION_KEY, 'hex')
+  const iv = crypto.randomBytes(12) // 96 бит для GCM
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv)
+  let encrypted = cipher.update(plaintext, 'utf8', 'hex')
+  encrypted += cipher.final('hex')
+  const tag = cipher.getAuthTag().toString('hex')
+  // Формат: iv:tag:ciphertext
+  return `${iv.toString('hex')}:${tag}:${encrypted}`
+}
+
+// ═══ FIX #2: Проверка GW уровня через RPC ═══
+const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || 'https://opbnb-mainnet-rpc.bnbchain.org'
+const NSS_PLATFORM_ADDR = '0xFb1ddFa8A7EAB0081EAe24ec3d24B0ED4Dd84f2B'
+
+// Минимальный ABI для проверки уровня
+const BRIDGE_ABI_FRAGMENT = [
+  'function getUserStatus(address user) external view returns (tuple(bool isRegistered, uint256 odixId, uint8 maxPackage, uint8 rank, bool quarterlyActive, address sponsor, bool[12] activeLevels))',
+]
+const NSS_ABI_FRAGMENT = [
+  'function bridge() external view returns (address)',
+]
+
+async function getGWLevel(walletAddress) {
+  try {
+    // Динамический импорт ethers (для серверного контекста)
+    const { ethers } = await import('ethers')
+    const provider = new ethers.JsonRpcProvider(RPC_URL)
+    
+    const nss = new ethers.Contract(NSS_PLATFORM_ADDR, NSS_ABI_FRAGMENT, provider)
+    const bridgeAddr = await nss.bridge()
+    
+    const bridge = new ethers.Contract(bridgeAddr, BRIDGE_ABI_FRAGMENT, provider)
+    const status = await bridge.getUserStatus(walletAddress)
+    
+    return {
+      isRegistered: status.isRegistered,
+      maxPackage: Number(status.maxPackage),
+    }
+  } catch (err) {
+    console.error('GW level check failed:', err.message)
+    return null
+  }
+}
+
+// Минимальный уровень для продажи/покупки (регулируется)
+const MIN_GW_LEVEL = parseInt(process.env.SHOWCASE_MIN_LEVEL || '4')
+
+// ═══ Проверка Origin ═══
+function checkOrigin(request) {
+  const origin = request.headers.get('origin') || request.headers.get('referer') || ''
+  const allowed = process.env.NEXT_PUBLIC_SITE_URL || ''
+  if (process.env.NODE_ENV === 'production' && allowed && !origin.startsWith(allowed)) {
+    return false
+  }
+  if (process.env.NODE_ENV === 'production' && !allowed) {
+    return false
+  }
+  return true
+}
 
 // Реферальные проценты (из контракта GemVaultV2)
 const REFERRAL_SHARES = [20, 15, 10, 10, 9, 8, 7, 6, 5] // 9 уровней, итого 90%
@@ -68,9 +141,6 @@ function calculateMarketing(purchasePrice, salePrice) {
   }
 }
 
-// Минимальный уровень для продажи/покупки (регулируется)
-const MIN_GW_LEVEL = parseInt(process.env.SHOWCASE_MIN_LEVEL || '4')
-
 // GET: список витрины
 export async function GET(request) {
   if (!supabase) return NextResponse.json({ ok: false, error: 'Сервер не настроен' }, { status: 503 })
@@ -104,6 +174,7 @@ export async function GET(request) {
 // POST: создать объявление
 export async function POST(request) {
   if (!supabase) return NextResponse.json({ ok: false, error: 'Сервер не настроен' }, { status: 503 })
+  if (!checkOrigin(request)) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 })
 
   try {
     const body = await request.json()
@@ -129,9 +200,16 @@ export async function POST(request) {
       if (!admin || !admin.active) {
         return NextResponse.json({ ok: false, error: 'Только администратор может создавать корпоративные объявления' }, { status: 403 })
       }
+    } else {
+      // FIX #2: Партнёрские — серверная проверка GW уровня через RPC
+      const gwStatus = await getGWLevel(wLower)
+      if (!gwStatus || !gwStatus.isRegistered) {
+        return NextResponse.json({ ok: false, error: 'Пользователь не зарегистрирован в GlobalWay' }, { status: 403 })
+      }
+      if (gwStatus.maxPackage < MIN_GW_LEVEL) {
+        return NextResponse.json({ ok: false, error: `Минимальный уровень для витрины: ${MIN_GW_LEVEL}. Ваш: ${gwStatus.maxPackage}` }, { status: 403 })
+      }
     }
-    // Для партнёрских — проверка уровня GW делается на фронтенде (через контракт)
-    // Здесь доверяем фронтенду, т.к. проверить GW уровень с сервера без RPC сложно
 
     // Проверка цены: клубная не выше 50% от розничной
     const rp = parseFloat(retailPrice) || 0
@@ -177,6 +255,7 @@ export async function POST(request) {
 // PATCH: обновить (продажа, статус, цена)
 export async function PATCH(request) {
   if (!supabase) return NextResponse.json({ ok: false, error: 'Сервер не настроен' }, { status: 503 })
+  if (!checkOrigin(request)) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 })
 
   try {
     const body = await request.json()
@@ -222,11 +301,9 @@ export async function PATCH(request) {
         sold_at: new Date().toISOString(),
       }
 
-      // Шифрованный адрес доставки
+      // FIX #3: AES-256-GCM шифрование адреса доставки
       if (deliveryAddress) {
-        // Простое шифрование Base64 (для продакшена — использовать AES)
-        const encrypted = Buffer.from(deliveryAddress).toString('base64')
-        updates.delivery_address_encrypted = encrypted
+        updates.delivery_address_encrypted = encryptAddress(deliveryAddress)
       }
 
       const { error } = await supabase
