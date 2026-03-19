@@ -39,6 +39,10 @@ function checkOrigin(request) {
   if (process.env.NODE_ENV === 'production' && allowed && !origin.startsWith(allowed)) {
     return false
   }
+  // FIX #6: если NEXT_PUBLIC_SITE_URL не задан в production — блокируем
+  if (process.env.NODE_ENV === 'production' && !allowed) {
+    return false
+  }
   return true
 }
 
