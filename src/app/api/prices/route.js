@@ -13,6 +13,19 @@ const supabase = supabaseUrl && supabaseServiceKey
   ? createClient(supabaseUrl, supabaseServiceKey)
   : null
 
+// FIX #6: Проверка Origin
+function checkOrigin(request) {
+  const origin = request.headers.get('origin') || request.headers.get('referer') || ''
+  const allowed = process.env.NEXT_PUBLIC_SITE_URL || ''
+  if (process.env.NODE_ENV === 'production' && allowed && !origin.startsWith(allowed)) {
+    return false
+  }
+  if (process.env.NODE_ENV === 'production' && !allowed) {
+    return false
+  }
+  return true
+}
+
 // ═══ Фиксированные клубные цены (defaults) ═══
 const DEFAULT_PRICES = {
   // Средняя чистота — без сертификата / с сертификатом
@@ -67,6 +80,7 @@ export async function GET() {
 // POST: обновить цены (только админ)
 export async function POST(request) {
   if (!supabase) return NextResponse.json({ ok: false, error: 'Сервер не настроен' }, { status: 503 })
+  if (!checkOrigin(request)) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 })
 
   try {
     const body = await request.json()
