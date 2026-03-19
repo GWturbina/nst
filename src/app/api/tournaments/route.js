@@ -20,6 +20,7 @@
  */
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { verifyWallet } from '@/lib/authHelper'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY
@@ -101,6 +102,13 @@ export async function POST(request) {
 
     if (!wallet || !/^0x[a-fA-F0-9]{40}$/.test(wallet)) {
       return NextResponse.json({ ok: false, error: 'Неверный кошелёк' }, { status: 400 })
+    }
+
+    // FIX #7: Проверка подписи — для admin-действий проверяем adminWallet, для tap — wallet
+    const authField = ADMIN_ONLY_ACTIONS.includes(action) ? 'adminWallet' : 'wallet'
+    const verified = await verifyWallet(body, authField)
+    if (!verified) {
+      return NextResponse.json({ ok: false, error: 'Неверная подпись кошелька' }, { status: 401 })
     }
 
     const wLower = wallet.toLowerCase()
