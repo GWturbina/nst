@@ -280,13 +280,13 @@ export function StaffAdmin() {
 
   const handleAdd = async () => {
     if (!newWallet) return
-    const result = await Orders.addAdmin(newWallet, newRole, newName, parseFloat(newLimit) || 0)
+    const result = await Orders.addAdmin(newWallet, newRole, newName, parseFloat(newLimit) || 0, wallet)
     if (result.ok) { addNotification(`✅ ${newName || shortAddress(newWallet)} добавлен как ${newRole}`); setShowAdd(false); setNewWallet(''); setNewName(''); setNewLimit(''); reload() }
     else addNotification(`❌ ${result.error}`)
   }
 
   const handleRemove = async (w) => {
-    const result = await Orders.removeAdmin(w)
+    const result = await Orders.removeAdmin(w, wallet)
     if (result.ok) { addNotification('✅ Деактивирован'); reload() }
     else addNotification(`❌ ${result.error}`)
   }
