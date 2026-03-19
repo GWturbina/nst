@@ -73,6 +73,15 @@ async function doConnect() {
   try {
     const result = await web3.connect()
     store.setWallet(result)
+
+    // FIX #7: Подписать сообщение для аутентификации API-запросов
+    try {
+      const auth = await web3.signAuthMessage()
+      store.setAuth(auth)
+    } catch (authErr) {
+      store.addNotification('⚠️ Подпись отклонена — API-функции недоступны')
+    }
+
     store.addNotification(`✅ Кошелёк: ${result.address.slice(0, 6)}...${result.address.slice(-4)}`)
     await refreshDataForAddress(result.address)
     startRefreshCycle(result.address)
