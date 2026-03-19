@@ -67,6 +67,10 @@ const useGameStore = create(
   ownerWallet: null,
   isAdmin: false,
 
+  // FIX #7: Подпись кошелька (не сохраняется между сессиями)
+  authSig: null,
+  authTs: null,
+
   // Курс BNB
   bnbPrice: 0,
   setBnbPrice: (price) => set({ bnbPrice: price }),
@@ -98,8 +102,12 @@ const useGameStore = create(
     level: 0,
     evapActive: false,
     evapSeconds: ENERGY_CONFIG.evapSeconds,
+    authSig: null, authTs: null, // FIX #7
   })),
   setConnecting: (v) => set({ isConnecting: v }),
+
+  // FIX #7: Установить подпись после подключения кошелька
+  setAuth: (authData) => set({ authSig: authData.authSig, authTs: authData.authTs }),
 
   // ═══════════════════════════════════════════════════
   // BLOCKCHAIN SYNC
