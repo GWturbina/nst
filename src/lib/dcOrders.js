@@ -4,6 +4,9 @@
  * 
  * Партнёр: создать заказ, оплатить, просмотреть свои заказы
  * Админ: утвердить, сменить статус, добавить заметку
+ * 
+ * FIX #5: linkOrderToBlockchain, linkOrderToLot, addAdminNote, addAdmin, removeAdmin
+ *         теперь через серверный API /api/admin (service_role), а не через anon Supabase
  */
 import supabase from './supabase'
 
@@ -128,55 +131,58 @@ export async function updateOrderStatus(orderId, newStatus, adminWallet, note = 
 
 /**
  * Привязать gem_id / purchase_id после создания камня в блокчейне
+ * FIX #5: через серверный API
  */
 export async function linkOrderToBlockchain(orderId, gemId, purchaseId, adminWallet) {
-  if (!supabase) return { ok: false, error: 'Supabase не подключён' }
   try {
-    const { error } = await supabase
-      .from('dc_orders')
-      .update({ gem_id: gemId, purchase_id: purchaseId })
-      .eq('id', orderId)
-    if (error) throw error
-    await addOrderLog(orderId, 'BLOCKCHAIN', adminWallet, `Привязано: gemId=${gemId}, purchaseId=${purchaseId}`)
+    const res = await fetch('/api/admin', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'link_blockchain', orderId, gemId, purchaseId, adminWallet }),
+    })
+    const data = await res.json()
+    if (!res.ok || !data.ok) return { ok: false, error: data.error || 'Ошибка' }
     return { ok: true }
   } catch (e) {
-    return { ok: false, error: e.message }
+    return { ok: false, error: e.message || 'Ошибка сети' }
   }
 }
 
 /**
  * Привязать lot_id для долевых заказов
+ * FIX #5: через серверный API
  */
 export async function linkOrderToLot(orderId, lotId, adminWallet) {
-  if (!supabase) return { ok: false, error: 'Supabase не подключён' }
   try {
-    const { error } = await supabase
-      .from('dc_orders')
-      .update({ lot_id: lotId })
-      .eq('id', orderId)
-    if (error) throw error
-    await addOrderLog(orderId, 'LOT_LINKED', adminWallet, `Лот #${lotId}`)
+    const res = await fetch('/api/admin', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'link_lot', orderId, lotId, adminWallet }),
+    })
+    const data = await res.json()
+    if (!res.ok || !data.ok) return { ok: false, error: data.error || 'Ошибка' }
     return { ok: true }
   } catch (e) {
-    return { ok: false, error: e.message }
+    return { ok: false, error: e.message || 'Ошибка сети' }
   }
 }
 
 /**
  * Добавить заметку (без смены статуса)
+ * FIX #5: через серверный API
  */
 export async function addAdminNote(orderId, adminWallet, note) {
-  if (!supabase) return { ok: false, error: 'Supabase не подключён' }
   try {
-    const { error } = await supabase
-      .from('dc_orders')
-      .update({ admin_note: note })
-      .eq('id', orderId)
-    if (error) throw error
-    await addOrderLog(orderId, 'NOTE', adminWallet, note)
+    const res = await fetch('/api/admin', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'add_note', orderId, note, adminWallet }),
+    })
+    const data = await res.json()
+    if (!res.ok || !data.ok) return { ok: false, error: data.error || 'Ошибка' }
     return { ok: true }
   } catch (e) {
-    return { ok: false, error: e.message }
+    return { ok: false, error: e.message || 'Ошибка сети' }
   }
 }
 
@@ -273,60 +279,45 @@ export async function getAllAdmins() {
 
 /**
  * Добавить админа (только owner)
+ * FIX #5: через серверный API
  */
-export async function addAdmin(wallet, role, name, maxAmount = 0) {
-  if (!supabase) return { ok: false, error: 'Supabase не подключён' }
+export async function addAdmin(wallet, role, name, maxAmount = 0, adminWallet) {
   try {
-    const { error } = await supabase
-      .from('dc_admins')
-      .upsert({
-        wallet: wallet.toLowerCase(),
-        role,
-        name: name || '',
-        max_amount: maxAmount,
-        active: true,
-      }, { onConflict: 'wallet' })
-    if (error) throw error
+    const res = await fetch('/api/admin', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'add_admin', wallet, role, name, maxAmount, adminWallet }),
+    })
+    const data = await res.json()
+    if (!res.ok || !data.ok) return { ok: false, error: data.error || 'Ошибка' }
     return { ok: true }
   } catch (e) {
-    return { ok: false, error: e.message }
+    return { ok: false, error: e.message || 'Ошибка сети' }
   }
 }
 
 /**
  * Удалить/деактивировать админа
+ * FIX #5: через серверный API
  */
-export async function removeAdmin(wallet) {
-  if (!supabase) return { ok: false, error: 'Supabase не подключён' }
+export async function removeAdmin(wallet, adminWallet) {
   try {
-    const { error } = await supabase
-      .from('dc_admins')
-      .update({ active: false })
-      .eq('wallet', wallet.toLowerCase())
-    if (error) throw error
+    const res = await fetch('/api/admin', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'remove_admin', wallet, adminWallet }),
+    })
+    const data = await res.json()
+    if (!res.ok || !data.ok) return { ok: false, error: data.error || 'Ошибка' }
     return { ok: true }
   } catch (e) {
-    return { ok: false, error: e.message }
+    return { ok: false, error: e.message || 'Ошибка сети' }
   }
 }
 
 // ═══════════════════════════════════════════════════
 // ЛОГ ДЕЙСТВИЙ
 // ═══════════════════════════════════════════════════
-
-async function addOrderLog(orderId, action, actor, details = '') {
-  if (!supabase) return
-  try {
-    await supabase
-      .from('dc_order_log')
-      .insert({
-        order_id: orderId,
-        action,
-        actor: actor.toLowerCase(),
-        details: details || null,
-      })
-  } catch {}
-}
 
 /**
  * Получить лог заказа
