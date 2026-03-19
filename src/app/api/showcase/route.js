@@ -19,6 +19,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import crypto from 'crypto'
+import { verifyWallet } from '@/lib/authHelper'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY
@@ -181,6 +182,12 @@ export async function POST(request) {
     const { wallet, type, category, title, description, photos, videoUrl, certUrl,
       retailPrice, clubPrice, customPrice, carat, shape, clarity, color, gemId } = body
 
+    // FIX #7: Проверка подписи кошелька
+    const verified = await verifyWallet(body)
+    if (!verified) {
+      return NextResponse.json({ ok: false, error: 'Неверная подпись кошелька' }, { status: 401 })
+    }
+
     if (!wallet || !/^0x[a-fA-F0-9]{40}$/.test(wallet)) {
       return NextResponse.json({ ok: false, error: 'Неверный кошелёк' }, { status: 400 })
     }
@@ -260,6 +267,12 @@ export async function PATCH(request) {
   try {
     const body = await request.json()
     const { id, wallet, action, buyerWallet, deliveryAddress, newPrice, newStatus } = body
+
+    // FIX #7: Проверка подписи кошелька
+    const verified = await verifyWallet(body)
+    if (!verified) {
+      return NextResponse.json({ ok: false, error: 'Неверная подпись кошелька' }, { status: 401 })
+    }
 
     if (!wallet || !id) {
       return NextResponse.json({ ok: false, error: 'Нет id или wallet' }, { status: 400 })
