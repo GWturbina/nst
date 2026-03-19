@@ -4,6 +4,10 @@
  * GET — лидерборд за текущий/указанный месяц
  * POST — обновить статистику (вызывается при тапах, покупках, продажах)
  * 
+ * FIX #1: Защита от накрутки:
+ *   - 'tap' — валидация через dc_taps (сверка total_dct)
+ *   - 'invite','turnover','gem_sale','jewelry_sale' — только admin/service
+ * 
  * Категории:
  *   invites     — кто больше пригласил
  *   turnover    — товарооборот (своя + команда)
@@ -28,6 +32,23 @@ function getCurrentMonth() {
   const now = new Date()
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
+
+// ═══ Проверка Origin ═══
+function checkOrigin(request) {
+  const origin = request.headers.get('origin') || request.headers.get('referer') || ''
+  const allowed = process.env.NEXT_PUBLIC_SITE_URL || ''
+  if (process.env.NODE_ENV === 'production' && allowed && !origin.startsWith(allowed)) {
+    return false
+  }
+  // FIX: если NEXT_PUBLIC_SITE_URL не задан в production — блокируем
+  if (process.env.NODE_ENV === 'production' && !allowed) {
+    return false
+  }
+  return true
+}
+
+// Действия, которые может вызвать только admin (или внутренний сервис)
+const ADMIN_ONLY_ACTIONS = ['invite', 'turnover', 'gem_sale', 'jewelry_sale']
 
 // GET: лидерборд
 export async function GET(request) {
@@ -72,6 +93,7 @@ export async function GET(request) {
 // POST: обновить статистику
 export async function POST(request) {
   if (!supabase) return NextResponse.json({ ok: false, error: 'Сервер не настроен' }, { status: 503 })
+  if (!checkOrigin(request)) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 })
 
   try {
     const body = await request.json()
@@ -83,6 +105,40 @@ export async function POST(request) {
 
     const wLower = wallet.toLowerCase()
     const month = getCurrentMonth()
+
+    // ═══ FIX #1: Проверка прав на действие ═══
+    if (ADMIN_ONLY_ACTIONS.includes(action)) {
+      // Эти действия — только для админа
+      if (!adminWallet || !/^0x[a-fA-F0-9]{40}$/.test(adminWallet)) {
+        return NextResponse.json({ ok: false, error: 'Требуется adminWallet' }, { status: 403 })
+      }
+      const aLower = adminWallet.toLowerCase()
+      const { data: admin } = await supabase
+        .from('dc_admins')
+        .select('role, active')
+        .eq('wallet', aLower)
+        .single()
+      if (!admin || !admin.active) {
+        return NextResponse.json({ ok: false, error: 'Нет прав администратора' }, { status: 403 })
+      }
+    } else if (action === 'tap') {
+      // Тапы — валидируем через dc_taps (сверка что пользователь реально тапает)
+      const { data: tapRecord } = await supabase
+        .from('dc_taps')
+        .select('total_dct, total_taps')
+        .eq('wallet', wLower)
+        .single()
+      if (!tapRecord) {
+        return NextResponse.json({ ok: false, error: 'Нет записи тапов' }, { status: 400 })
+      }
+      // amount не может быть больше total_dct из серверной тапалки
+      const val = parseFloat(amount) || 0
+      if (val > parseFloat(tapRecord.total_dct) + 1) {
+        return NextResponse.json({ ok: false, error: 'Невалидная сумма тапов' }, { status: 400 })
+      }
+    } else {
+      return NextResponse.json({ ok: false, error: 'Неизвестное действие' }, { status: 400 })
+    }
 
     // Получить или создать запись
     let { data: record } = await supabase
