@@ -10,6 +10,7 @@
  */
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { verifyWallet } from '@/lib/authHelper'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY
@@ -48,6 +49,12 @@ export async function POST(request) {
   try {
     const body = await request.json()
     const { wallet, level } = body
+
+    // FIX #7: Проверка подписи кошелька
+    const verified = await verifyWallet(body)
+    if (!verified) {
+      return NextResponse.json({ ok: false, error: 'Auth failed' }, { status: 401 })
+    }
 
     // Валидация входных данных
     if (!wallet || !/^0x[a-fA-F0-9]{40}$/.test(wallet)) {
