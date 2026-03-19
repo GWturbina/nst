@@ -115,6 +115,18 @@ class Web3Module {
   }
 
   // ───────────────────────────────────────────────────
+  // FIX #7: ПОДПИСЬ ДЛЯ АУТЕНТИФИКАЦИИ
+  // ───────────────────────────────────────────────────
+
+  async signAuthMessage() {
+    if (!this.signer) throw new Error('Кошелёк не подключён');
+    const ts = Math.floor(Date.now() / 1000);
+    const message = `DC-AUTH-${ts}`;
+    const signature = await this.signer.signMessage(message);
+    return { authSig: signature, authTs: ts };
+  }
+
+  // ───────────────────────────────────────────────────
   // ОТКЛЮЧЕНИЕ
   // ───────────────────────────────────────────────────
 
