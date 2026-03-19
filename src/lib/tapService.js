@@ -6,7 +6,9 @@
  * Для незарегистрированных: тапы локальные (испаряются через 30 мин)
  * 
  * Throttle: минимум 150мс между тапами
+ * FIX #7: serverTap через authFetch (подпись кошелька)
  */
+import { authFetch } from './authClient'
 
 let lastTapTime = 0
 const MIN_INTERVAL = 150 // мс
@@ -20,10 +22,9 @@ export async function serverTap(wallet, level) {
   lastTapTime = now
 
   try {
-    const res = await fetch('/api/tap', {
+    const res = await authFetch('/api/tap', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ wallet, level }),
+      body: { wallet, level },
     })
     const data = await res.json()
     return data
@@ -33,7 +34,7 @@ export async function serverTap(wallet, level) {
 }
 
 /**
- * Загрузить состояние игрока с сервера
+ * Загрузить состояние игрока с сервера (GET — без подписи, только чтение)
  */
 export async function loadTapState(wallet) {
   try {
