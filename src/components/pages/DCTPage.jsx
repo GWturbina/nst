@@ -12,6 +12,7 @@ import * as DCT from '@/lib/dctContracts'
 import { safeCall } from '@/lib/contracts'
 import { shortAddress } from '@/lib/web3'
 import ADDRESSES from '@/contracts/addresses'
+import HelpButton from '@/components/ui/HelpButton'
 
 // ═════════════════════════════════════════════════════════
 // MAIN: DCTPage
@@ -33,9 +34,9 @@ export default function DCTPage() {
   return (
     <div className="flex-1 overflow-y-auto pb-4">
       {/* Заголовок */}
-      <div className="px-3 pt-3 pb-1">
+      <div className="flex items-center justify-between">
         <h2 className="text-lg font-black text-emerald-400">🪙 DCT Diamond Club</h2>
-        <p className="text-[11px] text-slate-500">Токенизация активов v3.2</p>
+        <HelpButton section={section} />
       </div>
 
       {/* Sub-навигация — FIX: scrollbar visible on desktop */}
