@@ -237,7 +237,7 @@ export async function getAdminRole(wallet) {
       .from('dc_admins')
       .select('role, active')
       .eq('wallet', wallet.toLowerCase())
-      .single()
+      .maybeSingle()
     if (error || !data || !data.active) return null
     return data.role
   } catch { return null }
@@ -253,7 +253,7 @@ export async function getAdminInfo(wallet) {
       .from('dc_admins')
       .select('*')
       .eq('wallet', wallet.toLowerCase())
-      .single()
+      .maybeSingle()
     if (error) return null
     return data
   } catch { return null }
