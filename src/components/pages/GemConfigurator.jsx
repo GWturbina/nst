@@ -293,7 +293,7 @@ export default function GemConfigurator() {
         </div>
       </div>
 
-      {/* УРОВЕНЬ ЧИСТОТЫ */}
+      {/* ЦЕНОВАЯ КАТЕГОРИЯ */}
       <div className="p-3 rounded-2xl glass">
         <div className="text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest">Уровень чистоты</div>
         <div className="flex gap-1">
@@ -308,8 +308,8 @@ export default function GemConfigurator() {
         </div>
         <div className="mt-1.5 text-[8px] text-slate-600 text-center">
           {qualityTier === 'premium'
-            ? 'Высшая проба — камни с лучшими характеристиками прозрачности'
-            : 'Средняя чистота — стандартные параметры бриллианта'}
+            ? 'Премиум — лучшие характеристики, выше цена'
+            : 'Стандарт — оптимальное соотношение цена/качество'}
         </div>
       </div>
 
