@@ -386,9 +386,9 @@ export default function DeliverySection() {
               className={`flex-1 py-1.5 rounded-xl text-[10px] font-bold border ${assetSource === 0 ? 'bg-gold-400/15 border-gold-400/30 text-gold-400' : 'border-white/8 text-slate-500'}`}>
               💎 {t('dcGems')}
             </button>
-            <button onClick={() => setAssetSource(1)}
-              className={`flex-1 py-1.5 rounded-xl text-[10px] font-bold border ${assetSource === 1 ? 'bg-gold-400/15 border-gold-400/30 text-gold-400' : 'border-white/8 text-slate-500'}`}>
-              🥇 {t('dcMetals')}
+            <button disabled
+              className="flex-1 py-1.5 rounded-xl text-[10px] font-bold border border-white/5 text-slate-600 opacity-50 cursor-not-allowed">
+              🥇 {t('dcMetals')} (скоро)
             </button>
           </div>
 
