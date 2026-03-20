@@ -31,5 +31,7 @@ const ADDRESSES = {
   DCTExchange:       '0xeba425D4FAadA67dE66a2BBa6a2CFA789D80d70C',
   GemFractionDEX:    '0xDBcEbf6A85857be12b91FE685685d43C64E7823a',
   DCTHeritage:       '0x9dDCA909905afF16A76279e854856bab7164D4C8',
+  // ═══ Клубные лоты (после деплоя заменить на реальный адрес) ═══
+  ClubLots:          '0x_CLUB_LOTS_NOT_DEPLOYED',
 }
 export default ADDRESSES
