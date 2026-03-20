@@ -193,15 +193,15 @@ export default function GemConfigurator() {
   const currentPrice = calcPrice(carats, hasCert)
 
   // Коэффициенты чистоты (влияют на цену)
-  const CLARITY_COEFF = { IF: 1.03, VVS1: 1.02, VVS2: 1.01, VS1: 1.00, VS2: 0.99 }
+  const CLARITY_COEFF = { IF: 1.05, VVS1: 1.03, VVS2: 1.02, VS1: 1.01, VS2: 1.00 }
   // Коэффициенты цвета (влияют на цену)
-  const COLOR_COEFF = { D: 1.03, E: 1.02, F: 1.01, G: 1.00, H: 0.99, I: 0.98 }
+  const COLOR_COEFF = { D: 1.05, E: 1.04, F: 1.03, G: 1.02, H: 1.01, I: 1.00 }
   // Маркетинг 5% (реферальная программа 9 уровней)
   const MARKETING_MULT = 1.05
 
   const clarityMult = gemType === 'white' ? (CLARITY_COEFF[clarity] || 1.0) : 1.0
   const colorMult = gemType === 'white' ? (COLOR_COEFF[color] || 1.0) : 1.0
-  const totalMult = clarityMult * colorMult * MARKETING_MULT
+  const totalMult = clarityMult * colorMult
 
   const price = currentPrice ? {
     clubPrice: Math.round(currentPrice.club * totalMult),
