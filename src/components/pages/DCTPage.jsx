@@ -171,7 +171,7 @@ function DashboardSection() {
               <div className="text-[10px] text-slate-400">{claimableCount} покупок → DCT</div>
             </div>
             <div className="text-lg font-black text-emerald-400">
-              {claimableGems.estimatedDCT.reduce((s, v) => s + parseFloat(v), 0).toFixed(2)} DCT
+            {(claimableGems?.estimatedDCT || []).reduce((s, v) => s + parseFloat(v), 0).toFixed(2)} DCT
             </div>
           </div>
         </div>
