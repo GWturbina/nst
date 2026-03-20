@@ -16,6 +16,7 @@ import DeliverySection from '@/components/pages/DeliverySection'
 import ShowcaseNew from '@/components/pages/ShowcaseNew'
 import GemGallery from '@/components/pages/GemGallery'
 import ClubLotsSection from '@/components/pages/ClubLotsSection'
+import HelpButton from '@/components/ui/HelpButton'
 
 // ═════════════════════════════════════════════════════════
 // MAIN: DiamondClubTab
