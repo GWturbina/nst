@@ -12,6 +12,7 @@ export default function AdminPanel() {
   const [activeSection, setActiveSection] = useState('content')
   const [newNews, setNewNews] = useState('')
   const [newQuest, setNewQuest] = useState({ name: '', reward: '' })
+  const [showGuide, setShowGuide] = useState(false)
 
   const isOwner = isAdmin || (wallet && ownerWallet && wallet.toLowerCase() === ownerWallet.toLowerCase())
 
@@ -35,18 +36,26 @@ export default function AdminPanel() {
 
   return (
     <div className="flex-1 overflow-y-auto pb-4">
-      <div className="px-3 pt-3 pb-1">
+      <div className="px-3 pt-3 pb-1 flex items-center justify-between">
         <h2 className="text-lg font-black text-gold-400">⚙️ Админ Diamond Club</h2>
+        <button onClick={() => setShowGuide(!showGuide)}
+          className="w-7 h-7 rounded-full bg-gold-400/15 border border-gold-400/25 text-gold-400 text-[12px] font-bold flex items-center justify-center shrink-0">
+          ?
+        </button>
       </div>
 
-      <div className="flex gap-1 px-3 mt-1 overflow-x-auto scrollbar-hide">
+      {/* Навигация — СЕТКА вместо скролла */}
+      <div className="grid grid-cols-3 gap-1 px-3 mt-1">
         {SECTIONS.map(s => (
           <button key={s.id} onClick={() => setActiveSection(s.id)}
-            className={`px-3 py-2 rounded-xl text-[10px] font-bold border whitespace-nowrap ${activeSection === s.id ? 'bg-gold-400/15 border-gold-400/30 text-gold-400' : 'border-white/8 text-slate-500'}`}>
+            className={`py-2 rounded-xl text-[10px] font-bold border transition-all ${activeSection === s.id ? 'bg-gold-400/15 border-gold-400/30 text-gold-400' : 'border-white/8 text-slate-500'}`}>
             {s.icon} {s.label}
           </button>
         ))}
       </div>
+
+      {/* ИНСТРУКЦИЯ АДМИНА */}
+      {showGuide && <AdminGuide onClose={() => setShowGuide(false)} />}
 
       <div className="px-3 mt-3">
         {/* КОНТЕНТ */}
@@ -123,4 +132,194 @@ export default function AdminPanel() {
       </div>
     </div>
   )
+}
+
+// ═══════════════════════════════════════════════════════
+// ADMIN GUIDE — Подробная инструкция по админке
+// ═══════════════════════════════════════════════════════
+function AdminGuide({ onClose }) {
+  const [tab, setTab] = useState('overview')
+
+  const TABS = [
+    { id: 'overview', label: '📌 Обзор' },
+    { id: 'lots', label: '🎟 Лоты' },
+    { id: 'orders', label: '📋 Заказы' },
+    { id: 'showcase', label: '🏪 Витрина' },
+    { id: 'staff', label: '👥 Персонал' },
+    { id: 'prices', label: '💲 Цены' },
+  ]
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-3" style={{ background: 'rgba(0,0,0,0.9)' }} onClick={onClose}>
+      <div className="max-w-[430px] w-full max-h-[88vh] rounded-3xl overflow-hidden flex flex-col"
+        onClick={e => e.stopPropagation()}
+        style={{ background: 'linear-gradient(180deg, #1a1040 0%, #0c0c1e 100%)', border: '1px solid rgba(212,168,67,0.25)' }}>
+
+        <div className="px-4 py-3 border-b border-white/8 flex items-center justify-between shrink-0">
+          <div className="text-[14px] font-black text-gold-400">📖 Инструкция Админа</div>
+          <button onClick={onClose} className="w-8 h-8 rounded-full bg-white/5 text-slate-400 flex items-center justify-center text-[14px]">✕</button>
+        </div>
+
+        <div className="grid grid-cols-3 gap-1 px-3 py-2 border-b border-white/5 shrink-0">
+          {TABS.map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)}
+              className={`py-2 rounded-lg text-[10px] font-bold border transition-all ${tab === t.id ? 'bg-gold-400/15 border-gold-400/30 text-gold-400' : 'border-white/8 text-slate-500'}`}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 text-[11px] text-slate-300 leading-[1.7]">
+
+          {tab === 'overview' && (<>
+            <GTitle text="📌 Обзор админ-панели" />
+            <p>Админ-панель доступна только владельцу кошелька. Здесь 6 разделов:</p>
+            <p><b className="text-gold-400">📢 Контент</b> — управление новостями и квестами. Новости отображаются в приложении для всех. Квесты — задания для партнёров с наградами.</p>
+            <p><b className="text-gold-400">🎟 Лоты</b> — создание и управление клубными лотами (долевая покупка бриллиантов с розыгрышем).</p>
+            <p><b className="text-gold-400">📋 Заказы</b> — все заказы камней из конфигуратора. Смена статусов, заметки, история.</p>
+            <p><b className="text-gold-400">👥 Сотрудники</b> — назначение ролей: Менеджер (утверждает заказы), Оператор (просматривает).</p>
+            <p><b className="text-gold-400">💲 Цены</b> — загрузка цен в смарт-контракт FractionalGem. Клубная цена = 65% от рыночной.</p>
+            <p><b className="text-gold-400">🎮 Тест</b> — быстрое переключение уровня (только визуально, для тестирования).</p>
+
+            <GTitle text="🏪 Где Витрина?" />
+            <p>Витрина управляется из раздела <b className="text-blue-400">КЛУБ → Витрина</b> (не из админки). Вы как админ можете:</p>
+            <p>1. Нажать «+ Разместить» для добавления товара</p>
+            <p>2. Выбрать корпоративную витрину (ваши камни/ювелирка)</p>
+            <p>3. Модерировать партнёрские товары</p>
+            <p>4. Подтверждать продажи (кнопка «✅ Продажа»)</p>
+          </>)}
+
+          {tab === 'lots' && (<>
+            <GTitle text="🎟 Как создать клубный лот" />
+            <p>Клубный лот — это бриллиант, разделённый на доли. Участники покупают доли по $10-100. Когда все доли проданы — один участник получает камень (розыгрыш), остальные — компенсацию через 6 месяцев.</p>
+
+            <GTitle text="📝 Пошагово:" />
+            <p>1. Откройте <b className="text-gold-400">Админ → Лоты</b></p>
+            <p>2. Нажмите <b className="text-gold-400">«+ Создать новый лот»</b></p>
+            <p>3. Заполните форму:</p>
+            <p>   • <b>Название</b> — например «Бриллиант 1.5ct VS1 D»</p>
+            <p>   • <b>Описание</b> — детали камня</p>
+            <p>   • <b>Караты, чистота, цвет</b></p>
+            <p>   • <b>Клубная цена камня ($)</b> — стоимость закупки</p>
+            <p>   • <b>Цена доли ($)</b> — $25, $50 или $100</p>
+            <p>4. Система автоматически рассчитает:</p>
+            <p>   • Цена лота = цена камня × 1.25 (25% на расходы)</p>
+            <p>   • Количество долей = цена лота ÷ цена доли</p>
+            <p>5. <b className="text-red-400">СЕКРЕТ</b> — сгенерируется автоматически. ОБЯЗАТЕЛЬНО сохраните! Он нужен для честного розыгрыша.</p>
+            <p>6. Нажмите <b className="text-gold-400">«✨ Создать лот»</b></p>
+
+            <GTitle text="🔧 Управление лотом" />
+            <p>• <b>+3/+5 резерв</b> — зарезервировать доли для подарков или промо</p>
+            <p>• <b>🎁 Подарить</b> — отдать долю конкретному партнёру бесплатно</p>
+            <p>• <b>✕ Отмена</b> — отменить лот (все средства вернутся)</p>
+
+            <GTitle text="💎 Визуализация" />
+            <p>У каждого лота есть кнопка <b className="text-blue-400">💎</b> — открывает интерактивный бриллиант с 100 гранями. Каждая грань = доля. Можно нажимать на грани, выбирать и покупать.</p>
+          </>)}
+
+          {tab === 'orders' && (<>
+            <GTitle text="📋 Управление заказами" />
+            <p>Здесь отображаются все заказы камней из конфигуратора (КЛУБ → Камни). Каждый заказ проходит цепочку статусов:</p>
+
+            <p><b className="text-yellow-400">💰 Оплачен</b> — партнёр оплатил, заказ ожидает проверки</p>
+            <p><b className="text-emerald-400">✅ Утверждён</b> — вы проверили и одобрили заказ</p>
+            <p><b className="text-blue-400">🏭 Производство</b> — камень заказан на заводе</p>
+            <p><b className="text-purple-400">📦 Готов</b> — камень получен, готов к выдаче</p>
+            <p><b className="text-green-400">🎉 Выдан</b> — камень выдан партнёру</p>
+            <p><b className="text-red-400">❌ Отменён</b> — заказ отменён</p>
+
+            <GTitle text="🔧 Что можно делать:" />
+            <p>• Менять статус заказа (кнопки смены статуса)</p>
+            <p>• Добавлять заметки к заказу</p>
+            <p>• Просматривать историю изменений</p>
+            <p>• Фильтровать по статусу</p>
+
+            <GTitle text="👥 Роли в заказах:" />
+            <p>• <b className="text-gold-400">Владелец</b> — полные права, все статусы</p>
+            <p>• <b className="text-emerald-400">Менеджер</b> — утверждает заказы (с лимитом суммы)</p>
+            <p>• <b className="text-blue-400">Оператор</b> — только просмотр и заметки</p>
+          </>)}
+
+          {tab === 'showcase' && (<>
+            <GTitle text="🏪 Как выставить камень на витрину" />
+            <p>Витрина — это ваш магазин внутри Diamond Club. Управляется НЕ из админки, а из раздела <b className="text-blue-400">КЛУБ → Витрина</b>.</p>
+
+            <GTitle text="💎 Выставить бриллиант:" />
+            <p>1. Перейдите в <b>КЛУБ → Витрина</b></p>
+            <p>2. Убедитесь что выбрана вкладка «Корпоративная»</p>
+            <p>3. Нажмите <b>«+ Разместить»</b></p>
+            <p>4. Категория: <b>💎 Бриллианты</b></p>
+            <p>5. Заполните: название, описание, караты, форма, чистота, цвет</p>
+            <p>6. Укажите <b>розничную цену</b> и <b>клубную цену</b></p>
+            <p>7. Загрузите фото камня (до 5 штук)</p>
+            <p>8. Добавьте ссылку на видео (если есть)</p>
+            <p>9. Ссылка на сертификат GIA/IGI/HRD</p>
+            <p>10. Нажмите <b>«Опубликовать»</b></p>
+
+            <GTitle text="💍 Выставить ювелирку:" />
+            <p>Тот же процесс, но категория: <b>💍 Ювелирка</b></p>
+            <p>Описание: материал, проба, вес, камни, размер</p>
+
+            <GTitle text="✅ Подтверждение продажи:" />
+            <p>Когда покупатель найден:</p>
+            <p>1. Откройте свой товар на витрине</p>
+            <p>2. Нажмите <b>«✅ Продажа»</b></p>
+            <p>3. Введите адрес кошелька покупателя</p>
+            <p>4. Подтвердите — маркетинг распределится автоматически</p>
+
+            <GTitle text="💰 Маркетинг (15% от маржи):" />
+            <p>Пример: закупка $350, продажа $700, маржа $350</p>
+            <p>• 5% продавцу • 2% авторские • 3% тех.поддержка</p>
+            <p>• 2.5% GWT • 2.5% CGT</p>
+            <p>• 90% маржи → 9 уровней (20/15/10/10/9/8/7/6/5%)</p>
+          </>)}
+
+          {tab === 'staff' && (<>
+            <GTitle text="👥 Управление сотрудниками" />
+            <p>Вы можете назначить помощников с разными уровнями доступа.</p>
+
+            <GTitle text="👑 Роли:" />
+            <p><b className="text-gold-400">👑 Владелец</b> — полные права. Создание лотов, управление заказами, назначение ролей, управление ценами. Это вы.</p>
+            <p><b className="text-emerald-400">🔑 Менеджер</b> — утверждает заказы (с лимитом суммы). Может менять статусы заказов, добавлять заметки. НЕ может: создавать лоты, менять цены, назначать роли.</p>
+            <p><b className="text-blue-400">👁 Оператор</b> — только просмотр. Видит заказы, может писать заметки. НЕ может менять статусы.</p>
+
+            <GTitle text="➕ Как добавить сотрудника:" />
+            <p>1. Перейдите в <b>Админ → Сотрудники</b></p>
+            <p>2. Нажмите <b>«+ Добавить»</b></p>
+            <p>3. Введите адрес кошелька сотрудника</p>
+            <p>4. Выберите роль (Менеджер или Оператор)</p>
+            <p>5. Укажите имя для удобства</p>
+            <p>6. Для Менеджера — укажите лимит суммы</p>
+          </>)}
+
+          {tab === 'prices' && (<>
+            <GTitle text="💲 Управление ценами" />
+            <p>Здесь загружаются цены камней в смарт-контракт FractionalGem. Эти цены используются в конфигураторе (КЛУБ → Камни).</p>
+
+            <GTitle text="📊 Как работает ценообразование:" />
+            <p>Вы указываете базовую стоимость (без серт. и с серт.) для каждого веса в каратах. Контракт автоматически рассчитывает:</p>
+            <p>• <b>Рыночная цена</b> — показывается как «перечёркнутая»</p>
+            <p>• <b>Клубная цена</b> = 65% от рыночной</p>
+            <p>• <b>Доля поставщика</b> = 60% от клубной</p>
+            <p>• <b>Маркетинг-пул</b> = 5% (распределяется по 9 уровням рефералки)</p>
+
+            <GTitle text="➕ Как добавить цену:" />
+            <p>1. Перейдите в <b>Админ → Цены</b></p>
+            <p>2. Внизу заполните: Караты, Цена без серт. ($), Цена с серт. ($)</p>
+            <p>3. Нажмите <b>«Загрузить в контракт»</b></p>
+            <p>4. Подтвердите транзакцию в SafePal</p>
+            <p>5. Новая цена появится в таблице и в конфигураторе</p>
+          </>)}
+        </div>
+
+        <div className="px-4 py-3 border-t border-white/8 shrink-0">
+          <button onClick={onClose} className="w-full py-2.5 rounded-xl text-[12px] font-bold gold-btn">✅ Понятно</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function GTitle({ text }) {
+  return <div className="text-[12px] font-black text-gold-400 pt-1">{text}</div>
 }
