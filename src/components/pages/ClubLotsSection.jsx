@@ -146,6 +146,11 @@ export default function ClubLotsSection() {
   return (
     <div className="px-3 mt-3 space-y-3">
 
+      <div className="flex items-center justify-between">
+        <div className="text-[14px] font-black text-gold-400">🎟 Клубные лоты</div>
+        <HelpButton section="lots" />
+      </div>
+
       {/* Баланс маркетинга */}
       {wallet && parseFloat(mktBalance) > 0 && (
         <div className="p-3 rounded-2xl border border-gold-400/20" style={{ background: 'rgba(212,168,67,0.06)' }}>
