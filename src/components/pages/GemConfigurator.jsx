@@ -90,26 +90,65 @@ export default function GemConfigurator() {
 
   useEffect(() => { loadOrders() }, [loadOrders])
 
-  // Расчёт цены: фиксированные цены по ТЗ → интерполяция для промежуточных каратов
+  // Расчёт цены: контракт FractionalGem (source of truth) → Supabase fallback
+  const PREMIUM_MULT = 1.08 // премиум тир = +8%
+  const tierMult = qualityTier === 'premium' ? PREMIUM_MULT : 1
+
   const calcPrice = (ct, cert) => {
-    // 1) Попробовать фиксированные цены (из /api/prices)
+    // 1) Контракт FractionalGem — источник истины
+    if (availableCarats.length > 0) {
+      const x100 = Math.round(ct * 100)
+
+      // Точное совпадение
+      if (contractPrices[x100]) {
+        const p = cert ? contractPrices[x100].cert : contractPrices[x100].noCert
+        return { cost: 0, club: Math.round(p.club * tierMult), market: Math.round(p.market * tierMult) }
+      }
+
+      // Найти две ближайшие точки
+      let lower = null, upper = null
+      for (const a of availableCarats) {
+        if (a <= x100) lower = a
+        if (a >= x100 && upper === null) upper = a
+      }
+
+      if (!lower && upper) {
+        const p = cert ? contractPrices[upper].cert : contractPrices[upper].noCert
+        const perCarat = p.club / (upper / 100)
+        return { cost: 0, club: Math.round(perCarat * ct * tierMult), market: Math.round((p.market / (upper / 100)) * ct * tierMult) }
+      }
+      if (lower && !upper) {
+        const p = cert ? contractPrices[lower].cert : contractPrices[lower].noCert
+        const perCarat = p.club / (lower / 100)
+        return { cost: 0, club: Math.round(perCarat * ct * tierMult), market: Math.round((p.market / (lower / 100)) * ct * tierMult) }
+      }
+      if (lower && upper && lower !== upper) {
+        const pL = cert ? contractPrices[lower].cert : contractPrices[lower].noCert
+        const pU = cert ? contractPrices[upper].cert : contractPrices[upper].noCert
+        const t = (x100 - lower) / (upper - lower)
+        return { cost: 0, club: Math.round((pL.club + (pU.club - pL.club) * t) * tierMult), market: Math.round((pL.market + (pU.market - pL.market) * t) * tierMult) }
+      }
+      if (lower) {
+        const p = cert ? contractPrices[lower].cert : contractPrices[lower].noCert
+        return { cost: 0, club: Math.round(p.club * tierMult), market: Math.round(p.market * tierMult) }
+      }
+    }
+
+    // 2) Fallback: Supabase dc_prices (если контракт пуст)
     const tierKey = qualityTier === 'premium' ? 'club_premium' : 'club_standard'
     const tierPrices = fixedPrices?.[tierKey]
     if (tierPrices) {
       const fixedPoints = Object.keys(tierPrices).map(Number).sort((a, b) => a - b)
       if (fixedPoints.length > 0) {
         const field = cert ? 'cert' : 'noCert'
-        // Розничная ≈ клубная / 0.65 (клубная = 65% от рыночной)
         const toRetail = (clubP) => Math.round(clubP / 0.65)
 
-        // Точное совпадение
         const ctStr = ct.toFixed(2)
         if (tierPrices[ctStr]) {
           const clubP = tierPrices[ctStr][field]
           return { cost: 0, club: clubP, market: toRetail(clubP) }
         }
 
-        // Интерполяция между фиксированными точками
         let lower = null, upper = null
         for (const p of fixedPoints) {
           if (p <= ct) lower = p
@@ -124,70 +163,16 @@ export default function GemConfigurator() {
           return { cost: 0, club: clubP, market: toRetail(clubP) }
         }
         if (lower && !upper) {
-          const lP = tierPrices[lower.toFixed(2)]?.[field] || 0
-          const perCarat = lP / lower
-          const clubP = Math.round(perCarat * ct)
+          const clubP = Math.round((tierPrices[lower.toFixed(2)]?.[field] || 0) / lower * ct)
           return { cost: 0, club: clubP, market: toRetail(clubP) }
         }
         if (!lower && upper) {
-          const uP = tierPrices[upper.toFixed(2)]?.[field] || 0
-          const perCarat = uP / upper
-          const clubP = Math.round(perCarat * ct)
+          const clubP = Math.round((tierPrices[upper.toFixed(2)]?.[field] || 0) / upper * ct)
           return { cost: 0, club: clubP, market: toRetail(clubP) }
         }
       }
     }
 
-    // 2) Fallback: цены из контракта FractionalGem (интерполяция)
-    if (availableCarats.length === 0) return null
-    const x100 = Math.round(ct * 100)
-
-    // Точное совпадение
-    if (contractPrices[x100]) {
-      const p = cert ? contractPrices[x100].cert : contractPrices[x100].noCert
-      return p
-    }
-
-    // Найти две ближайшие точки (ниже и выше)
-    let lower = null, upper = null
-    for (const a of availableCarats) {
-      if (a <= x100) lower = a
-      if (a >= x100 && upper === null) upper = a
-    }
-
-    // Если ниже минимума — экстраполяция по первой точке (цена за карат)
-    if (!lower && upper) {
-      const p = cert ? contractPrices[upper].cert : contractPrices[upper].noCert
-      const perCarat = p.club / (upper / 100)
-      const club = perCarat * ct
-      const market = (p.market / (upper / 100)) * ct
-      return { cost: 0, club, market }
-    }
-
-    // Если выше максимума — экстраполяция по последней точке
-    if (lower && !upper) {
-      const p = cert ? contractPrices[lower].cert : contractPrices[lower].noCert
-      const perCarat = p.club / (lower / 100)
-      const club = perCarat * ct
-      const market = (p.market / (lower / 100)) * ct
-      return { cost: 0, club, market }
-    }
-
-    // Интерполяция между двумя точками
-    if (lower && upper && lower !== upper) {
-      const pL = cert ? contractPrices[lower].cert : contractPrices[lower].noCert
-      const pU = cert ? contractPrices[upper].cert : contractPrices[upper].noCert
-      const t = (x100 - lower) / (upper - lower) // 0..1
-      const club = pL.club + (pU.club - pL.club) * t
-      const market = pL.market + (pU.market - pL.market) * t
-      return { cost: 0, club, market }
-    }
-
-    // lower === upper (точное совпадение, уже обработано выше)
-    if (lower) {
-      const p = cert ? contractPrices[lower].cert : contractPrices[lower].noCert
-      return p
-    }
     return null
   }
 
