@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import useGameStore from '@/lib/store'
 import { LEVELS, LEADERBOARD } from '@/lib/gameData'
 import { shortAddress } from '@/lib/web3'
+import HelpButton from '@/components/ui/HelpButton'
 
 // ═════════════════════════════════════════════════════════
 // TEAM PAGE — Команда + Лидерборд + Соревнования + Профиль
@@ -135,9 +136,12 @@ export default function TeamTab() {
 
   return (
     <div className="flex-1 overflow-y-auto pb-4">
-      <div className="px-3 pt-3 pb-1">
-        <h2 className="text-lg font-black text-gold-400">👥 {t('team')}</h2>
-        <p className="text-[11px] text-slate-500">{t('teamDesc')}</p>
+      <div className="px-3 pt-3 pb-1 flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-black text-gold-400">👥 {t('team')}</h2>
+          <p className="text-[11px] text-slate-500">{t('teamDesc')}</p>
+        </div>
+        <HelpButton section="team" />
       </div>
 
       {/* Табы */}
