@@ -192,13 +192,24 @@ export default function GemConfigurator() {
 
   const currentPrice = calcPrice(carats, hasCert)
 
+  // Коэффициенты чистоты (влияют на цену)
+  const CLARITY_COEFF = { IF: 1.08, VVS1: 1.04, VVS2: 1.02, VS1: 1.00, VS2: 0.97 }
+  // Коэффициенты цвета (влияют на цену)
+  const COLOR_COEFF = { D: 1.10, E: 1.06, F: 1.03, G: 1.00, H: 0.97, I: 0.95 }
+  // Маркетинг 5% (реферальная программа 9 уровней)
+  const MARKETING_MULT = 1.05
+
+  const clarityMult = gemType === 'white' ? (CLARITY_COEFF[clarity] || 1.0) : 1.0
+  const colorMult = gemType === 'white' ? (COLOR_COEFF[color] || 1.0) : 1.0
+  const totalMult = clarityMult * colorMult * MARKETING_MULT
+
   const price = currentPrice ? {
-    clubPrice: Math.round(currentPrice.club),
+    clubPrice: Math.round(currentPrice.club * totalMult),
     retailPrice: Math.round(currentPrice.market),
-    clubPerCarat: Math.round(currentPrice.club / carats),
+    clubPerCarat: Math.round(currentPrice.club * totalMult / carats),
     retailPerCarat: Math.round(currentPrice.market / carats),
-    savings: Math.round(currentPrice.market - currentPrice.club),
-    discountPct: currentPrice.market > 0 ? Math.round((1 - currentPrice.club / currentPrice.market) * 100) : 0,
+    savings: Math.round(currentPrice.market - currentPrice.club * totalMult),
+    discountPct: currentPrice.market > 0 ? Math.round((1 - (currentPrice.club * totalMult) / currentPrice.market) * 100) : 0,
   } : null
 
   const fractionPrice = price ? Math.round(price.clubPrice * fractions / totalFractions) : 0
@@ -293,17 +304,17 @@ export default function GemConfigurator() {
         </div>
       </div>
 
-      {/* ЦЕНОВАЯ КАТЕГОРИЯ */}
+      {/* УРОВЕНЬ ЧИСТОТЫ */}
       <div className="p-3 rounded-2xl glass">
-        <div className="text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest">Уровень чистоты</div>
+        <div className="text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest">Ценовая категория</div>
         <div className="flex gap-1">
           <button onClick={() => setQualityTier('standard')}
             className={`flex-1 py-2.5 rounded-xl text-[10px] font-bold transition-all border ${sel(qualityTier==='standard')}`}>
-            💎 Средняя
+            💎 Стандарт
           </button>
           <button onClick={() => setQualityTier('premium')}
             className={`flex-1 py-2.5 rounded-xl text-[10px] font-bold transition-all border ${sel(qualityTier==='premium')}`}>
-            👑 Высшая проба
+            👑 Премиум
           </button>
         </div>
         <div className="mt-1.5 text-[8px] text-slate-600 text-center">
@@ -590,7 +601,7 @@ export default function GemConfigurator() {
               <div className="flex items-center justify-between p-2 rounded-xl bg-white/5">
                 <span className="text-[10px] text-slate-400">Чистота</span>
                 <span className={`text-[11px] font-bold ${qualityTier==='premium'?'text-gold-400':'text-blue-400'}`}>
-                  {qualityTier==='premium'?'👑 Высшая проба':'💎 Средняя'}</span>
+                  {qualityTier==='premium'?'👑 Премиум':'💎 Стандарт'}</span>
               </div>
               <div className="flex items-center justify-between p-2 rounded-xl bg-white/5">
                 <span className="text-[10px] text-slate-400">Рыночная</span>
