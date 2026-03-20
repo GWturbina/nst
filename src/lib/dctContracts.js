@@ -78,6 +78,19 @@ const FRACTIONALGEM_ABI = [
   'function voteForSale(uint256 lotId)',
   'function claimSaleProceeds(uint256 lotId)',
   'function setApprovalForAll(address operator, bool approved)',
+  // Admin
+  'function createLot(uint256 gemId, uint16 caratX100, string name, string imageURI, bool certified, uint8 certLab, string certNumber, uint256 totalFractions, uint256 fractionPriceDCT, uint16 stakingAPR, uint256 stakingDays, address lotSupplier)',
+  'function startFundraising(uint256 lotId)',
+  'function addCycleProfit(uint256 lotId, uint256 profitUSDT)',
+  'function fundStakingReserve(uint256 lotId, uint256 amountUSDT)',
+  'function requestJewelryProduction(uint256 lotId, uint256 jewelryCost, uint8 mode)',
+  'function fundJewelryProduction(uint256 lotId, uint256 amountUSDT)',
+  'function forceForSale(uint256 lotId)',
+  'function confirmSale(uint256 lotId, uint256 saleAmountUSDT)',
+  'function emergencyClaimStaking(uint256 lotId)',
+  'function emergencyRefundToPartner(address p, uint256 amt, string reason)',
+  'function buyWholeGem(uint256 lotId)',
+  'function owner() view returns (address)',
 ]
 
 const DCTEXCHANGE_ABI = [
@@ -600,6 +613,86 @@ export async function approveDCTForHeritage() {
   const approveAmount = balance * 2n
   const tx = await dct.approve(ADDRESSES.DCTHeritage, approveAmount)
   return await tx.wait()
+}
+
+// ═══════════════════════════════════════════════════
+// FractionalGem — Админские функции (owner only)
+// ═══════════════════════════════════════════════════
+
+export async function createFractionalLot({ gemId, caratX100, name, imageURI, certified, certLab, certNumber, totalFractions, fractionPriceDCT, stakingAPR, stakingDays, lotSupplier }) {
+  const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
+  const priceParsed = ethers.parseEther(String(fractionPriceDCT))
+  const tx = await c.createLot(gemId, caratX100, name, imageURI || '', certified, certLab || 0, certNumber || '', totalFractions, priceParsed, stakingAPR, stakingDays, lotSupplier)
+  await tx.wait()
+  return tx
+}
+
+export async function startLotFundraising(lotId) {
+  const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
+  const tx = await c.startFundraising(lotId)
+  await tx.wait()
+  return tx
+}
+
+export async function addLotCycleProfit(lotId, profitUSDT) {
+  const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
+  const tx = await c.addCycleProfit(lotId, ethers.parseUnits(String(profitUSDT), 6))
+  await tx.wait()
+  return tx
+}
+
+export async function fundLotStakingReserve(lotId, amountUSDT) {
+  const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
+  const tx = await c.fundStakingReserve(lotId, ethers.parseUnits(String(amountUSDT), 6))
+  await tx.wait()
+  return tx
+}
+
+export async function requestLotJewelry(lotId, jewelryCost, mode) {
+  const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
+  const tx = await c.requestJewelryProduction(lotId, ethers.parseUnits(String(jewelryCost), 6), mode)
+  await tx.wait()
+  return tx
+}
+
+export async function fundLotJewelry(lotId, amountUSDT) {
+  const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
+  const tx = await c.fundJewelryProduction(lotId, ethers.parseUnits(String(amountUSDT), 6))
+  await tx.wait()
+  return tx
+}
+
+export async function forceLotForSale(lotId) {
+  const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
+  const tx = await c.forceForSale(lotId)
+  await tx.wait()
+  return tx
+}
+
+export async function confirmLotSale(lotId, saleAmountUSDT) {
+  const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
+  const tx = await c.confirmSale(lotId, ethers.parseUnits(String(saleAmountUSDT), 6))
+  await tx.wait()
+  return tx
+}
+
+export async function emergencyLotClaimStaking(lotId) {
+  const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
+  const tx = await c.emergencyClaimStaking(lotId)
+  await tx.wait()
+  return tx
+}
+
+export async function emergencyRefundPartner(address, amountUSDT, reason) {
+  const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
+  const tx = await c.emergencyRefundToPartner(address, ethers.parseUnits(String(amountUSDT), 6), reason)
+  await tx.wait()
+  return tx
+}
+
+export async function getFractionalGemOwner() {
+  const c = getDCTRead('FractionalGem', FRACTIONALGEM_ABI)
+  return await c.owner()
 }
 
 // ═══════════════════════════════════════════════════
