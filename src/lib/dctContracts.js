@@ -621,3 +621,164 @@ export async function getGemShowcaseListings() {
     }))
   } catch { return [] }
 }
+
+// ═══════════════════════════════════════════════════
+// ДОПОЛНИТЕЛЬНЫЕ ЭКСПОРТЫ (используются в DCTPage.jsx)
+// ═══════════════════════════════════════════════════
+
+// Загрузить полный дашборд DCT — токен + пользователь
+export async function loadDCTDashboard(address) {
+  try {
+    const token = await getDCTTokenInfo()
+    const user = address ? await getDCTUserInfo(address) : null
+    return { token, user }
+  } catch { return { token: null, user: null } }
+}
+
+// Backing rate из DCTBridge
+export async function getBridgeBackingRate() {
+  const c = getDCTRead('DCTBridge', DCTBRIDGE_ABI)
+  if (!c) return 0
+  try { return Number(await c.BACKING_RATE_BP()) } catch { return 0 }
+}
+
+// Claim одного гема по purchaseId (алиас)
+export async function claimGemDCT(purchaseId) {
+  const c = getDCT('DCTBridge', DCTBRIDGE_ABI)
+  const tx = await c.claimGemDCT(purchaseId)
+  return await tx.wait()
+}
+
+// Металлы — пока не реализовано (MetalVault не задеплоен)
+export async function getClaimableMetals(address) {
+  return { ids: [], values: [], estimated: [] }
+}
+
+export async function claimAllMetalDCT() {
+  throw new Error('Металлы пока не доступны')
+}
+
+// Таблица цен из FractionalGem
+export async function getGemPriceTable() {
+  const c = getDCTRead('FractionalGem', FRACTIONALGEM_ABI)
+  if (!c) return []
+  try {
+    const carats = await c.getRegisteredCarats()
+    const table = []
+    for (const ct of carats) {
+      try {
+        const info = await c.getPriceInfo(ct, false)
+        const infoCert = await c.getPriceInfo(ct, true)
+        table.push({
+          caratX100: Number(ct),
+          carat: Number(ct) / 100,
+          cost: fmt6(info.cost),
+          club: fmt6(info.club),
+          wholesale: fmt6(info.ws),
+          market: fmt6(info.mkt),
+          costCert: fmt6(infoCert.cost),
+          clubCert: fmt6(infoCert.club),
+          wholesaleCert: fmt6(infoCert.ws),
+          marketCert: fmt6(infoCert.mkt),
+        })
+      } catch {}
+    }
+    return table
+  } catch { return [] }
+}
+
+// Купить целый камень (через FractionalGem — все доли)
+export async function buyWholeGem(lotId) {
+  const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
+  const cRead = getDCTRead('FractionalGem', FRACTIONALGEM_ABI)
+  const lotInfo = await cRead.getLotInfo(lotId)
+  const remaining = lotInfo.l.totalFractions - lotInfo.l.soldFractions
+  if (remaining <= 0n) throw new Error('Все доли проданы')
+  // Approve DCT
+  const cost = lotInfo.l.fractionPriceDCT * remaining
+  await ensureDCTApproval(ADDRESSES.FractionalGem, cost)
+  const tx = await c.buyFractions(lotId, remaining)
+  return await tx.wait()
+}
+
+// Голосование за продажу лота (алиас)
+export async function voteForLotSale(lotId) {
+  return await voteForSale(lotId)
+}
+
+// Забрать прибыль от продажи лота (алиас)
+export async function claimLotSaleProceeds(lotId) {
+  return await claimSaleProceeds(lotId)
+}
+
+// Количество записей в витрине
+export async function getGemShowcaseCount() {
+  const c = getDCTRead('GemShowcase', GEMSHOWCASE_ABI)
+  if (!c) return 0
+  try { return Number(await c.showcaseCount()) } catch { return 0 }
+}
+
+// GemShowcase — запись на витрину (нужен approve fractions)
+const GEMSHOWCASE_WRITE_ABI = [
+  'function createListing(uint256 lotId, uint256 salePrice)',
+  'function buyListing(uint256 listingId)',
+  'function cancelListing(uint256 listingId)',
+]
+
+export async function createGemShowcaseListing(lotId, salePriceUSDT) {
+  const c = getDCT('GemShowcase', GEMSHOWCASE_WRITE_ABI)
+  // Approve fractions for GemShowcase
+  const fg = getDCT('FractionalGem', FRACTIONALGEM_ABI)
+  const isApproved = await fg.isApprovedForAll(web3.address, ADDRESSES.GemShowcase)
+  if (!isApproved) {
+    const appTx = await fg.setApprovalForAll(ADDRESSES.GemShowcase, true)
+    await appTx.wait()
+  }
+  const tx = await c.createListing(lotId, parse6(salePriceUSDT))
+  return await tx.wait()
+}
+
+export async function buyFromGemShowcase(listingId) {
+  const c = getDCT('GemShowcase', GEMSHOWCASE_WRITE_ABI)
+  // Нужен USDT approve
+  const cRead = getDCTRead('GemShowcase', GEMSHOWCASE_ABI)
+  const listing = await cRead.showcaseListings(listingId)
+  await ensureUSDTApproval(ADDRESSES.GemShowcase, listing.salePrice)
+  const tx = await c.buyListing(listingId)
+  return await tx.wait()
+}
+
+export async function cancelGemShowcaseListing(listingId) {
+  const c = getDCT('GemShowcase', GEMSHOWCASE_WRITE_ABI)
+  const tx = await c.cancelListing(listingId)
+  return await tx.wait()
+}
+
+// DCTExchange — алиасы с именами из DCTPage
+export async function fillSellOrderDCT(orderId, dctAmount) {
+  return await fillSellOrder(orderId, dctAmount)
+}
+
+export async function fillBuyOrderDCT(orderId, dctAmount) {
+  return await fillBuyOrder(orderId, dctAmount)
+}
+
+// Heritage — константы
+export async function getHeritageConstants() {
+  const c = getDCTRead('DCTHeritage', DCTHERIT_ABI)
+  if (!c) return { minInactivity: 0, maxHeirs: 0 }
+  try {
+    const min = await c.MIN_INACTIVITY()
+    const max = await c.MAX_HEIRS()
+    return { minInactivity: Number(min), maxHeirs: Number(max) }
+  } catch { return { minInactivity: 0, maxHeirs: 0 } }
+}
+
+// Heritage — исполнение (любой может вызвать если срок прошёл)
+export async function executeHeritage(ownerAddress) {
+  const c = getDCT('DCTHeritage', [
+    'function execute(address owner)',
+  ])
+  const tx = await c.execute(ownerAddress)
+  return await tx.wait()
+}
