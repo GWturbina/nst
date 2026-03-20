@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import useGameStore from '@/lib/store'
 import { LEVELS } from '@/lib/gameData'
 import * as C from '@/lib/contracts'
+import HelpButton from '@/components/ui/HelpButton'
 
 export default function LevelsTab() {
   const { level, wallet, registered, setTab, addNotification, setTxPending, txPending, setLevel, t } = useGameStore()
@@ -137,9 +138,12 @@ export default function LevelsTab() {
 
   return (
     <div className="flex-1 overflow-y-auto pb-4">
-      <div className="px-3 pt-3 pb-1">
-        <h2 className="text-lg font-black text-gold-400">🗺 {t('levelMap')}</h2>
-        <p className="text-[11px] text-slate-500">{t('levelMapDesc')}</p>
+      <div className="px-3 pt-3 pb-1 flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-black text-gold-400">🗺 {t('levelMap')}</h2>
+          <p className="text-[11px] text-slate-500">{t('levelMapDesc')}</p>
+        </div>
+        <HelpButton section="levels" />
       </div>
 
       <div className="px-3 mt-1 space-y-2">
