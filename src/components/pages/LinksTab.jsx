@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import useGameStore from '@/lib/store'
+import HelpButton from '@/components/ui/HelpButton'
 
 export default function LinksTab() {
   const { wallet, sponsorId, t } = useGameStore()
@@ -31,7 +32,10 @@ export default function LinksTab() {
 
   return (
     <div className="px-3 py-4 space-y-3">
-      <h2 className="text-lg font-black" style={{ color: 'var(--gold)' }}>✂️ {t('tabLinks')}</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-black" style={{ color: 'var(--gold)' }}>✂️ {t('tabLinks')}</h2>
+        <HelpButton section="links" />
+      </div>
 
       {!wallet ? (
         <div className="p-4 rounded-2xl text-center text-[12px] text-slate-400 border border-white/5">
