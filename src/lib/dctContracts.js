@@ -629,10 +629,18 @@ export async function getGemShowcaseListings() {
 // Загрузить полный дашборд DCT — токен + пользователь
 export async function loadDCTDashboard(address) {
   try {
-    const token = await getDCTTokenInfo()
-    const user = address ? await getDCTUserInfo(address) : null
-    return { token, user }
-  } catch { return { token: null, user: null } }
+    const [tokenInfo, userInfo, claimableGems, exchangeStats, bestPrices, heritageInfo] = await Promise.all([
+      getDCTTokenInfo().catch(() => null),
+      address ? getDCTUserInfo(address).catch(() => null) : null,
+      address ? getClaimableGems(address).catch(() => ({ purchaseIds: [], marketValues: [], estimatedDCT: [] })) : { purchaseIds: [], marketValues: [], estimatedDCT: [] },
+      getExchangeStats().catch(() => null),
+      getExchangeBestPrices().catch(() => null),
+      address ? getHeritageInfo(address).catch(() => null) : null,
+    ])
+    return { tokenInfo, userInfo, claimableGems, exchangeStats, bestPrices, heritageInfo }
+  } catch {
+    return { tokenInfo: null, userInfo: null, claimableGems: { purchaseIds: [], marketValues: [], estimatedDCT: [] }, exchangeStats: null, bestPrices: null, heritageInfo: null }
+  }
 }
 
 // Backing rate из DCTBridge
