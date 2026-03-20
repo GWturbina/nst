@@ -5,6 +5,7 @@ import OrdersAdmin, { StaffAdmin } from '@/components/admin/OrdersAdmin'
 import PriceAdmin from '@/components/admin/PriceAdmin'
 import LotsAdmin from '@/components/admin/LotsAdmin'
 import FractionalLotsAdmin from '@/components/admin/FractionalLotsAdmin'
+import ShowcaseAdmin from '@/components/admin/ShowcaseAdmin'
 
 export default function AdminPanel() {
   const { wallet, isAdmin, ownerWallet, addNotification,
@@ -22,6 +23,7 @@ export default function AdminPanel() {
     { id: 'lots', icon: '🎟', label: 'Лоты' },
     { id: 'fractional', icon: '🧩', label: 'Фракции' },
     { id: 'orders', icon: '📋', label: 'Заказы' },
+    { id: 'showcase', icon: '🏪', label: 'Витрина' },
     { id: 'staff', icon: '👥', label: 'Сотрудники' },
     { id: 'prices', icon: '💲', label: 'Цены' },
     { id: 'test', icon: '🎮', label: 'Тест' },
@@ -47,7 +49,7 @@ export default function AdminPanel() {
       </div>
 
       {/* Навигация — СЕТКА вместо скролла */}
-      <div className="grid grid-cols-3 gap-1 px-3 mt-1">
+      <div className="grid grid-cols-4 gap-1 px-3 mt-1">
         {SECTIONS.map(s => (
           <button key={s.id} onClick={() => setActiveSection(s.id)}
             className={`py-2 rounded-xl text-[10px] font-bold border transition-all ${activeSection === s.id ? 'bg-gold-400/15 border-gold-400/30 text-gold-400' : 'border-white/8 text-slate-500'}`}>
@@ -113,6 +115,9 @@ export default function AdminPanel() {
         {/* ЗАКАЗЫ */}
         {activeSection === 'orders' && <OrdersAdmin />}
 
+        {/* ВИТРИНА */}
+        {activeSection === 'showcase' && <ShowcaseAdmin />}
+
         {/* СОТРУДНИКИ */}
         {activeSection === 'staff' && <StaffAdmin />}
 
@@ -166,7 +171,7 @@ function AdminGuide({ onClose }) {
           <button onClick={onClose} className="w-8 h-8 rounded-full bg-white/5 text-slate-400 flex items-center justify-center text-[14px]">✕</button>
         </div>
 
-        <div className="grid grid-cols-3 gap-1 px-3 py-2 border-b border-white/5 shrink-0">
+        <div className="grid grid-cols-4 gap-1 px-3 py-2 border-b border-white/5 shrink-0">
           {TABS.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`py-2 rounded-lg text-[10px] font-bold border transition-all ${tab === t.id ? 'bg-gold-400/15 border-gold-400/30 text-gold-400' : 'border-white/8 text-slate-500'}`}>
@@ -184,16 +189,15 @@ function AdminGuide({ onClose }) {
             <p><b className="text-gold-400">🎟 Лоты</b> — создание и управление клубными лотами (долевая покупка бриллиантов с розыгрышем).</p>
             <p><b className="text-gold-400">🧩 Фракции</b> — создание и управление фракционными лотами в смарт-контракте FractionalGem (on-chain доли, стейкинг, ювелирка, продажа).</p>
             <p><b className="text-gold-400">📋 Заказы</b> — все заказы камней из конфигуратора. Смена статусов, заметки, история.</p>
+            <p><b className="text-gold-400">🏪 Витрина</b> — создание корпоративных товаров, модерация, оформление продаж. Те же товары доступны пользователям в КЛУБ → Магазин.</p>
             <p><b className="text-gold-400">👥 Сотрудники</b> — назначение ролей: Менеджер (утверждает заказы), Оператор (просматривает).</p>
             <p><b className="text-gold-400">💲 Цены</b> — загрузка цен в смарт-контракт FractionalGem. Клубная цена = 65% от рыночной.</p>
             <p><b className="text-gold-400">🎮 Тест</b> — быстрое переключение уровня (только визуально, для тестирования).</p>
 
-            <GTitle text="🏪 Где Витрина?" />
-            <p>Витрина управляется из раздела <b className="text-blue-400">КЛУБ → Витрина</b> (не из админки). Вы как админ можете:</p>
-            <p>1. Нажать «+ Разместить» для добавления товара</p>
-            <p>2. Выбрать корпоративную витрину (ваши камни/ювелирка)</p>
-            <p>3. Модерировать партнёрские товары</p>
-            <p>4. Подтверждать продажи (кнопка «✅ Продажа»)</p>
+            <GTitle text="🏪 Витрина" />
+            <p>Витрина теперь управляется из двух мест:</p>
+            <p>1. <b className="text-gold-400">Админ → Витрина</b> — создание корпоративных товаров, модерация, смена статусов, оформление продаж</p>
+            <p>2. <b className="text-blue-400">КЛУБ → Магазин</b> — партнёры выставляют свои товары (с мин. 4 уровнем GW)</p>
           </>)}
 
           {tab === 'lots' && (<>
@@ -273,31 +277,17 @@ function AdminGuide({ onClose }) {
           </>)}
 
           {tab === 'showcase' && (<>
-            <GTitle text="🏪 Как выставить камень на витрину" />
-            <p>Витрина — это ваш магазин внутри Diamond Club. Управляется НЕ из админки, а из раздела <b className="text-blue-400">КЛУБ → Витрина</b>.</p>
+            <GTitle text="🏪 Витрина Diamond Club" />
+            <p>Витрина — ваш магазин. Теперь управление доступно из <b className="text-gold-400">Админ → Витрина</b>.</p>
 
-            <GTitle text="💎 Выставить бриллиант:" />
-            <p>1. Перейдите в <b>КЛУБ → Витрина</b></p>
-            <p>2. Убедитесь что выбрана вкладка «Корпоративная»</p>
-            <p>3. Нажмите <b>«+ Разместить»</b></p>
-            <p>4. Категория: <b>💎 Бриллианты</b></p>
-            <p>5. Заполните: название, описание, караты, форма, чистота, цвет</p>
-            <p>6. Укажите <b>розничную цену</b> и <b>клубную цену</b></p>
-            <p>7. Загрузите фото камня (до 5 штук)</p>
-            <p>8. Добавьте ссылку на видео (если есть)</p>
-            <p>9. Ссылка на сертификат GIA/IGI/HRD</p>
-            <p>10. Нажмите <b>«Опубликовать»</b></p>
+            <GTitle text="📝 Из админки вы можете:" />
+            <p>1. <b className="text-gold-400">Создать корпоративный товар</b> — бриллиант или ювелирку с фото, видео, сертификатом</p>
+            <p>2. <b>Просмотреть все товары</b> — фильтр по статусу (активные, скрытые, проданные)</p>
+            <p>3. <b>Скрыть/активировать</b> — управление видимостью</p>
+            <p>4. <b className="text-emerald-400">Оформить продажу</b> — указать покупателя и адрес доставки</p>
 
-            <GTitle text="💍 Выставить ювелирку:" />
-            <p>Тот же процесс, но категория: <b>💍 Ювелирка</b></p>
-            <p>Описание: материал, проба, вес, камни, размер</p>
-
-            <GTitle text="✅ Подтверждение продажи:" />
-            <p>Когда покупатель найден:</p>
-            <p>1. Откройте свой товар на витрине</p>
-            <p>2. Нажмите <b>«✅ Продажа»</b></p>
-            <p>3. Введите адрес кошелька покупателя</p>
-            <p>4. Подтвердите — маркетинг распределится автоматически</p>
+            <GTitle text="👥 Партнёрская витрина:" />
+            <p>Партнёры выставляют товары из <b className="text-blue-400">КЛУБ → Магазин</b> (мин. 4 уровень GW). Вы видите их товары в админке и можете модерировать.</p>
 
             <GTitle text="💰 Маркетинг (15% от маржи):" />
             <p>Пример: закупка $350, продажа $700, маржа $350</p>
