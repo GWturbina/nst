@@ -227,6 +227,14 @@ export default function ClubLotsSection() {
           <div className="text-xs text-slate-500">
             {tab === 'active' ? 'Нет активных лотов' : tab === 'my' ? 'Вы ещё не участвуете' : 'Нет завершённых лотов'}
           </div>
+          {/* Демо-визуализация */}
+          <button onClick={() => setVisualLot({
+            id: 'demo', title: 'ДЕМО — Бриллиант 1.5 ct', description: 'Превью визуализации долевого участия. Нажимайте на грани!',
+            total_shares: 100, sold_shares: 14, share_price: 10, status: 'active',
+          })}
+            className="mt-4 px-5 py-2.5 rounded-xl text-[12px] font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/15 transition-all">
+            💎 Посмотреть визуализацию бриллианта
+          </button>
         </div>
       ) : (
         <div className="space-y-3">
