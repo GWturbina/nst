@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { ethers } from 'ethers'
 import useGameStore from '@/lib/store'
 import { safeCall } from '@/lib/contracts'
+import { authFetch } from '@/lib/authClient'
 import web3 from '@/lib/web3'
 import ADDRESSES from '@/contracts/addresses'
 
@@ -81,7 +82,31 @@ export default function PriceAdmin() {
     setTxPending(false)
 
     if (result.ok) {
-      addNotification(`✅ Цена ${ct}ct сохранена: $${no} / $${ce}`)
+      addNotification(`✅ Цена ${ct}ct в контракте: $${no} / $${ce}`)
+
+      // Синхронизация с Supabase dc_prices (конфигуратор читает оттуда)
+      try {
+        const PREMIUM_MULT = 1.08 // премиум = +8%
+        const ctKey = ct.toFixed(2)
+
+        // Загружаем текущие цены из Supabase
+        const current = await fetch('/api/prices').then(r => r.json()).catch(() => ({ prices: {} }))
+        const stdPrices = { ...(current.prices?.club_standard || {}) }
+        const premPrices = { ...(current.prices?.club_premium || {}) }
+
+        // Обновляем
+        stdPrices[ctKey] = { noCert: Math.round(no), cert: Math.round(ce) }
+        premPrices[ctKey] = { noCert: Math.round(no * PREMIUM_MULT), cert: Math.round(ce * PREMIUM_MULT) }
+
+        // Сохраняем оба тира
+        await authFetch('/api/prices', { method: 'POST', body: { adminWallet: wallet, key: 'club_standard', data: stdPrices } })
+        await authFetch('/api/prices', { method: 'POST', body: { adminWallet: wallet, key: 'club_premium', data: premPrices } })
+
+        addNotification('✅ Синхронизировано с конфигуратором')
+      } catch {
+        addNotification('⚠️ Контракт обновлён, но синхронизация с Supabase не удалась')
+      }
+
       setNewCarats(''); setNewNoCert(''); setNewCert('')
       reload()
     } else {
