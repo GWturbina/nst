@@ -6,6 +6,7 @@ import { useBlockchain } from '@/lib/useBlockchain'
 import { useTelegram } from '@/lib/useTelegram'
 import { serverTap, localTapAllowed, loadTapState } from '@/lib/tapService'
 import * as C from '@/lib/contracts'
+import HelpButton from '@/components/ui/HelpButton'
 
 export default function MineTab() {
   const bnbPrice = useGameStore(s => s.bnbPrice)
@@ -261,6 +262,7 @@ export default function MineTab() {
           <div className="text-xl font-black font-display" style={{ color: lv.color }}>{totalDct.toFixed(2)}</div>
           <div className="text-[9px] text-slate-500">DCT</div>
         </div>
+        <HelpButton section="mine" />
       </div>
 
       {/* Энергия — показываем время до полной зарядки */}
