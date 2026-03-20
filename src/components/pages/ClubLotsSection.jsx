@@ -18,6 +18,7 @@ import { shortAddress } from '@/lib/web3'
 import { safeCall } from '@/lib/contracts'
 import * as CL from '@/lib/clubLotsContracts'
 import { authFetch } from '@/lib/authClient'
+import HelpButton from '@/components/ui/HelpButton'
 
 const STATUS_MAP = {
   active: { label: '🟢 Активный', color: 'text-emerald-400' },
