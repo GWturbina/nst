@@ -9,6 +9,7 @@ import {
 import * as Orders from '@/lib/dcOrders'
 import ADDRESSES from '@/contracts/addresses'
 import ShapeSVG from '@/components/ui/DiamondShapes'
+import HelpButton from '@/components/ui/HelpButton'
 
 const READ_RPC = process.env.NEXT_PUBLIC_RPC_URL || 'https://opbnb-mainnet-rpc.bnbchain.org'
 const readProvider = new ethers.JsonRpcProvider(READ_RPC)
