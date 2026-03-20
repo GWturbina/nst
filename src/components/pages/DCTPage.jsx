@@ -25,7 +25,7 @@ export default function DCTPage() {
     { id: 'dashboard',  icon: '📊', label: 'Обзор' },
     { id: 'bridge',     icon: '🌉', label: 'Мост' },
     { id: 'fractions',  icon: '💎', label: 'Фракции' },
-    { id: 'showcase',   icon: '🏪', label: 'Витрина' },
+    { id: 'showcase',   icon: '🏪', label: 'NFT Витрина' },
     { id: 'exchange',   icon: '📈', label: 'Биржа' },
     { id: 'dex',        icon: '🔄', label: 'DEX' },
     { id: 'heritage',   icon: '🏛️', label: 'Наследство' },
@@ -766,7 +766,7 @@ function ShowcaseSection() {
   return (
     <div className="px-3 mt-2 space-y-2">
       <div className="flex items-center justify-between">
-        <SectionTitle icon="🏪" text={`Витрина (${activeListings.length})`} />
+        <SectionTitle icon="🏪" text={`NFT Витрина (${activeListings.length})`} />
         <button onClick={() => setShowCreate(!showCreate)}
           className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border ${showCreate ? 'border-white/10 text-slate-400' : 'border-emerald-500/20 text-emerald-400 bg-emerald-500/10'}`}>
           {showCreate ? '✕ Закрыть' : '+ Выставить'}
