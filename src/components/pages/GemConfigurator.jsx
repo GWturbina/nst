@@ -193,9 +193,9 @@ export default function GemConfigurator() {
   const currentPrice = calcPrice(carats, hasCert)
 
   // Коэффициенты чистоты (влияют на цену)
-  const CLARITY_COEFF = { IF: 1.08, VVS1: 1.04, VVS2: 1.02, VS1: 1.00, VS2: 0.97 }
+  const CLARITY_COEFF = { IF: 1.03, VVS1: 1.02, VVS2: 1.01, VS1: 1.00, VS2: 0.99 }
   // Коэффициенты цвета (влияют на цену)
-  const COLOR_COEFF = { D: 1.10, E: 1.06, F: 1.03, G: 1.00, H: 0.97, I: 0.95 }
+  const COLOR_COEFF = { D: 1.03, E: 1.02, F: 1.01, G: 1.00, H: 0.99, I: 0.98 }
   // Маркетинг 5% (реферальная программа 9 уровней)
   const MARKETING_MULT = 1.05
 
