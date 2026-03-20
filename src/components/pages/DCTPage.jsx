@@ -281,8 +281,8 @@ function BridgeSection() {
 
   if (loading) return <Loading />
 
-  const totalGemDCT = claimableGems.estimatedDCT.reduce((s, v) => s + parseFloat(v), 0)
-  const totalMetalDCT = claimableMetals.estimatedDCT.reduce((s, v) => s + parseFloat(v), 0)
+  const totalGemDCT = (claimableGems?.estimatedDCT || []).reduce((s, v) => s + parseFloat(v), 0)
+  const totalMetalDCT = (claimableMetals?.estimatedDCT || []).reduce((s, v) => s + parseFloat(v), 0)
 
   return (
     <div className="px-3 mt-2 space-y-2">
