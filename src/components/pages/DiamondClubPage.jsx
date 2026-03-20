@@ -15,6 +15,7 @@ import GemConfigurator from '@/components/pages/GemConfigurator'
 import DeliverySection from '@/components/pages/DeliverySection'
 import ShowcaseNew from '@/components/pages/ShowcaseNew'
 import GemGallery from '@/components/pages/GemGallery'
+import ClubLotsSection from '@/components/pages/ClubLotsSection'
 
 // ═════════════════════════════════════════════════════════
 // MAIN: DiamondClubTab
@@ -26,6 +27,7 @@ export default function DiamondClubTab() {
 
   const sections = [
     { id: 'dashboard', icon: '📊', label: t('dcDashboard') || 'Обзор' },
+    { id: 'lots',      icon: '🎟', label: 'Клубные лоты' },
     { id: 'gems',      icon: '💎', label: t('dcGems') || 'Камни' },
     { id: 'gallery',   icon: '🧩', label: 'Галерея' },
     { id: 'showcase',  icon: '🏪', label: t('dcShowcase') || 'Витрина' },
@@ -76,6 +78,7 @@ export default function DiamondClubTab() {
       ) : (
         <>
           {section === 'dashboard' && <DashboardSection />}
+          {section === 'lots' && <ClubLotsSection />}
           {section === 'gems' && <GemsFullSection onGoToDCT={() => setSection('dct')} />}
           {section === 'gallery' && <GemGallery />}
           {section === 'showcase' && <ShowcaseNew />}
