@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import useGameStore from '@/lib/store'
 import * as DCT from '@/lib/dctContracts'
+import HelpButton from '@/components/ui/HelpButton'
 
 export default function VaultTab() {
   const { wallet, dct, dctFree, dctLocked, dctPrice, addNotification, setTxPending, txPending, t } = useGameStore()
@@ -19,8 +20,9 @@ export default function VaultTab() {
 
   return (
     <div className="flex-1 overflow-y-auto pb-4">
-      <div className="px-3 pt-3 pb-1">
+      <div className="px-3 pt-3 pb-1 flex items-center justify-between">
         <h2 className="text-lg font-black text-gold-400">🔐 DCT Сейф</h2>
+        <HelpButton section="vault" />
       </div>
 
       {!wallet ? (
