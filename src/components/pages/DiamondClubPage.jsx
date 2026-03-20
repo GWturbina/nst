@@ -40,7 +40,7 @@ export default function DiamondClubTab() {
     { id: 'delivery',  icon: '📦', label: t('dcDelivery') || 'Доставка' },
   ]
 
-  return (
+return (
     <div className="flex-1 overflow-y-auto pb-4">
       {/* Заголовок + кнопка помощи */}
       <div className="px-3 pt-3 pb-1 flex items-center justify-between">
@@ -48,10 +48,13 @@ export default function DiamondClubTab() {
           <h2 className="text-lg font-black text-gold-400">♦️ {t('dcTitle') || 'Diamond Club'}</h2>
           <p className="text-[11px] text-slate-500">{t('dcSubtitle') || 'Инвестиционный клуб'}</p>
         </div>
-        <button onClick={() => setShowHelp(true)}
-          className="w-9 h-9 rounded-full bg-blue-500/15 border border-blue-500/25 flex items-center justify-center text-blue-400 text-lg font-bold">
-          ?
-        </button>
+        <div className="flex items-center gap-2">
+          <HelpButton section={section} />
+          <button onClick={() => setShowHelp(true)}
+            className="w-9 h-9 rounded-full bg-blue-500/15 border border-blue-500/25 flex items-center justify-center text-blue-400 text-lg font-bold">
+            ?
+          </button>
+        </div>
       </div>
 
       {/* Sub-навигация */}
