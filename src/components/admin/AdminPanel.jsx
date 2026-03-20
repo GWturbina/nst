@@ -3,6 +3,7 @@ import { useState } from 'react'
 import useGameStore from '@/lib/store'
 import OrdersAdmin, { StaffAdmin } from '@/components/admin/OrdersAdmin'
 import PriceAdmin from '@/components/admin/PriceAdmin'
+import LotsAdmin from '@/components/admin/LotsAdmin'
 
 export default function AdminPanel() {
   const { wallet, isAdmin, ownerWallet, addNotification,
@@ -16,6 +17,7 @@ export default function AdminPanel() {
 
   const SECTIONS = [
     { id: 'content', icon: '📢', label: 'Контент' },
+    { id: 'lots', icon: '🎟', label: 'Лоты' },
     { id: 'orders', icon: '📋', label: 'Заказы' },
     { id: 'staff', icon: '👥', label: 'Сотрудники' },
     { id: 'prices', icon: '💲', label: 'Цены' },
@@ -90,6 +92,9 @@ export default function AdminPanel() {
             </div>
           </div>
         )}
+
+        {/* ЛОТЫ */}
+        {activeSection === 'lots' && <LotsAdmin />}
 
         {/* ЗАКАЗЫ */}
         {activeSection === 'orders' && <OrdersAdmin />}
