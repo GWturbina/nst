@@ -19,6 +19,7 @@ import { safeCall } from '@/lib/contracts'
 import * as CL from '@/lib/clubLotsContracts'
 import { authFetch } from '@/lib/authClient'
 import HelpButton from '@/components/ui/HelpButton'
+import DiamondLotVisual from '@/components/ui/DiamondLotVisual'
 
 const STATUS_MAP = {
   active: { label: '🟢 Активный', color: 'text-emerald-400' },
@@ -40,6 +41,7 @@ export default function ClubLotsSection() {
   const [buyModal, setBuyModal] = useState(null)
   const [buyCount, setBuyCount] = useState(1)
   const [useBalance, setUseBalance] = useState(false)
+  const [visualLot, setVisualLot] = useState(null) // Лот для визуализации бриллианта
 
   // ═══ Загрузка данных ═══
   const reload = useCallback(async () => {
@@ -190,7 +192,36 @@ export default function ClubLotsSection() {
       </div>
 
       {/* Список лотов */}
-      {displayLots.length === 0 ? (
+      {visualLot ? (
+        /* ═══ ВИЗУАЛИЗАЦИЯ БРИЛЛИАНТА ═══ */
+        <div>
+          <button onClick={() => setVisualLot(null)}
+            className="mb-2 px-3 py-1.5 rounded-xl text-[11px] font-bold text-slate-400 border border-white/8 hover:bg-white/5">
+            ← Назад к лотам
+          </button>
+          <DiamondLotVisual
+            lot={visualLot}
+            soldIds={(() => {
+              // Генерируем sold ID из количества проданных (пока нет поштучных данных)
+              const sold = visualLot.sold_shares || 0
+              return Array.from({ length: sold }, (_, i) => i + 1)
+            })()}
+            myIds={(() => {
+              const my = myShares[visualLot.id] || 0
+              const sold = visualLot.sold_shares || 0
+              // Мои доли — последние из проданных
+              return Array.from({ length: my }, (_, i) => sold - my + i + 1)
+            })()}
+            onBuy={async (facetId) => {
+              setBuyModal(visualLot)
+              setBuyCount(1)
+              setUseBalance(false)
+            }}
+            onBuyRandom={() => {}}
+            disabled={txPending}
+          />
+        </div>
+      ) : displayLots.length === 0 ? (
         <div className="text-center py-8">
           <div className="text-2xl mb-2">{tab === 'active' ? '💎' : tab === 'my' ? '🎟' : '📜'}</div>
           <div className="text-xs text-slate-500">
@@ -206,6 +237,7 @@ export default function ClubLotsSection() {
               myShareCount={myShares[lot.id] || 0}
               wallet={wallet}
               onBuy={() => { setBuyModal(lot); setBuyCount(1); setUseBalance(false) }}
+              onVisual={() => setVisualLot(lot)}
               onClaimComp={() => handleClaimCompensation(lot.id)}
               txPending={txPending}
             />
@@ -277,7 +309,7 @@ export default function ClubLotsSection() {
 // ═══════════════════════════════════════════════════
 // КАРТОЧКА ЛОТА
 // ═══════════════════════════════════════════════════
-function LotCard({ lot, myShareCount, wallet, onBuy, onClaimComp, txPending }) {
+function LotCard({ lot, myShareCount, wallet, onBuy, onVisual, onClaimComp, txPending }) {
   const pctSold = lot.total_shares > 0
     ? Math.round(((lot.sold_shares + (lot.reserved_shares || 0)) / lot.total_shares) * 100)
     : 0
@@ -381,6 +413,14 @@ function LotCard({ lot, myShareCount, wallet, onBuy, onClaimComp, txPending }) {
           <button onClick={onBuy} disabled={txPending}
             className="flex-1 py-2.5 rounded-xl text-[12px] font-black gold-btn disabled:opacity-50">
             🎟 Купить долю (${parseFloat(lot.share_price)})
+          </button>
+        )}
+
+        {/* Кнопка визуализации бриллианта */}
+        {wallet && (
+          <button onClick={onVisual}
+            className="py-2.5 px-3 rounded-xl text-[11px] font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/15 transition-all">
+            💎
           </button>
         )}
 
