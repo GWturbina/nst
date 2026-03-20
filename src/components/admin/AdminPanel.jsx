@@ -4,6 +4,7 @@ import useGameStore from '@/lib/store'
 import OrdersAdmin, { StaffAdmin } from '@/components/admin/OrdersAdmin'
 import PriceAdmin from '@/components/admin/PriceAdmin'
 import LotsAdmin from '@/components/admin/LotsAdmin'
+import FractionalLotsAdmin from '@/components/admin/FractionalLotsAdmin'
 
 export default function AdminPanel() {
   const { wallet, isAdmin, ownerWallet, addNotification,
@@ -19,6 +20,7 @@ export default function AdminPanel() {
   const SECTIONS = [
     { id: 'content', icon: '📢', label: 'Контент' },
     { id: 'lots', icon: '🎟', label: 'Лоты' },
+    { id: 'fractional', icon: '🧩', label: 'Фракции' },
     { id: 'orders', icon: '📋', label: 'Заказы' },
     { id: 'staff', icon: '👥', label: 'Сотрудники' },
     { id: 'prices', icon: '💲', label: 'Цены' },
@@ -105,6 +107,9 @@ export default function AdminPanel() {
         {/* ЛОТЫ */}
         {activeSection === 'lots' && <LotsAdmin />}
 
+        {/* ФРАКЦИИ (on-chain FractionalGem) */}
+        {activeSection === 'fractional' && <FractionalLotsAdmin />}
+
         {/* ЗАКАЗЫ */}
         {activeSection === 'orders' && <OrdersAdmin />}
 
@@ -143,6 +148,7 @@ function AdminGuide({ onClose }) {
   const TABS = [
     { id: 'overview', label: '📌 Обзор' },
     { id: 'lots', label: '🎟 Лоты' },
+    { id: 'fractional', label: '🧩 Фракции' },
     { id: 'orders', label: '📋 Заказы' },
     { id: 'showcase', label: '🏪 Витрина' },
     { id: 'staff', label: '👥 Персонал' },
@@ -176,6 +182,7 @@ function AdminGuide({ onClose }) {
             <p>Админ-панель доступна только владельцу кошелька. Здесь 6 разделов:</p>
             <p><b className="text-gold-400">📢 Контент</b> — управление новостями и квестами. Новости отображаются в приложении для всех. Квесты — задания для партнёров с наградами.</p>
             <p><b className="text-gold-400">🎟 Лоты</b> — создание и управление клубными лотами (долевая покупка бриллиантов с розыгрышем).</p>
+            <p><b className="text-gold-400">🧩 Фракции</b> — создание и управление фракционными лотами в смарт-контракте FractionalGem (on-chain доли, стейкинг, ювелирка, продажа).</p>
             <p><b className="text-gold-400">📋 Заказы</b> — все заказы камней из конфигуратора. Смена статусов, заметки, история.</p>
             <p><b className="text-gold-400">👥 Сотрудники</b> — назначение ролей: Менеджер (утверждает заказы), Оператор (просматривает).</p>
             <p><b className="text-gold-400">💲 Цены</b> — загрузка цен в смарт-контракт FractionalGem. Клубная цена = 65% от рыночной.</p>
@@ -215,6 +222,31 @@ function AdminGuide({ onClose }) {
 
             <GTitle text="💎 Визуализация" />
             <p>У каждого лота есть кнопка <b className="text-blue-400">💎</b> — открывает интерактивный бриллиант с 100 гранями. Каждая грань = доля. Можно нажимать на грани, выбирать и покупать.</p>
+          </>)}
+
+          {tab === 'fractional' && (<>
+            <GTitle text="🧩 Фракционные лоты (on-chain)" />
+            <p>Фракционные лоты — это камни, разделённые на доли через смарт-контракт FractionalGem. Каждая доля — ERC-1155 токен. Отличие от клубных лотов: всё on-chain, доли торгуются на DEX, есть стейкинг-доход.</p>
+
+            <GTitle text="📝 Как создать:" />
+            <p>1. Откройте <b className="text-gold-400">Админ → Фракции</b></p>
+            <p>2. Нажмите <b className="text-gold-400">«+ Создать фракционный лот»</b></p>
+            <p>3. Заполните: название, караты (×100, т.е. 250 = 2.50ct), кол-во долей, цена доли в DCT</p>
+            <p>4. Укажите APR стейкинга (в BP: 1200 = 12%) и период в днях</p>
+            <p>5. Подтвердите транзакцию в SafePal — лот создаётся в контракте</p>
+
+            <GTitle text="🔄 Жизненный цикл лота:" />
+            <p><b className="text-slate-400">СОЗДАН</b> → <b className="text-blue-400">СБОР</b> → <b className="text-emerald-400">СТЕЙКИНГ</b> → <b className="text-pink-400">ЮВЕЛИРКА</b> → <b className="text-gold-400">ПРОДАЖА</b> → <b className="text-purple-400">ПРОДАН</b></p>
+            <p>После создания нажмите <b className="text-blue-400">«🚀 Запустить сбор»</b> — партнёры смогут покупать доли за DCT.</p>
+            <p>Когда доли проданы — лот переходит в стейкинг. Вы начисляете прибыль кнопкой <b className="text-emerald-400">«💰 Прибыль цикла»</b>.</p>
+
+            <GTitle text="🔧 Действия админа:" />
+            <p>• <b className="text-emerald-400">💰 Прибыль цикла</b> — начислить USDT прибыль держателям долей</p>
+            <p>• <b className="text-blue-400">📥 Пополнить резерв</b> — добавить USDT в стейкинг-резерв</p>
+            <p>• <b className="text-pink-400">💍 Ювелирка</b> — запустить производство ювелирки из камня</p>
+            <p>• <b className="text-orange-400">🏷 На продажу</b> — принудительно выставить лот на продажу</p>
+            <p>• <b className="text-purple-400">✅ Подтвердить продажу</b> — зафиксировать сумму продажи, средства распределятся по долям</p>
+            <p>• <b className="text-red-400">🆘 Экстренный вывод</b> — аварийный вывод стейкинга (только owner)</p>
           </>)}
 
           {tab === 'orders' && (<>
