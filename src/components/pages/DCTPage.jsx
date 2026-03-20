@@ -37,7 +37,7 @@ export default function DCTPage() {
       </div>
 
       {/* Sub-навигация */}
-      <div className="flex gap-1 px-3 mt-1 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+      <div className="flex gap-1 px-3 mt-1 overflow-x-auto hover:overflow-x-scroll" style={{ scrollbarWidth: 'thin' }}>
         {sections.map(s => (
           <button key={s.id} onClick={() => setSection(s.id)}
             className={`shrink-0 px-3 py-2 rounded-xl text-[10px] font-bold border transition-all ${
