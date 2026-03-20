@@ -50,7 +50,6 @@ return (
           <p className="text-[11px] text-slate-500">{t('dcSubtitle') || 'Инвестиционный клуб'}</p>
         </div>
         <div className="flex items-center gap-2">
-          <HelpButton section={section} />
           <button onClick={() => setShowHelp(true)}
             className="w-9 h-9 rounded-full bg-blue-500/15 border border-blue-500/25 flex items-center justify-center text-blue-400 text-lg font-bold">
             ?
