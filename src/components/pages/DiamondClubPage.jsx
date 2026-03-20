@@ -24,7 +24,6 @@ import HelpButton from '@/components/ui/HelpButton'
 export default function DiamondClubTab() {
   const { wallet, t } = useGameStore()
   const [section, setSection] = useState('dashboard')
-  const [showHelp, setShowHelp] = useState(false)
 
   const sections = [
     { id: 'dashboard', icon: '📊', label: t('dcDashboard') || 'Обзор' },
@@ -50,10 +49,7 @@ return (
           <p className="text-[11px] text-slate-500">{t('dcSubtitle') || 'Инвестиционный клуб'}</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setShowHelp(true)}
-            className="w-9 h-9 rounded-full bg-blue-500/15 border border-blue-500/25 flex items-center justify-center text-blue-400 text-lg font-bold">
-            ?
-          </button>
+          <HelpButton section={section} />
         </div>
       </div>
 
@@ -95,8 +91,7 @@ return (
         </>
       )}
 
-      {/* Модалка инструкции */}
-      {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
+      {/* Модалка инструкции — теперь через HelpButton */}
     </div>
   )
 }
