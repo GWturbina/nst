@@ -261,6 +261,11 @@ export default function GemConfigurator() {
   return (
     <div className="px-3 mt-2 space-y-2">
 
+      <div className="flex items-center justify-between">
+        <div className="text-[14px] font-black text-gold-400">💎 Конфигуратор</div>
+        <HelpButton section="gems" />
+      </div>
+
       {/* ТИП */}
       <div className="flex gap-1 p-1 rounded-2xl bg-white/5">
         <button onClick={() => setGemType('white')}
