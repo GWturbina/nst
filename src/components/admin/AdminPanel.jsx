@@ -7,6 +7,7 @@ import LotsAdmin from '@/components/admin/LotsAdmin'
 import FractionalLotsAdmin from '@/components/admin/FractionalLotsAdmin'
 import ShowcaseAdmin from '@/components/admin/ShowcaseAdmin'
 import LevelContentAdmin from '@/components/admin/LevelContentAdmin'
+import BoostConfigAdmin from '@/components/admin/BoostConfigAdmin'
 
 export default function AdminPanel() {
   const { wallet, isAdmin, ownerWallet, addNotification,
@@ -27,6 +28,7 @@ export default function AdminPanel() {
     { id: 'showcase', icon: '🏪', label: 'Витрина' },
     { id: 'staff', icon: '👥', label: 'Сотрудники' },
     { id: 'prices', icon: '💲', label: 'Цены' },
+    { id: 'boost', icon: '🚀', label: 'Буст' },
     { id: 'test', icon: '🗺', label: 'Уровни' },
   ]
 
@@ -50,7 +52,7 @@ export default function AdminPanel() {
       </div>
 
       {/* Навигация — СЕТКА вместо скролла */}
-      <div className="grid grid-cols-4 gap-1 px-3 mt-1">
+      <div className="grid grid-cols-5 gap-1 px-3 mt-1">
         {SECTIONS.map(s => (
           <button key={s.id} onClick={() => setActiveSection(s.id)}
             className={`py-2 rounded-xl text-[10px] font-bold border transition-all ${activeSection === s.id ? 'bg-gold-400/15 border-gold-400/30 text-gold-400' : 'border-white/8 text-slate-500'}`}>
@@ -124,6 +126,9 @@ export default function AdminPanel() {
 
         {/* ЦЕНЫ */}
         {activeSection === 'prices' && <PriceAdmin />}
+
+        {/* БУСТ — пороги UserBoost */}
+        {activeSection === 'boost' && <BoostConfigAdmin />}
 
         {/* УРОВНИ — тексты + превью тем */}
         {activeSection === 'test' && <LevelContentAdmin />}
