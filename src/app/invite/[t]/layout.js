@@ -1,9 +1,9 @@
-const BASE_URL = 'https://nss-azure.vercel.app'
+const BASE_URL = 'https://nst-murex.vercel.app'
 
 const templates = {
   gems: {
     title: '💎 NSS Diamond Club — Бриллианты по клубной цене',
-    description: 'Закрытый инвестиционный клуб. Бриллианты от завода со скидкой до 64%. Стейкинг от 50% годовых. Начни бесплатно!',
+    description: 'Закрытый инвестиционный клуб. Бриллианты от завода со скидкой до 70%. Стейкинг от 50% годовых. Начни бесплатно!',
     image: 'invite-gems.jpg',
   },
   house: {
