@@ -10,7 +10,7 @@ import HelpButton from '@/components/ui/HelpButton'
 
 export default function MineTab() {
   const bnbPrice = useGameStore(s => s.bnbPrice)
-  const { level, localDct, dct, energy, maxEnergy, taps, registered, wallet,
+  const { level, localNss, energy, maxEnergy, taps, registered, wallet,
     evapActive, evapSeconds, doTap, tickEvap, news, setTab, addNotification,
     setTxPending, txPending, setLevel, t } = useGameStore()
   const { connect } = useBlockchain()
@@ -49,7 +49,7 @@ export default function MineTab() {
   const [registering, setRegistering] = useState(false)
   const [refFromLink, setRefFromLink] = useState(false)
 
-  const totalDct = dct + localDct
+  const totalNss = localNss
 
   // Автозаполнение спонсора
   useEffect(() => {
@@ -102,7 +102,7 @@ export default function MineTab() {
           useGameStore.getState().syncServerTaps({
             energy: state.energy,
             maxEnergy: state.maxEnergy,
-            localDct: state.totalDct,
+            localNss: state.totalNss,
             taps: state.totalTaps,
           })
         }
@@ -134,7 +134,7 @@ export default function MineTab() {
           useGameStore.getState().syncServerTaps({
             energy: result.energy,
             maxEnergy: result.maxEnergy,
-            localDct: result.totalDct,
+            localNss: result.totalNss,
             taps: result.totalTaps,
           })
         }
@@ -160,7 +160,7 @@ export default function MineTab() {
     const lv = LEVELS[useGameStore.getState().level]
 
     setEffects(prev => [...prev,
-      { id: Date.now() + Math.random(), x: `${x}px`, y: `${y - 10}px`, text: `+${lv.dctPerTap}`, type: 'number' },
+      { id: Date.now() + Math.random(), x: `${x}px`, y: `${y - 10}px`, text: `+${lv.nssPerTap}`, type: 'number' },
     ])
     setTimeout(() => setEffects(prev => prev.slice(1)), 800)
 
@@ -285,8 +285,8 @@ export default function MineTab() {
           <div className="text-[10px] text-slate-400">{lv.sub} • Lv.{level}</div>
         </div>
         <div className="text-right">
-          <div className="text-xl font-black font-display" style={{ color: lv.color }}>{totalDct.toFixed(2)}</div>
-          <div className="text-[9px] text-slate-500">DCT</div>
+          <div className="text-xl font-black font-display" style={{ color: lv.color }}>{totalNss.toFixed(0)}</div>
+          <div className="text-[9px] text-slate-500">⛏ NSS</div>
         </div>
         <HelpButton section="mine" />
       </div>
@@ -401,8 +401,8 @@ export default function MineTab() {
       {nextLv && (
         <div className="px-3 mt-1.5">
           <div className="flex items-center justify-between text-[9px] mb-0.5">
-            <span className="text-slate-500">{lv.emoji} Lv.{level} (+{lv.dctPerTap} DCT)</span>
-            <span style={{ color: nextLv.color }} className="font-bold">{nextLv.emoji} {nextLv.name} (+{nextLv.dctPerTap} DCT)</span>
+            <span className="text-slate-500">{lv.emoji} Lv.{level} (+{lv.nssPerTap} NSS)</span>
+            <span style={{ color: nextLv.color }} className="font-bold">{nextLv.emoji} {nextLv.name} (+{nextLv.nssPerTap} NSS)</span>
           </div>
           <div className="h-1 rounded-full bg-white/5 overflow-hidden">
             <div className="h-full rounded-full" style={{ width: '100%', background: `linear-gradient(90deg, ${lv.color}, ${nextLv.color}40)` }} />
@@ -425,7 +425,7 @@ export default function MineTab() {
         </div>
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 text-[11px] px-3 py-1 rounded-full"
           style={{ color: '#eee8d5', background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}>
-          ⛏ {t('tapHint')} • +{lv.dctPerTap} DCT
+          ⛏ {t('tapHint')} • +{lv.nssPerTap} NSS
         </div>
         {effects.map(ef => (
           <div key={ef.id} className={`absolute pointer-events-none z-20 ${ef.type === 'number' ? 'animate-tap-up font-black text-base' : 'animate-gem-burst text-lg'}`}
@@ -443,7 +443,7 @@ export default function MineTab() {
 
       <div className="grid grid-cols-3 gap-1.5 px-3 pb-2">
         <StatCard value={taps} label={t('taps')} color="text-gold-400" />
-        <StatCard value={totalDct.toFixed(2)} label="DCT" color="text-emerald-400" />
+        <StatCard value={totalNss.toFixed(0)} label="NSS" color="text-emerald-400" />
         <StatCard value={parseFloat(useGameStore.getState().usdt || 0).toFixed(0)} label="USDT" color="text-blue-400" />
       </div>
 
