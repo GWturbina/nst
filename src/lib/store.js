@@ -109,6 +109,12 @@ const useGameStore = create(
   // FIX #7: Установить подпись после подключения кошелька
   setAuth: (authData) => set({ authSig: authData.authSig, authTs: authData.authTs }),
 
+  // ═══ AUTO-REGISTER (показ модала регистрации после подключения) ═══
+  showAutoRegister: false,
+  pendingRefId: null,
+  setAutoRegister: (refId) => set({ showAutoRegister: true, pendingRefId: refId }),
+  clearAutoRegister: () => set({ showAutoRegister: false, pendingRefId: null }),
+
   // ═══════════════════════════════════════════════════
   // BLOCKCHAIN SYNC
   // ═══════════════════════════════════════════════════
