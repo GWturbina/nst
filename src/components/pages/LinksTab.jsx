@@ -1,36 +1,23 @@
 'use client'
-/**
- * LinksTab — Реферальные ссылки + шаринг с превью
- * Telegram, WhatsApp, Viber + выбор шаблона превью
- */
 import { useState } from 'react'
 import useGameStore from '@/lib/store'
 import HelpButton from '@/components/ui/HelpButton'
 
-const TEMPLATES = [
-  { id: 'gems',  emoji: '💎', title: 'Ищи камни — зарабатывай!', color: '#a855f7' },
-  { id: 'house', emoji: '🏠', title: 'Свой дом под 0%!', color: '#f59e0b' },
-  { id: 'money', emoji: '💰', title: '15 источников дохода!', color: '#10b981' },
-]
-
 export default function LinksTab() {
   const { wallet, sponsorId, t } = useGameStore()
   const [copied, setCopied] = useState(false)
-  const [selTemplate, setSelTemplate] = useState('gems')
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://nst-murex.vercel.app'
 
-  // Ссылки
   const inviteLink = sponsorId
-    ? `${baseUrl}/invite?ref=${sponsorId}&t=${selTemplate}`
-    : wallet ? `${baseUrl}/invite?ref=${wallet.slice(2, 10)}&t=${selTemplate}` : ''
+    ? `${baseUrl}/invite?ref=${sponsorId}`
+    : wallet ? `${baseUrl}/invite?ref=${wallet.slice(2, 10)}` : ''
 
   const tgBotLink = sponsorId
     ? `https://t.me/DiamondClubNSSBot?start=${sponsorId}`
     : ''
 
-  const tpl = TEMPLATES.find(t => t.id === selTemplate) || TEMPLATES[0]
-  const shareText = `${tpl.emoji} ${tpl.title}\n💎 NSS — Искатели Камней! Бесплатный старт, реальные камни, свой дом!\nПрисоединяйся:`
+  const shareText = `💎 Бриллианты со скидкой до 70%! Стейкинг от 50% годовых. Бесплатный старт! Присоединяйся:`
 
   const shareLinks = {
     tg: `https://t.me/share/url?url=${encodeURIComponent(inviteLink)}&text=${encodeURIComponent(shareText)}`,
@@ -39,16 +26,8 @@ export default function LinksTab() {
   }
 
   const copy = (text) => {
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(text)
-    } else {
-      const ta = document.createElement('textarea')
-      ta.value = text
-      document.body.appendChild(ta)
-      ta.select()
-      document.execCommand('copy')
-      document.body.removeChild(ta)
-    }
+    if (navigator.clipboard) navigator.clipboard.writeText(text)
+    else { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta) }
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -67,27 +46,7 @@ export default function LinksTab() {
       ) : (
         <div className="space-y-3">
 
-          {/* ═══ Выбор шаблона превью ═══ */}
-          <div className="p-3 rounded-2xl border" style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}>
-            <div className="text-[10px] text-slate-500 mb-2">🎨 Шаблон превью (отображается при отправке ссылки)</div>
-            <div className="flex gap-1.5">
-              {TEMPLATES.map(tpl => (
-                <button key={tpl.id} onClick={() => setSelTemplate(tpl.id)}
-                  className={`flex-1 py-2.5 rounded-xl text-center transition-all border ${
-                    selTemplate === tpl.id
-                      ? 'border-gold-400/30 bg-gold-400/10'
-                      : 'border-white/8 bg-white/3'
-                  }`}>
-                  <div className="text-lg">{tpl.emoji}</div>
-                  <div className={`text-[9px] font-bold ${selTemplate === tpl.id ? 'text-gold-400' : 'text-slate-500'}`}>
-                    {tpl.title.split('!')[0]}
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* ═══ Ссылка + копирование ═══ */}
+          {/* Ссылка + копирование */}
           <div className="p-3 rounded-2xl border" style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}>
             <div className="text-[10px] text-slate-500 mb-1">🔗 Реферальная ссылка</div>
             <div className="text-[10px] text-white break-all mb-2 p-2 rounded-lg bg-white/5 font-mono">{inviteLink || '—'}</div>
@@ -97,7 +56,7 @@ export default function LinksTab() {
             </button>
           </div>
 
-          {/* ═══ Шаринг: Telegram / WhatsApp / Viber ═══ */}
+          {/* Шаринг: Telegram / WhatsApp / Viber */}
           {inviteLink && (
             <div className="p-3 rounded-2xl border" style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}>
               <div className="text-[10px] text-slate-500 mb-2">📤 Отправить приглашение</div>
@@ -124,7 +83,7 @@ export default function LinksTab() {
             </div>
           )}
 
-          {/* ═══ Telegram Bot ═══ */}
+          {/* Telegram Bot */}
           {tgBotLink && (
             <div className="p-3 rounded-2xl border" style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}>
               <div className="text-[10px] text-slate-500 mb-1">🤖 Telegram Bot</div>
@@ -136,9 +95,9 @@ export default function LinksTab() {
             </div>
           )}
 
-          {/* ═══ Бонусы за приглашение ═══ */}
+          {/* Бонусы */}
           <div className="p-3 rounded-2xl border" style={{ background: 'rgba(255,215,0,0.04)', borderColor: 'rgba(255,215,0,0.15)' }}>
-            <div className="text-[12px] font-bold text-gold-400 mb-2">🎁 Бонусы за приглашение</div>
+            <div className="text-[12px] font-bold mb-2" style={{ color: '#ffd700' }}>🎁 Бонусы за приглашение</div>
             <div className="space-y-1.5 text-[11px]">
               <div className="flex items-center gap-2">
                 <span className="text-amber-400">⛏</span>
@@ -149,13 +108,13 @@ export default function LinksTab() {
                 <span className="text-slate-300"><b className="text-white">+10%</b> от тапов приглашённых (постоянно)</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-gold-400">💎</span>
+                <span style={{ color: '#ffd700' }}>💎</span>
                 <span className="text-slate-300"><b className="text-white">9 уровней</b> партнёрки от покупок камней</span>
               </div>
             </div>
           </div>
 
-          {/* ═══ ID ═══ */}
+          {/* ID */}
           {sponsorId && (
             <div className="p-3 rounded-2xl border text-center" style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}>
               <div className="text-[10px] text-slate-500">Ваш ID в GlobalWay</div>
