@@ -233,14 +233,14 @@ function HelpModal({ onClose }) {
             <p><b className="text-emerald-400">Актив (стейкинг)</b> — камень сразу размещается в стейкинг. Начинает приносить доход с первого дня.</p>
 
             <HelpTitle emoji="📈" text="Процентные ставки" />
-            <p>Базовая ставка — 50% годовых. Сжигая токены DCT в разделе «Буст», вы повышаете ставку:</p>
+            <p>Базовая ставка — 50% годовых. Сжигая NSS в разделе «Буст», вы повышаете ставку:</p>
             <div className="grid grid-cols-3 gap-1 text-[10px]">
-              <div className="p-1.5 rounded bg-white/5 text-center"><b className="text-white">0 DCT</b><br/>50%</div>
-              <div className="p-1.5 rounded bg-white/5 text-center"><b className="text-white">10K</b><br/>55%</div>
-              <div className="p-1.5 rounded bg-white/5 text-center"><b className="text-white">50K</b><br/>60%</div>
-              <div className="p-1.5 rounded bg-white/5 text-center"><b className="text-white">100K</b><br/>65%</div>
-              <div className="p-1.5 rounded bg-white/5 text-center"><b className="text-white">500K</b><br/>70%</div>
-              <div className="p-1.5 rounded bg-white/5 text-center"><b className="text-gold-400">1M</b><br/>75%</div>
+              <div className="p-1.5 rounded bg-white/5 text-center"><b className="text-white">0</b><br/>50%</div>
+              <div className="p-1.5 rounded bg-white/5 text-center"><b className="text-white">1K</b><br/>55%</div>
+              <div className="p-1.5 rounded bg-white/5 text-center"><b className="text-white">3K</b><br/>60%</div>
+              <div className="p-1.5 rounded bg-white/5 text-center"><b className="text-white">6K</b><br/>65%</div>
+              <div className="p-1.5 rounded bg-white/5 text-center"><b className="text-white">10K</b><br/>70%</div>
+              <div className="p-1.5 rounded bg-white/5 text-center"><b className="text-gold-400">16K</b><br/>75%</div>
             </div>
 
             <HelpTitle emoji="🏁" text="Через 12 месяцев" />
@@ -964,8 +964,7 @@ function BoostSection() {
     setTxPending(true)
     const result = await safeCall(() => DC.burnNSTForBoost(burnAmount))
     setTxPending(false)
-    if (result.ok) { addNotification(`✅ 🔥 ${burnAmount} DCT сожжено!`); setBurnAmount(''); reload() }
-    else addNotification(`❌ ${result.error}`)
+    if (result.ok) { addNotification(`✅ 🔥 ${burnAmount} NSS сожжено!`); setBurnAmount(''  ); reload() }
   }
 
   if (loading) return <Loading />
@@ -1000,8 +999,8 @@ function BoostSection() {
       )}
 
       <div className="p-3 rounded-2xl glass">
-        <div className="text-[12px] font-bold text-orange-400 mb-2">🔥 Сжечь DCT</div>
-        <div className="text-[11px] text-slate-400 mb-2">Сожгите DCT для увеличения ставки</div>
+        <div className="text-[12px] font-bold text-orange-400 mb-2">🔥 Сжечь NSS → Буст</div>
+        <div className="text-[11px] text-slate-400 mb-2">Сожгите NSS для увеличения ставки стейкинга</div>
         <div className="grid grid-cols-3 gap-2 mb-3 text-center">
           <div className="p-2 rounded-lg bg-white/5">
             <div className="text-[11px] font-bold text-orange-400">{parseFloat(boostInfo?.nstBurned||0).toFixed(0)}</div>
@@ -1009,7 +1008,7 @@ function BoostSection() {
           </div>
           <div className="p-2 rounded-lg bg-white/5">
             <div className="text-[11px] font-bold text-gold-400">{(dct||0).toFixed(0)}</div>
-            <div className="text-[8px] text-slate-500">Мои DCT</div>
+            <div className="text-[8px] text-slate-500">Мои NSS</div>
           </div>
           <div className="p-2 rounded-lg bg-white/5">
             <div className="text-[11px] font-bold text-purple-400">{parseFloat(boostInfo?.nextBurnRequired||0).toFixed(0)}</div>
@@ -1017,7 +1016,7 @@ function BoostSection() {
           </div>
         </div>
         <div className="flex gap-2">
-          <input type="number" value={burnAmount} onChange={e => setBurnAmount(e.target.value)} placeholder="DCT"
+          <input type="number" value={burnAmount} onChange={e => setBurnAmount(e.target.value)} placeholder="NSS"
             className="flex-1 p-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-white outline-none text-center" />
           <button onClick={handleBurn} disabled={txPending || !burnAmount}
             className="px-4 py-2 rounded-xl text-[11px] font-bold bg-orange-500/15 text-orange-400 border border-orange-500/20"
@@ -1026,12 +1025,12 @@ function BoostSection() {
         </div>
         <div className="mt-3 text-[9px] text-slate-500">
           <div className="grid grid-cols-3 gap-1">
-            <div className="p-1.5 rounded bg-white/5 text-center"><b className="text-white">0 DCT</b><br/>50%</div>
-            <div className="p-1.5 rounded bg-white/5 text-center"><b className="text-white">10K DCT</b><br/>55%</div>
-            <div className="p-1.5 rounded bg-white/5 text-center"><b className="text-white">50K DCT</b><br/>60%</div>
-            <div className="p-1.5 rounded bg-white/5 text-center"><b className="text-white">100K DCT</b><br/>65%</div>
-            <div className="p-1.5 rounded bg-white/5 text-center"><b className="text-white">500K DCT</b><br/>70%</div>
-            <div className="p-1.5 rounded bg-white/5 text-center"><b className="text-gold-400">1M DCT</b><br/>75%</div>
+            <div className="p-1.5 rounded bg-white/5 text-center"><b className="text-white">0</b><br/>50%</div>
+            <div className="p-1.5 rounded bg-white/5 text-center"><b className="text-white">1K NSS</b><br/>55%</div>
+            <div className="p-1.5 rounded bg-white/5 text-center"><b className="text-white">3K NSS</b><br/>60%</div>
+            <div className="p-1.5 rounded bg-white/5 text-center"><b className="text-white">6K NSS</b><br/>65%</div>
+            <div className="p-1.5 rounded bg-white/5 text-center"><b className="text-white">10K NSS</b><br/>70%</div>
+            <div className="p-1.5 rounded bg-white/5 text-center"><b className="text-gold-400">16K NSS</b><br/>75%</div>
           </div>
         </div>
       </div>
