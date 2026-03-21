@@ -6,6 +6,7 @@ import PriceAdmin from '@/components/admin/PriceAdmin'
 import LotsAdmin from '@/components/admin/LotsAdmin'
 import FractionalLotsAdmin from '@/components/admin/FractionalLotsAdmin'
 import ShowcaseAdmin from '@/components/admin/ShowcaseAdmin'
+import LevelContentAdmin from '@/components/admin/LevelContentAdmin'
 
 export default function AdminPanel() {
   const { wallet, isAdmin, ownerWallet, addNotification,
@@ -26,7 +27,7 @@ export default function AdminPanel() {
     { id: 'showcase', icon: '🏪', label: 'Витрина' },
     { id: 'staff', icon: '👥', label: 'Сотрудники' },
     { id: 'prices', icon: '💲', label: 'Цены' },
-    { id: 'test', icon: '🎮', label: 'Тест' },
+    { id: 'test', icon: '🗺', label: 'Уровни' },
   ]
 
   if (!isOwner) {
@@ -124,21 +125,8 @@ export default function AdminPanel() {
         {/* ЦЕНЫ */}
         {activeSection === 'prices' && <PriceAdmin />}
 
-        {/* ТЕСТ — переключение уровня */}
-        {activeSection === 'test' && (
-          <div className="p-3 rounded-2xl border" style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}>
-            <div className="text-[12px] font-bold text-purple-400 mb-2">🎮 Тестирование</div>
-            <div className="text-[10px] text-slate-500 mb-2">Быстрое переключение уровня (только визуально)</div>
-            <div className="flex flex-wrap gap-1">
-              {Array.from({ length: 13 }, (_, i) => (
-                <button key={i} onClick={() => setLevel(i)}
-                  className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold border border-white/10 text-white hover:bg-white/5">
-                  Lv.{i}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* УРОВНИ — тексты + превью тем */}
+        {activeSection === 'test' && <LevelContentAdmin />}
       </div>
     </div>
   )
