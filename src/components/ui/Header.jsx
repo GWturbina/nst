@@ -7,7 +7,7 @@ import { languages } from '@/locales'
 
 export default function Header() {
   const {
-    localDct, dct, dctFree, bnb, usdt,
+    localNss, dct, dctFree, bnb, usdt,
     registered, wallet, isConnecting, txPending,
     dayMode, toggleDayMode, unreadCount, notifications, markAllRead,
     activeTab, setTab, dctPrice,
@@ -18,7 +18,7 @@ export default function Header() {
   const [showWallet, setShowWallet] = useState(false)
   const [showLang, setShowLang] = useState(false)
 
-  const totalDct = dct + localDct
+  // NSS (тап-очки) и DCT (блокчейн-токен) показываются отдельно
 
   const TOP_TABS = [
     { id: 'mine', icon: '⛏', label: t('tabMine') },
@@ -146,14 +146,16 @@ export default function Header() {
         </div>
       )}
 
-      {/* Token bar — DCT focused */}
+      {/* Token bar — NSS (тап-очки) + DCT (блокчейн) */}
       <div className="flex gap-1.5 px-3 pb-2 overflow-x-auto scrollbar-hide">
         {[
-          ['gold', 'DCT', totalDct.toFixed(2), '💎'],
+          ['amber', 'NSS', localNss.toFixed(0), '⛏'],
+          ['gold', 'DCT', parseFloat(dct).toFixed(2), '💎'],
           ['emerald', 'USDT', parseFloat(usdt).toFixed(0), '💵'],
           ['purple', 'BNB', bnb.toFixed(3), '🔶'],
         ].map(([c, l, v, i]) => {
           const s = {
+            amber: { bg: 'rgba(245,158,11,0.12)', bc: 'rgba(245,158,11,0.25)', tc: '#f59e0b' },
             gold: { bg: 'rgba(255,215,0,0.12)', bc: 'rgba(255,215,0,0.25)', tc: '#ffd700' },
             emerald: { bg: 'rgba(16,185,129,0.12)', bc: 'rgba(16,185,129,0.25)', tc: '#10b981' },
             purple: { bg: 'rgba(168,85,247,0.12)', bc: 'rgba(168,85,247,0.25)', tc: '#a855f7' },
