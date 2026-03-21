@@ -8,7 +8,7 @@ import useGameStore from '@/lib/store'
 import HelpButton from '@/components/ui/HelpButton'
 
 const TEMPLATES = [
-  { id: 'gems',  emoji: '💎', title: 'Ищи камни — зарабатывай!', color: '#a855f7' },
+  { id: 'gems',  emoji: '💎', title: 'Ищи Бриллианты — зарабатывай!', color: '#a855f7' },
   { id: 'house', emoji: '🏠', title: 'Свой дом под 0%!', color: '#f59e0b' },
   { id: 'money', emoji: '💰', title: '15 источников дохода!', color: '#10b981' },
 ]
@@ -30,7 +30,7 @@ export default function LinksTab() {
     : ''
 
   const tpl = TEMPLATES.find(t => t.id === selTemplate) || TEMPLATES[0]
-  const shareText = `${tpl.emoji} ${tpl.title}\n💎 NSS — Искатели Камней! Бесплатный старт, реальные камни, свой дом!\nПрисоединяйся:`
+  const shareText = `${tpl.emoji} ${tpl.title}\n💎 NSS — Искатели Алмазов! Бесплатный старт, реальные Бриллианты!\nПрисоединяйся:`
 
   const shareLinks = {
     tg: `https://t.me/share/url?url=${encodeURIComponent(inviteLink)}&text=${encodeURIComponent(shareText)}`,
