@@ -1,10 +1,10 @@
 export async function generateMetadata() {
   const baseUrl = 'https://nst-murex.vercel.app'
   return {
-    title: '💎 NSS Diamond Club — Бриллианты по клубной цене',
+    title: '💎 NSS Diamond Club — Бриллианты со скидкой до 70%',
     description: 'Закрытый инвестиционный клуб. Бриллианты от завода со скидкой до 70%. Стейкинг от 50% годовых.',
     openGraph: {
-      title: '💎 NSS Diamond Club — Бриллианты по клубной цене',
+      title: '💎 NSS Diamond Club — Бриллианты со скидкой до 70%',
       description: 'Закрытый инвестиционный клуб. Бриллианты от завода со скидкой до 70%. Стейкинг от 50% годовых.',
       url: `${baseUrl}/invite`,
       siteName: 'NSS Diamond Club',
