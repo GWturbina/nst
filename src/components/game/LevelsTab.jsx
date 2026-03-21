@@ -172,7 +172,7 @@ export default function LevelsTab() {
                     {isOwned && <span className="text-[9px] bg-emerald-500/15 text-emerald-400 px-1.5 rounded-full font-bold">✓</span>}
                     {isActive && <span className="text-[9px] bg-gold-400/15 text-gold-400 px-1.5 rounded-full font-bold">⛏</span>}
                   </div>
-                  <div className="text-[10px] text-slate-500">{lv.sub} • +{lv.dctPerTap} {t('dctPerTap')}</div>
+                  <div className="text-[10px] text-slate-500">{lv.sub} • +{lv.nssPerTap} {t('nssPerTap')}</div>
                 </div>
                 <div className="text-right flex-shrink-0">
                   {i === 0 ? (
@@ -195,12 +195,12 @@ export default function LevelsTab() {
                       <div className="text-slate-500">{t('partners')}</div>
                     </div>
                     <div className="flex-1 p-2 rounded-lg bg-white/5 text-center">
-                      <div className="font-bold text-emerald-400">+{lv.dctBonus}</div>
-                      <div className="text-slate-500">{t('dctBonus')}</div>
+                      <div className="font-bold text-emerald-400">+{lv.nssBonus}</div>
+                      <div className="text-slate-500">{t('nssBonus')}</div>
                     </div>
                     <div className="flex-1 p-2 rounded-lg bg-white/5 text-center">
-                      <div className="font-bold text-purple-400">+{lv.dctBonus}</div>
-                      <div className="text-slate-500">{t('dctBonus')}</div>
+                      <div className="font-bold text-purple-400">+{lv.nssBonus}</div>
+                      <div className="text-slate-500">{t('nssBonus')}</div>
                     </div>
                   </div>
                   <div className="mt-1 text-[10px] text-slate-400">💰 {t('income')}: {lv.earn}</div>
