@@ -5,7 +5,7 @@
  * POST — обновить статистику (вызывается при тапах, покупках, продажах)
  * 
  * FIX #1: Защита от накрутки:
- *   - 'tap' — валидация через dc_taps (сверка total_dct)
+ *   - 'tap' — валидация через dc_taps (сверка total_nss)
  *   - 'invite','turnover','gem_sale','jewelry_sale' — только admin/service
  * 
  * Категории:
@@ -133,15 +133,15 @@ export async function POST(request) {
       // Тапы — валидируем через dc_taps (сверка что пользователь реально тапает)
       const { data: tapRecord } = await supabase
         .from('dc_taps')
-        .select('total_dct, total_taps')
+        .select('total_nss, total_taps')
         .eq('wallet', wLower)
         .single()
       if (!tapRecord) {
         return NextResponse.json({ ok: false, error: 'Нет записи тапов' }, { status: 400 })
       }
-      // amount не может быть больше total_dct из серверной тапалки
+      // amount не может быть больше total_nss из серверной тапалки
       const val = parseFloat(amount) || 0
-      if (val > parseFloat(tapRecord.total_dct) + 1) {
+      if (val > parseFloat(tapRecord.total_nss) + 1) {
         return NextResponse.json({ ok: false, error: 'Невалидная сумма тапов' }, { status: 400 })
       }
     } else {
