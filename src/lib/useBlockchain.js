@@ -76,7 +76,8 @@ async function doConnect() {
 
 // FIX #7: Подписать сообщение для аутентификации API-запросов
     // Не запрашивать повторно если подпись уже есть и свежая (< 12 часов)
-    const authAge = store.authTs ? Date.now() - store.authTs : Infinity
+    // authTs хранится в секундах (unix), Date.now() — в миллисекундах
+    const authAge = store.authTs ? Date.now() - store.authTs * 1000 : Infinity
     if (!store.authSig || authAge > 12 * 60 * 60 * 1000) {
       try {
         const auth = await web3.signAuthMessage()
