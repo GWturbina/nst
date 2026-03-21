@@ -73,23 +73,43 @@ async function doConnect() {
   try {
     const result = await web3.connect()
     store.setWallet(result)
+    store.addNotification(`✅ Кошелёк: ${result.address.slice(0, 6)}...${result.address.slice(-4)}`)
 
-// FIX #7: Подписать сообщение для аутентификации API-запросов
-    // Не запрашивать повторно если подпись уже есть и свежая (< 12 часов)
-    // authTs хранится в секундах (unix), Date.now() — в миллисекундах
-    const authAge = store.authTs ? Date.now() - store.authTs * 1000 : Infinity
-    if (!store.authSig || authAge > 12 * 60 * 60 * 1000) {
-      try {
-        const auth = await web3.signAuthMessage()
-        store.setAuth(auth)
-      } catch (authErr) {
-        console.warn('Auth signature declined')
+    // ═══ СНАЧАЛА проверяем регистрацию (без подписи!) ═══
+    const gwStatus = await C.getGWUserStatus(result.address).catch(() => null)
+    const isReg = gwStatus?.isRegistered || false
+
+    if (isReg) {
+      // Зарегистрирован → обновляем данные + запрашиваем подпись
+      store.updateRegistration(true, gwStatus.odixId || null)
+      if (gwStatus.maxPackage > 0) store.setLevel(gwStatus.maxPackage)
+
+      // Подпись — только для зарегистрированных (не пугаем новичков)
+      const authAge = store.authTs ? Date.now() - store.authTs * 1000 : Infinity
+      if (!store.authSig || authAge > 12 * 60 * 60 * 1000) {
+        try {
+          const auth = await web3.signAuthMessage()
+          store.setAuth(auth)
+        } catch (authErr) {
+          console.warn('Auth signature declined')
+        }
       }
+
+      await refreshDataForAddress(result.address)
+      startRefreshCycle(result.address)
+    } else {
+      // НЕ зарегистрирован → показать модал регистрации (без подписи!)
+      store.updateRegistration(false, null)
+      const savedRef = typeof localStorage !== 'undefined' ? localStorage.getItem('dc_ref') : null
+      store.setAutoRegister(savedRef && /^\d+$/.test(savedRef) ? savedRef : null)
+
+      // Загружаем балансы (BNB для оплаты уровня)
+      const balances = await C.getBalances(result.address).catch(() => ({ bnb: '0', usdt: '0' }))
+      store.updateBalances(balances)
+      const bnbPrice = await C.getBNBPrice().catch(() => null)
+      if (bnbPrice) store.setBnbPrice(bnbPrice)
     }
 
-    store.addNotification(`✅ Кошелёк: ${result.address.slice(0, 6)}...${result.address.slice(-4)}`)
-    await refreshDataForAddress(result.address)
-    startRefreshCycle(result.address)
     return true
   } catch (err) {
     store.addNotification(`❌ ${err.message}`)
@@ -175,6 +195,20 @@ export function useBlockchain() {
     connect: doConnect,
     disconnect: doDisconnect,
     refreshData: () => refreshDataForAddress(wallet),
+    /** Вызвать после успешной регистрации — подпись + полная загрузка данных */
+    afterRegistration: async () => {
+      const store = useGameStore.getState()
+      const addr = store.wallet
+      if (!addr) return
+      // Теперь запрашиваем подпись (пользователь уже знаком с приложением)
+      try {
+        const auth = await web3.signAuthMessage()
+        store.setAuth(auth)
+      } catch {}
+      store.clearAutoRegister()
+      await refreshDataForAddress(addr)
+      startRefreshCycle(addr)
+    },
   }
 }
 
