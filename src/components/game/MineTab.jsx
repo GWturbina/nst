@@ -6,7 +6,9 @@ import { useBlockchain } from '@/lib/useBlockchain'
 import { useTelegram } from '@/lib/useTelegram'
 import { serverTap, localTapAllowed, loadTapState } from '@/lib/tapService'
 import * as C from '@/lib/contracts'
+import web3 from '@/lib/web3'
 import HelpButton from '@/components/ui/HelpButton'
+import SafePalPrompt from '@/components/ui/SafePalPrompt'
 
 export default function MineTab() {
   const bnbPrice = useGameStore(s => s.bnbPrice)
@@ -48,6 +50,17 @@ export default function MineTab() {
   const [sponsorInput, setSponsorInput] = useState('')
   const [registering, setRegistering] = useState(false)
   const [refFromLink, setRefFromLink] = useState(false)
+  const [showSafePal, setShowSafePal] = useState(false)
+
+  // Умное подключение — показать SafePal prompt если нет кошелька
+  const smartConnect = async () => {
+    const walletType = web3.detectWallet()
+    if (!walletType) {
+      setShowSafePal(true)
+      return
+    }
+    await connect()
+  }
 
   const totalNss = localNss
 
@@ -312,14 +325,19 @@ export default function MineTab() {
 
       <div className="px-3 mt-2 space-y-1.5">
         {!wallet && taps === 0 && (
-          <button onClick={connect} className="w-full p-2.5 rounded-xl text-xs font-bold text-center bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 hover:bg-emerald-500/15 transition-all">
+          <button onClick={smartConnect} className="w-full p-2.5 rounded-xl text-xs font-bold text-center bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 hover:bg-emerald-500/15 transition-all">
             🚀 {t('connectSaveStones')}
           </button>
         )}
         {!wallet && taps > 0 && (
-          <button onClick={connect} className="w-full p-2.5 rounded-xl text-xs font-bold text-center flex items-center justify-center gap-2 bg-red-500/10 border border-red-500/25 text-red-400 animate-pulse">
+          <button onClick={smartConnect} className="w-full p-2.5 rounded-xl text-xs font-bold text-center flex items-center justify-center gap-2 bg-red-500/10 border border-red-500/25 text-red-400 animate-pulse">
             ⚠️ {t('stonesEvaporating')} <span className="font-display text-lg">{evapMin}:{evapSec < 10 ? '0' : ''}{evapSec}</span> 💨
           </button>
+        )}
+
+        {/* SafePal Prompt — когда кошелёк не найден */}
+        {showSafePal && !wallet && (
+          <SafePalPrompt compact onClose={() => setShowSafePal(false)} />
         )}
 
         {wallet && !registered && !showRegModal && (
