@@ -3,7 +3,9 @@ import { useState } from 'react'
 import useGameStore from '@/lib/store'
 import { useBlockchain } from '@/lib/useBlockchain'
 import { shortAddress } from '@/lib/web3'
+import web3 from '@/lib/web3'
 import { languages } from '@/locales'
+import SafePalPrompt from '@/components/ui/SafePalPrompt'
 
 export default function Header() {
   const {
@@ -17,6 +19,7 @@ export default function Header() {
   const [showNotif, setShowNotif] = useState(false)
   const [showWallet, setShowWallet] = useState(false)
   const [showLang, setShowLang] = useState(false)
+  const [showSafePal, setShowSafePal] = useState(false)
 
   // NSS (тап-очки) и DCT (блокчейн-токен) показываются отдельно
 
@@ -32,6 +35,12 @@ export default function Header() {
       setShowWallet(!showWallet)
       setShowLang(false)
     } else {
+      // Проверяем наличие кошелька перед попыткой connect
+      const walletType = web3.detectWallet()
+      if (!walletType) {
+        setShowSafePal(true)
+        return
+      }
       await connect()
     }
   }
@@ -190,6 +199,9 @@ export default function Header() {
           )
         })}
       </div>
+
+      {/* SafePal Prompt — когда кошелёк не найден */}
+      {showSafePal && <SafePalPrompt onClose={() => setShowSafePal(false)} />}
     </div>
   )
 }
