@@ -25,6 +25,24 @@ const NSS_PER_TAP = [0.01, 0.03, 0.05, 0.08, 0.12, 0.16, 0.20, 0.24, 0.28, 0.32,
 const INVITE_BONUS_NSS = 50
 const REFERRAL_TAP_PCT = 10
 
+// Сгорание NSS: 180 дней неактивности → 1% в день
+const DECAY_START_DAYS = 180   // начало сгорания
+const DECAY_PCT_PER_DAY = 1   // % потерь в день после старта
+const MS_PER_DAY = 86400000
+
+// ═══ Расчёт сгорания NSS ═══
+function calcDecay(totalNss, lastTapAt) {
+  if (!lastTapAt || totalNss <= 0) return { decayed: 0, remaining: totalNss, daysInactive: 0 }
+  const now = Date.now()
+  const daysInactive = Math.floor((now - lastTapAt) / MS_PER_DAY)
+  if (daysInactive <= DECAY_START_DAYS) return { decayed: 0, remaining: totalNss, daysInactive }
+  const decayDays = daysInactive - DECAY_START_DAYS
+  const decayPct = Math.min(100, decayDays * DECAY_PCT_PER_DAY)
+  const decayed = +(totalNss * decayPct / 100).toFixed(4)
+  const remaining = +(totalNss - decayed).toFixed(4)
+  return { decayed, remaining: Math.max(0, remaining), daysInactive, decayPct }
+}
+
 // ═══ Блокчейн: получить спонсора ═══
 const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || 'https://opbnb-mainnet-rpc.bnbchain.org'
 const NSS_PLATFORM_ADDR = '0xFb1ddFa8A7EAB0081EAe24ec3d24B0ED4Dd84f2B'
@@ -120,6 +138,13 @@ export async function POST(request) {
       }
     }
 
+    // ═══ Сгорание NSS (6 месяцев неактивности) ═══
+    const decay = calcDecay(player.total_nss, player.last_tap_at)
+    if (decay.decayed > 0) {
+      player.total_nss = decay.remaining
+      await supabase.from('dc_taps').update({ total_nss: decay.remaining }).eq('wallet', walletLower)
+    }
+
     // Cooldown
     const timeSinceLastTap = now - (player.last_tap_at || 0)
     if (timeSinceLastTap < MIN_TAP_INTERVAL_MS) {
@@ -155,6 +180,7 @@ export async function POST(request) {
     return NextResponse.json({
       ok: true, earned, energy: newEnergy, maxEnergy: ENERGY_MAX,
       totalNss: newTotal, totalTaps: newTaps, referralBonus,
+      decayApplied: decay.decayed > 0 ? decay.decayed : 0,
     })
   } catch { return NextResponse.json({ ok: false, error: 'Server error' }, { status: 500 }) }
 }
@@ -178,10 +204,14 @@ export async function GET(request) {
     const regenAmount = Math.floor((now - (player.last_regen_at || now)) / REGEN_MS)
     const currentEnergy = Math.min(ENERGY_MAX, (player.energy || 0) + regenAmount)
 
+    // Сгорание NSS
+    const decay = calcDecay(player.total_nss, player.last_tap_at)
+
     return NextResponse.json({
       ok: true, energy: currentEnergy, maxEnergy: ENERGY_MAX,
-      totalNss: player.total_nss || 0, totalTaps: player.total_taps || 0,
+      totalNss: decay.remaining, totalTaps: player.total_taps || 0,
       referralNss: player.referral_nss || 0,
+      decay: decay.decayed > 0 ? { lost: decay.decayed, daysInactive: decay.daysInactive, pct: decay.decayPct } : null,
     })
   } catch { return NextResponse.json({ ok: false, error: 'Server error' }, { status: 500 }) }
 }
