@@ -111,10 +111,13 @@ export default function TeamTab() {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  const shareText = `💎 Бриллианты со скидкой до 70%! Стейкинг от 50% годовых. Бесплатный старт! Присоединяйся:`
+  const viberText = 'Бриллианты со скидкой до 70%! Стейкинг от 50% годовых. Бесплатный старт! Присоединяйся:'
+
   const shareLinks = {
-    tg: `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent('💎 NSS — Natural Stone Seekers!')}`,
-    wa: `https://wa.me/?text=${encodeURIComponent(`💎 NSS — Join! ${referralLink}`)}`,
-    vb: `viber://forward?text=${encodeURIComponent(`NSS — Natural Stone Seekers! Присоединяйся: ${referralLink}`)}`,
+    tg: `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent(shareText)}`,
+    wa: `https://wa.me/?text=${encodeURIComponent(`${shareText}\n${referralLink}`)}`,
+    vb: `viber://forward?text=${encodeURIComponent(`${viberText}\n${referralLink}`)}`,
   }
 
   const lv = LEVELS[level] || LEVELS[0]
