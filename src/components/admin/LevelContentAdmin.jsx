@@ -118,7 +118,7 @@ export default function LevelContentAdmin() {
             <div className="text-[13px] font-black" style={{ color: lv.color }}>
               Lv.{selectedLevel} — {lv.name}
             </div>
-            <div className="text-[10px] text-slate-500">{lv.sub} • +{lv.dctPerTap} DCT/тап</div>
+            <div className="text-[10px] text-slate-500">{lv.sub} • +{lv.nssPerTap} NSS/тап</div>
           </div>
           <div className="ml-auto text-right">
             <div className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${hasCustom ? 'bg-emerald-500/15 text-emerald-400' : 'bg-orange-500/15 text-orange-400'}`}>
