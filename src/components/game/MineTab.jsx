@@ -1,265 +1,493 @@
 'use client'
-import { useState, useEffect, Suspense } from 'react'
-import { useSearchParams, useParams } from 'next/navigation'
+import { useRef, useState, useEffect, useCallback } from 'react'
+import useGameStore from '@/lib/store'
+import { LEVELS, LEVEL_BACKGROUNDS, ENERGY_CONFIG } from '@/lib/gameData'
+import { useBlockchain } from '@/lib/useBlockchain'
+import { useTelegram } from '@/lib/useTelegram'
+import { serverTap, localTapAllowed, loadTapState } from '@/lib/tapService'
+import * as C from '@/lib/contracts'
+import web3 from '@/lib/web3'
+import HelpButton from '@/components/ui/HelpButton'
+import SafePalPrompt from '@/components/ui/SafePalPrompt'
 
-const TEMPLATES = {
-  gems: { emoji: '💎', title: 'Бриллианты по клубной цене!', sub: 'Экономия до 64%. Стейкинг от 50% годовых.', color: '#a855f7', ogImage: 'invite-gems.jpg' },
-  house: { emoji: '🏠', title: 'Свой дом под 0%!', sub: 'Заработай 35% — клуб добавит 65%.', color: '#f59e0b', ogImage: 'invite-house.jpg' },
-  money: { emoji: '💰', title: '15 источников дохода!', sub: 'Бриллианты, стейкинг, токены — всё в одном.', color: '#10b981', ogImage: 'invite-money.jpg' },
-}
+export default function MineTab() {
+  const bnbPrice = useGameStore(s => s.bnbPrice)
+  const showAutoRegister = useGameStore(s => s.showAutoRegister)
+  const { level, localNss, energy, maxEnergy, taps, registered, wallet,
+    evapActive, evapSeconds, doTap, tickEvap, news, setTab, addNotification,
+    setTxPending, txPending, setLevel, t } = useGameStore()
+  const { connect } = useBlockchain()
+  const { haptic, isInTelegram } = useTelegram()
+  const lv = LEVELS[level]
+  const nextLv = LEVELS[level + 1] || null
 
-const FEATURES = [
-  { emoji: '💎', title: 'Реальные бриллианты', desc: 'От завода по клубной цене — экономия до 70%' },
-  { emoji: '📈', title: 'Стейкинг Бриллиантов', desc: 'От 50% до 75% годовых на ваших активах' },
-  { emoji: '🪙', title: 'DCT токен', desc: 'Обеспечен реальными бриллиантами' },
-  { emoji: '🏠', title: 'Свой дом под 0%', desc: 'Заработай 35% — клуб добавит 65%!' },
-  { emoji: '🧩', title: 'Доли камней', desc: 'Инвестируй от малой суммы в дорогие камни' },
-  { emoji: '👥', title: 'Партнёрская программа', desc: 'До 10% пожизненно от приглашённых' },
-]
-
-function InviteContent() {
-  const searchParams = useSearchParams()
-  const params = useParams()
-  const ref = searchParams.get('ref') || '0'
-  const t = params.t || 'gems'
-  const tpl = TEMPLATES[t] || TEMPLATES.gems
-
-  const [registered, setRegistered] = useState(false)
-  const [showExitPopup, setShowExitPopup] = useState(false)
-  const [showViralPopup, setShowViralPopup] = useState(false)
-  const [copied, setCopied] = useState(false)
-
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://nst-murex.vercel.app'
-  const myLink = `${baseUrl}/invite/${t}?ref=${ref}`
-  const shareText = `💎 Бриллианты со скидкой до 70%! Стейкинг от 50% годовых. Бесплатный старт! Присоединяйся:`
-  const viberText = 'Бриллианты со скидкой до 70%! Стейкинг от 50% годовых. Бесплатный старт! Присоединяйся:'
-
-  const shareLinks = {
-    tg: `https://t.me/share/url?url=${encodeURIComponent(myLink)}&text=${encodeURIComponent(shareText)}`,
-    wa: `https://wa.me/?text=${encodeURIComponent(`${shareText}\n${myLink}`)}`,
-    vb: `viber://forward?text=${encodeURIComponent(`${viberText}\n${myLink}`)}`,
+  const fmtUsd = (bnb) => {
+    if (!bnb || !bnbPrice) return ''
+    const usd = bnb * bnbPrice
+    return usd >= 1 ? `~$${Math.round(usd)}` : `~$${usd.toFixed(2)}`
   }
+  const tapAreaRef = useRef(null)
+  const [effects, setEffects] = useState([])
+  const [thoughts, setThoughts] = useState([])
+  const tapCountRef = useRef(0)
+  const [buyingLevel, setBuyingLevel] = useState(false)
 
-  const copyLink = () => {
-    if (navigator.clipboard) navigator.clipboard.writeText(myLink)
-    else { const ta = document.createElement('textarea'); ta.value = myLink; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta) }
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
+  // Динамические тексты уровней из Supabase
+  const levelTextsRef = useRef({}) // { level: [text1, text2, ...] }
+  const thoughtIndexRef = useRef({}) // { level: currentIndex }
 
   useEffect(() => {
-    let triggered = false
-    const handleMouseLeave = (e) => {
-      if (e.clientY <= 5 && !triggered) {
-        triggered = true
-        if (registered) setShowViralPopup(true)
-        else setShowExitPopup(true)
+    fetch('/api/level-content').then(r => r.json()).then(data => {
+      if (data.ok && data.levels) {
+        const map = {}
+        for (const row of data.levels) {
+          if (row.thoughts?.length > 0) map[row.level] = row.thoughts
+        }
+        levelTextsRef.current = map
       }
-    }
-    document.addEventListener('mouseleave', handleMouseLeave)
+    }).catch(() => {})
+  }, [])
+  const [showRegModal, setShowRegModal] = useState(false)
+  const [sponsorInput, setSponsorInput] = useState('')
+  const [registering, setRegistering] = useState(false)
+  const [refFromLink, setRefFromLink] = useState(false)
+  const [showSafePal, setShowSafePal] = useState(false)
 
-    const handleBack = () => {
-      if (registered) setShowViralPopup(true)
-      else setShowExitPopup(true)
+  // Умное подключение — показать SafePal prompt если нет кошелька
+  const smartConnect = async () => {
+    const walletType = web3.detectWallet()
+    if (!walletType) {
+      setShowSafePal(true)
+      return
     }
-    window.history.pushState(null, '', window.location.href)
-    window.addEventListener('popstate', handleBack)
-
-    return () => {
-      document.removeEventListener('mouseleave', handleMouseLeave)
-      window.removeEventListener('popstate', handleBack)
-    }
-  }, [registered])
-
-  const handleRegister = () => {
-    if (ref && ref !== '0') {
-      localStorage.setItem('dc_ref', ref)
-    }
-    setRegistered(true)
-    setShowExitPopup(false)
+    await connect()
   }
 
+  const totalNss = localNss
+
+  // Автозаполнение спонсора
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const savedRef = localStorage.getItem('dc_ref')
+    if (savedRef && /^\d+$/.test(savedRef)) {
+      setSponsorInput(savedRef)
+      setRefFromLink(true)
+    }
+  }, [])
+
+  // Испарение
+  useEffect(() => {
+    if (!evapActive || registered) return
+    const interval = setInterval(() => {
+      const result = tickEvap()
+      if (result === 'expired') {
+        showThought(t('stonesEvaporated'), 'ruby', '😱')
+      }
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [evapActive, registered, tickEvap, t])
+
+  // ═══════════════════════════════════════════════════
+  // ЭНЕРГИЯ — МЕДЛЕННОЕ ВОССТАНОВЛЕНИЕ
+  // 1 единица каждые 120 секунд (2 минуты)
+  // Полная зарядка 200 → ~6.7 часов
+  // ═══════════════════════════════════════════════════
+  useEffect(() => {
+    const interval = setInterval(() => useGameStore.getState().regenEnergy(), ENERGY_CONFIG.regenIntervalMs)
+    return () => clearInterval(interval)
+  }, [])
+
+  const showThought = useCallback((text, color, icon, shape = 'thought-pill') => {
+    const id = Date.now() + Math.random()
+    setThoughts(prev => [...prev, { id, text, color, icon, shape }])
+    setTimeout(() => setThoughts(prev => prev.filter(t => t.id !== id)), 4500)
+  }, [])
+
+  // ═══════════════════════════════════════════════════
+  // FIX C1+C4+C7: Серверные тапы + throttle + без двойного срабатывания
+  // ═══════════════════════════════════════════════════
+  const isTapping = useRef(false)
+
+  // Загрузить серверное состояние при подключении кошелька
+  useEffect(() => {
+    if (wallet && registered) {
+      loadTapState(wallet).then(state => {
+        if (state) {
+          useGameStore.getState().syncServerTaps({
+            energy: state.energy,
+            maxEnergy: state.maxEnergy,
+            localNss: state.totalNss,
+            taps: state.totalTaps,
+          })
+          // Предупреждение о сгорании
+          if (state.decay && state.decay.lost > 0) {
+            addNotification(`⚠️ Сгорело ${state.decay.lost.toFixed(0)} NSS (${state.decay.daysInactive} дней неактивности)`)
+          }
+        }
+      })
+    }
+  }, [wallet, registered, addNotification])
+
+  const handleTap = useCallback((e) => {
+    // Предотвращаем двойное срабатывание и всплытие
+    e.preventDefault()
+    e.stopPropagation()
+    if (isTapping.current) return
+    isTapping.current = true
+    setTimeout(() => { isTapping.current = false }, 120)
+
+    if (wallet && registered) {
+      // ═══ СЕРВЕРНЫЙ ТАП (для зарегистрированных) ═══
+      // Оптимистичное обновление UI + серверная верификация
+      const earned = doTap()
+      if (!earned) { isTapping.current = false; return }
+
+      if (isInTelegram) haptic('light')
+      showTapEffect(e)
+
+      // Отправляем на сервер асинхронно
+      serverTap(wallet, level).then(result => {
+        if (result && result.ok) {
+          useGameStore.getState().syncServerTaps({
+            energy: result.energy,
+            maxEnergy: result.maxEnergy,
+            localNss: result.totalNss,
+            taps: result.totalTaps,
+          })
+          if (result.decayApplied > 0) {
+            addNotification(`⚠️ Сгорело ${result.decayApplied.toFixed(0)} NSS за неактивность. Тапайте регулярно!`)
+          }
+        }
+      })
+    } else {
+      // ═══ ЛОКАЛЬНЫЙ ТАП (незарегистрированные — с throttle) ═══
+      if (!localTapAllowed()) { isTapping.current = false; return }
+      const earned = doTap()
+      if (!earned) { isTapping.current = false; return }
+      if (isInTelegram) haptic('light')
+      showTapEffect(e)
+    }
+  }, [doTap, wallet, registered, level, isInTelegram, haptic])
+
+  // Визуальный эффект тапа (отделён от логики)
+  const showTapEffect = useCallback((e) => {
+    tapCountRef.current++
+    const rect = tapAreaRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const touch = e.touches?.[0] || e.changedTouches?.[0] || e
+    const x = touch.clientX - rect.left
+    const y = touch.clientY - rect.top
+    const lv = LEVELS[useGameStore.getState().level]
+
+    setEffects(prev => [...prev,
+      { id: Date.now() + Math.random(), x: `${x}px`, y: `${y - 10}px`, text: `+${lv.nssPerTap}`, type: 'number' },
+    ])
+    setTimeout(() => setEffects(prev => prev.slice(1)), 800)
+
+    if (tapCountRef.current % 25 === 0) {
+      const lvl = useGameStore.getState().level
+      const dynamicTexts = levelTextsRef.current[lvl]
+      let thoughtText = lv.thought
+      if (dynamicTexts && dynamicTexts.length > 0) {
+        const idx = (thoughtIndexRef.current[lvl] || 0) % dynamicTexts.length
+        thoughtText = dynamicTexts[idx]
+        thoughtIndexRef.current[lvl] = idx + 1
+      }
+      if (thoughtText) {
+        const shapes = ['thought-pill', 'thought-cloud', 'thought-crystal', 'thought-bubble']
+        const shape = shapes[Math.floor(Math.random() * shapes.length)]
+        showThought(thoughtText, lv.thoughtColor, lv.thoughtIcon, shape)
+      }
+    }
+  }, [showThought])
+
+  // Регистрация
+  const openRegModal = () => {
+    if (!wallet) return
+    const savedRef = typeof window !== 'undefined' ? localStorage.getItem('dc_ref') || '' : ''
+    if (savedRef && /^\d+$/.test(savedRef)) {
+      setSponsorInput(savedRef)
+      setRefFromLink(true)
+    }
+    setShowRegModal(true)
+  }
+
+  const handleBuyNextLevel = () => {
+    if (!wallet || !nextLv) return
+    if (!registered) { openRegModal(); return }
+    doBuyLevel()
+  }
+
+  const handleRegisterOnly = async () => {
+    const sid = parseInt(sponsorInput)
+    if (!sid || sid <= 0) { addNotification('❌ ' + t('enterValidSponsorId')); return }
+    setRegistering(true)
+    setTxPending(true)
+    try {
+      addNotification(`⏳ ${t('registering')} #${sid}...`)
+      await C.register(sid)
+      addNotification('✅ ' + t('registrationSuccess'))
+      setShowRegModal(false)
+      const confirmed = await C.waitForRegistration(wallet)
+      const gwStatus = await C.getGWUserStatus(wallet).catch(() => null)
+      if (gwStatus) {
+        useGameStore.getState().updateRegistration(gwStatus.isRegistered, gwStatus.odixId || sid)
+        if (gwStatus.maxPackage > 0) useGameStore.getState().setLevel(gwStatus.maxPackage)
+      } else {
+        useGameStore.getState().updateRegistration(true, sid)
+      }
+    } catch (err) {
+      const msg = err?.reason || err?.shortMessage || err?.message || 'Ошибка'
+      if (msg.includes('Already registered')) {
+        addNotification('ℹ️ ' + t('alreadyRegistered'))
+        useGameStore.getState().updateRegistration(true, sid)
+        setShowRegModal(false)
+      } else if (msg.includes('Sponsor not found') || msg.includes('Invalid sponsor')) {
+        addNotification(`❌ ${t('sponsorNotFound')} #${sid}`)
+      } else {
+        addNotification(`❌ ${msg.slice(0, 100)}`)
+      }
+    }
+    setTxPending(false)
+    setRegistering(false)
+  }
+
+  const doBuyLevel = async () => {
+    if (!nextLv) return
+    setBuyingLevel(true)
+    setTxPending(true)
+    try {
+      addNotification(`⏳ ${t('buyingLevel')} ${nextLv.name}...`)
+      await C.buyLevel(nextLv.id)
+      setLevel(nextLv.id)
+      addNotification(`✅ ${nextLv.name} ${t('levelActivated')}`)
+      setTimeout(async () => {
+        const gwStatus = await C.getGWUserStatus(wallet).catch(() => null)
+        if (gwStatus) {
+          if (gwStatus.maxPackage > 0) useGameStore.getState().setLevel(gwStatus.maxPackage)
+          useGameStore.getState().updateRegistration(gwStatus.isRegistered, gwStatus.odixId || null)
+        }
+      }, 3000)
+    } catch (err) {
+      const msg = err?.reason || err?.shortMessage || err?.message || t('error')
+      if (msg.includes('Not registered')) {
+        addNotification('❌ ' + t('registrationRequired'))
+        openRegModal()
+      } else if (msg.includes('insufficient funds') || msg.includes('INSUFFICIENT')) {
+        addNotification('❌ ' + t('insufficientBNB'))
+      } else {
+        addNotification(`❌ ${msg.slice(0, 80)}`)
+      }
+    }
+    setTxPending(false)
+    setBuyingLevel(false)
+  }
+
+  const evapMin = Math.floor(evapSeconds / 60)
+  const evapSec = evapSeconds % 60
+  const toolSrc = `/icons/tools/${['hands','shovel','sieve','cart','auto','cutting','jewelry','building','earth','house','village','resort','empire'][level]}.png`
+  const lvBg = LEVEL_BACKGROUNDS[level] || LEVEL_BACKGROUNDS[0]
+  const bgSrc = `/icons/backgrounds/levels/${lvBg.file}`
+
+  // Время до полной зарядки
+  const missingEnergy = maxEnergy - energy
+  const rechargeMinutes = Math.ceil(missingEnergy * ENERGY_CONFIG.regenIntervalMs / 60000)
+
   return (
-    <div className="min-h-screen" style={{ background: 'linear-gradient(180deg, #0a0a20 0%, #1a1040 50%, #0a0a20 100%)' }}>
-      <div className="max-w-[430px] mx-auto px-4 py-6">
-        <div className="flex justify-center mb-4">
-          <img src="/icons/logo.png" alt="NSS" className="w-16 h-16 rounded-2xl" onError={e => { e.target.style.display='none' }} />
+    <div className="flex flex-col flex-1">
+      <div className="mx-3 mt-2 p-3 rounded-2xl border flex items-center gap-3" style={{ background: 'linear-gradient(135deg, var(--bg-card), rgba(13,26,46,0.9))', borderColor: `${lv.color}25`, boxShadow: `0 2px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.03)` }}>
+        <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl border-2 flex-shrink-0 overflow-hidden" style={{ borderColor: `${lv.color}50`, background: `${lv.color}12` }}>
+          <img src={toolSrc} alt="" className="w-9 h-9 object-contain" onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block' }} />
+          <span className="hidden text-2xl">{lv.emoji}</span>
         </div>
-
-        <div className="text-center mb-6">
-          <h1 className="text-2xl font-black text-white mb-1">
-            <span className="mr-2">{tpl.emoji}</span>{tpl.title}
-          </h1>
-          <p className="text-sm text-slate-400">{tpl.sub}</p>
+        <div className="flex-1">
+          <div className="text-sm font-black text-white">{lv.name}</div>
+          <div className="text-[10px] text-slate-400">{lv.sub} • Lv.{level}</div>
         </div>
-
-        <div className="p-3 rounded-2xl mb-4 text-center" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-          <div className="text-[12px] text-slate-400">Тебя пригласил участник</div>
-          <div className="text-lg font-black" style={{ color: tpl.color }}>ID: {ref}</div>
+        <div className="text-right">
+          <div className="text-xl font-black font-display" style={{ color: lv.color }}>{totalNss.toFixed(0)}</div>
+          <div className="text-[9px] text-slate-500">⛏ NSS</div>
         </div>
+        <HelpButton section="mine" />
+      </div>
 
-        <div className="flex justify-center gap-3 mb-2">
-          <span className="text-4xl">💎</span>
-          <span className="text-4xl">🪙</span>
-          <span className="text-4xl">🏠</span>
+      {/* Энергия — показываем время до полной зарядки */}
+      <div className="px-3 mt-2">
+        <div className="flex justify-between text-[10px] mb-1">
+          <span className="text-slate-400">⚡ {t('energy')}{missingEnergy > 0 ? ` • ${rechargeMinutes} мин` : ''}</span>
+          <span className="text-emerald-400 font-extrabold">{energy}/{maxEnergy}</span>
         </div>
-        <h2 className="text-center text-lg font-black text-white mb-0.5">NSS Diamond Club</h2>
-        <p className="text-center text-[12px] text-slate-500 mb-4">Бриллианты • Инвестиции • Доход</p>
-
-        <div className="space-y-2 mb-6">
-          {FEATURES.map((f, i) => (
-            <div key={i} className="flex items-start gap-3 p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-              <span className="text-xl mt-0.5">{f.emoji}</span>
-              <div>
-                <div className="text-[13px] font-bold text-white">{f.title}</div>
-                <div className="text-[11px] text-slate-400">{f.desc}</div>
-              </div>
-            </div>
-          ))}
+        <div className="h-[7px] rounded-full bg-white/5 overflow-hidden">
+          <div className="h-full rounded-full transition-all duration-500 relative overflow-hidden" style={{ width: `${(energy / maxEnergy) * 100}%`, background: `linear-gradient(90deg, ${lv.color}, ${lv.color}cc)` }}>
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/25 to-transparent animate-shimmer" style={{ backgroundSize: '200% 100%' }} />
+          </div>
         </div>
+      </div>
 
-        {!registered ? (
-          <button onClick={handleRegister} className="w-full py-4 rounded-2xl text-lg font-black mb-4" style={{ background: 'linear-gradient(135deg, #ffd700, #f5a623)', color: '#000' }}>
-            🎁 Присоединиться — БЕСПЛАТНО
+      <div className="px-3 mt-2 space-y-1.5">
+        {!wallet && taps === 0 && (
+          <button onClick={smartConnect} className="w-full p-2.5 rounded-xl text-xs font-bold text-center bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 hover:bg-emerald-500/15 transition-all">
+            🚀 {t('connectSaveStones')}
           </button>
-        ) : (
-          <div className="space-y-3 mb-4">
-            <div className="p-4 rounded-2xl" style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)' }}>
+        )}
+        {!wallet && taps > 0 && (
+          <button onClick={smartConnect} className="w-full p-2.5 rounded-xl text-xs font-bold text-center flex items-center justify-center gap-2 bg-red-500/10 border border-red-500/25 text-red-400 animate-pulse">
+            ⚠️ {t('stonesEvaporating')} <span className="font-display text-lg">{evapMin}:{evapSec < 10 ? '0' : ''}{evapSec}</span> 💨
+          </button>
+        )}
+
+        {/* SafePal Prompt — когда кошелёк не найден */}
+        {showSafePal && !wallet && (
+          <SafePalPrompt compact onClose={() => setShowSafePal(false)} />
+        )}
+
+        {wallet && !registered && !showRegModal && !showAutoRegister && (
+          <button onClick={openRegModal}
+            className="w-full p-2.5 rounded-xl text-[11px] font-bold text-center bg-yellow-500/8 border border-yellow-500/25 text-yellow-400 hover:bg-yellow-500/12 transition-all">
+            🆔 {t('registerInNSS')}
+          </button>
+        )}
+
+        {/* Модал регистрации */}
+        {showRegModal && (
+          <div className="fixed inset-0 z-50 flex items-end justify-center pb-6 px-3" style={{ background: 'rgba(0,0,0,0.7)' }}
+            onClick={() => setShowRegModal(false)}>
+            <div className="w-full max-w-[400px] rounded-3xl p-5 space-y-4"
+              style={{ background: 'var(--bg-card)', border: '1px solid rgba(255,215,0,0.25)' }}
+              onClick={e => e.stopPropagation()}>
               <div className="text-center">
-                <div className="text-[13px] text-emerald-400 font-bold">✅ Реферал сохранён!</div>
-                <div className="text-sm font-black text-white mt-1">Спонсор ID: #{ref}</div>
-                <a href="/" className="block w-full py-3 rounded-2xl text-center text-sm font-black mt-3" style={{ background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff' }}>
-                  🚀 Войти в приложение
-                </a>
-                {/* SafePal deeplink — для Telegram и мобилы */}
-                <a href={`safepalwallet://open?url=${encodeURIComponent(baseUrl)}`}
-                  className="block w-full py-3 rounded-2xl text-center text-sm font-black mt-2"
-                  style={{ background: 'linear-gradient(135deg, #3b82f6, #2563eb)', color: '#fff' }}>
-                  🔐 Открыть в SafePal
-                </a>
-                <div className="text-[9px] text-slate-500 mt-1.5 leading-tight">
-                  Из Telegram? Нажми «Открыть в SafePal» — кошелёк подключится автоматически
-                </div>
-              </div>
-            </div>
-
-            {/* Вирусный блок */}
-            <div className="p-4 rounded-2xl" style={{ background: 'linear-gradient(135deg, rgba(255,215,0,0.08), rgba(245,166,35,0.08))', border: '1px solid rgba(255,215,0,0.25)' }}>
-              <div className="text-center mb-3">
-                <div className="text-2xl mb-1">🔥</div>
-                <div className="text-[14px] font-black text-white">Хочешь ещё больше скидку?</div>
-                <div className="text-[11px] font-bold mt-1" style={{ color: '#ffd700' }}>Отправь 5 друзьям → получи от +5% до +10%!</div>
-                <div className="text-[10px] text-slate-400 mt-1">Итого до <b className="text-white">80% скидки</b> на бриллианты!</div>
+                <div className="text-2xl mb-1">🆔</div>
+                <div className="text-sm font-black text-white">{t('regModalTitle')}</div>
+                <div className="text-[10px] text-slate-400 mt-1 leading-relaxed">{t('regModalDesc')}</div>
               </div>
 
-              <div className="p-2 rounded-xl bg-black/30 text-[9px] text-white break-all mb-2 font-mono">{myLink}</div>
-              <button onClick={copyLink} className="w-full py-2 rounded-xl text-[11px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 mb-3">
-                {copied ? '✅ Скопировано!' : '📋 Копировать ссылку'}
-              </button>
+              <div>
+                <label className="text-[10px] text-slate-500 mb-1 block">{t('sponsorIdLabel')}:</label>
+                {refFromLink && sponsorInput ? (
+                  <div>
+                    <div className="w-full p-3 rounded-xl text-sm text-white flex items-center justify-between"
+                      style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(34,197,94,0.3)' }}>
+                      <span>✅ #{sponsorInput}</span>
+                      <span className="text-[9px] text-emerald-400">{t('fromReferralLink')}</span>
+                    </div>
+                    <button onClick={() => setRefFromLink(false)} className="text-[9px] text-slate-500 mt-1 underline">{t('changeSponsor')}</button>
+                  </div>
+                ) : (
+                  <div>
+                    <input type="number" value={sponsorInput} onChange={e => setSponsorInput(e.target.value)}
+                      placeholder={t('sponsorIdPlaceholder')}
+                      className="w-full p-3 rounded-xl text-sm text-white outline-none"
+                      style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,215,0,0.2)' }}
+                      autoFocus />
+                    {!sponsorInput && <div className="text-[9px] text-slate-500 mt-1">💡 {t('sponsorIdHint')}</div>}
+                  </div>
+                )}
+              </div>
 
               <div className="flex gap-2">
-                <a href={shareLinks.tg} target="_blank" rel="noopener noreferrer"
-                  className="flex-1 py-3 rounded-xl text-[11px] font-bold text-center" style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', color: '#3b82f6' }}>
-                  📱 Telegram
-                </a>
-                <a href={shareLinks.wa} target="_blank" rel="noopener noreferrer"
-                  className="flex-1 py-3 rounded-xl text-[11px] font-bold text-center" style={{ background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.3)', color: '#22c55e' }}>
-                  💬 WhatsApp
-                </a>
-                <a href={shareLinks.vb} target="_blank" rel="noopener noreferrer"
-                  className="flex-1 py-3 rounded-xl text-[11px] font-bold text-center" style={{ background: 'rgba(168,85,247,0.15)', border: '1px solid rgba(168,85,247,0.3)', color: '#a855f7' }}>
-                  📞 Viber
-                </a>
-              </div>
-
-              <div className="mt-3 p-2.5 rounded-xl text-[10px] text-slate-400 leading-relaxed" style={{ background: 'rgba(255,215,0,0.05)', border: '1px solid rgba(255,215,0,0.1)' }}>
-                💡 <b className="text-white">Как получить бонус:</b><br/>
-                1. Скопируй ссылку выше<br/>
-                2. Отправь минимум 5 друзьям<br/>
-                3. Свяжись со своим спонсором (ID: #{ref})<br/>
-                4. Получи персональную скидку +5-10%!
+                <button onClick={() => setShowRegModal(false)}
+                  className="flex-1 py-3 rounded-2xl text-[11px] font-bold text-slate-400 border border-white/10">{t('cancel')}</button>
+                <button onClick={handleRegisterOnly}
+                  disabled={registering || !sponsorInput || parseInt(sponsorInput) <= 0}
+                  className="flex-1 py-3 rounded-2xl text-[11px] font-black gold-btn"
+                  style={{ opacity: (!sponsorInput || parseInt(sponsorInput) <= 0 || registering) ? 0.5 : 1 }}>
+                  {registering ? '⏳ ...' : '✅ ' + t('register')}
+                </button>
               </div>
             </div>
           </div>
         )}
 
-        <div className="text-center text-[10px] text-slate-600 mt-4">
-          NSS Diamond Club • Powered by GlobalWay
-        </div>
+        {/* Кнопка покупки уровня */}
+        {wallet && nextLv && (
+          <button onClick={handleBuyNextLevel} disabled={buyingLevel || txPending}
+            className="w-full p-3 rounded-2xl font-bold text-sm transition-all active:scale-[0.98] border-2 flex items-center justify-center gap-2"
+            style={{
+              background: `linear-gradient(135deg, ${nextLv.color}20, ${nextLv.color}08)`,
+              borderColor: `${nextLv.color}50`, color: nextLv.color,
+              opacity: (buyingLevel || txPending) ? 0.6 : 1,
+            }}>
+            {buyingLevel ? <span>⏳ {t('buying')}</span> : (
+              <>
+                <span className="text-lg">{nextLv.emoji}</span>
+                <span>{t('buy')} {nextLv.name}</span>
+                <span className="text-[11px] opacity-75">({nextLv.price}{bnbPrice > 0 && nextLv.bnb ? ` ${fmtUsd(nextLv.bnb)}` : ''})</span>
+              </>
+            )}
+          </button>
+        )}
+        {wallet && !nextLv && level === 12 && (
+          <div className="p-2.5 rounded-xl text-[11px] font-bold text-center bg-gold-400/10 border border-gold-400/25 text-gold-400">
+            👑 {t('maxLevelReached')}
+          </div>
+        )}
       </div>
 
-      {showExitPopup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.85)' }}>
-          <div className="max-w-[380px] w-full p-5 rounded-3xl" style={{ background: 'linear-gradient(180deg, #1a1040, #0a0a20)', border: '1px solid rgba(255,215,0,0.2)' }}>
-            <div className="text-center">
-              <div className="text-4xl mb-2">⏳</div>
-              <h3 className="text-xl font-black text-white mb-1">Не спеши уходить!</h3>
-              <p className="text-[12px] text-slate-400 mb-4">Ты в одном шаге от вступления в клуб</p>
-              <div className="space-y-2 mb-4 text-left">
-                <div className="flex items-center gap-2 text-[12px]"><span className="text-emerald-400">✓</span><span className="text-slate-300">Бесплатная регистрация</span></div>
-                <div className="flex items-center gap-2 text-[12px]"><span className="text-emerald-400">✓</span><span className="text-slate-300">Бриллианты со скидкой до 64%</span></div>
-                <div className="flex items-center gap-2 text-[12px]"><span className="text-emerald-400">✓</span><span className="text-slate-300">Стейкинг от 50% годовых</span></div>
-                <div className="flex items-center gap-2 text-[12px]"><span className="text-emerald-400">✓</span><span className="text-slate-300">Свой дом под 0% годовых</span></div>
-              </div>
-              <button onClick={handleRegister} className="w-full py-3 rounded-2xl text-base font-black mb-2" style={{ background: 'linear-gradient(135deg, #ffd700, #f5a623)', color: '#000' }}>
-                🎁 Присоединиться
-              </button>
-              <button onClick={() => setShowExitPopup(false)} className="text-[11px] text-slate-500 hover:text-slate-400">
-                Нет, спасибо
-              </button>
-            </div>
+      {nextLv && (
+        <div className="px-3 mt-1.5">
+          <div className="flex items-center justify-between text-[9px] mb-0.5">
+            <span className="text-slate-500">{lv.emoji} Lv.{level} (+{lv.nssPerTap} NSS)</span>
+            <span style={{ color: nextLv.color }} className="font-bold">{nextLv.emoji} {nextLv.name} (+{nextLv.nssPerTap} NSS)</span>
+          </div>
+          <div className="h-1 rounded-full bg-white/5 overflow-hidden">
+            <div className="h-full rounded-full" style={{ width: '100%', background: `linear-gradient(90deg, ${lv.color}, ${nextLv.color}40)` }} />
           </div>
         </div>
       )}
 
-      {/* Popup 2: После регистрации — вирусный */}
-      {showViralPopup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.9)' }}>
-          <div className="max-w-[380px] w-full p-5 rounded-3xl" style={{ background: 'linear-gradient(180deg, #1a1040, #0a0a20)', border: '1px solid rgba(255,215,0,0.3)' }}>
-            <div className="text-center">
-              <div className="text-4xl mb-2">🔥</div>
-              <h3 className="text-xl font-black text-white mb-1">Не уходи с пустыми руками!</h3>
-              <div className="text-[13px] font-bold mb-1" style={{ color: '#ffd700' }}>Получи дополнительные 5-10% скидки!</div>
-              <p className="text-[11px] text-slate-400 mb-4">
-                Отправь эту ссылку <b className="text-white">5 друзьям</b> → свяжись с приглашающим → получи <b style={{ color: '#ffd700' }}>до 80% скидки</b>!
-              </p>
+      <div ref={tapAreaRef} onPointerDown={handleTap}
+        className="flex-1 mx-3 my-2 rounded-2xl relative overflow-hidden flex items-center justify-center cursor-pointer select-none min-h-[200px] border transition-all duration-700"
+        style={{ borderColor: `${lv.color}20`, background: 'var(--lv-ambient)', boxShadow: `inset 0 0 60px ${lvBg.glow}, 0 0 20px ${lvBg.glow}` }}>
+        <div className="absolute inset-0 bg-cover bg-center transition-all duration-1000"
+          style={{ backgroundImage: `url(${bgSrc})`, filter: 'brightness(0.85)' }} />
+        <div className="absolute inset-0 transition-all duration-700"
+          style={{ background: `linear-gradient(180deg, ${lvBg.overlay} 0%, ${lv.color}15 50%, ${lvBg.overlay} 100%)` }} />
+        <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at 50% 50%, transparent 40%, rgba(0,0,0,0.5) 100%)' }} />
 
-              <div className="p-2.5 rounded-xl bg-black/40 text-[10px] text-white break-all mb-3 font-mono border border-white/10">{myLink}</div>
-
-              <button onClick={copyLink} className="w-full py-2.5 rounded-xl text-[12px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 mb-3">
-                {copied ? '✅ Скопировано!' : '📋 Копировать ссылку'}
-              </button>
-
-              <div className="flex gap-2 mb-4">
-                <a href={shareLinks.tg} target="_blank" rel="noopener noreferrer" className="flex-1 py-2.5 rounded-xl text-[11px] font-bold text-center" style={{ background: 'rgba(59,130,246,0.15)', color: '#3b82f6' }}>📱 TG</a>
-                <a href={shareLinks.wa} target="_blank" rel="noopener noreferrer" className="flex-1 py-2.5 rounded-xl text-[11px] font-bold text-center" style={{ background: 'rgba(34,197,94,0.15)', color: '#22c55e' }}>💬 WA</a>
-                <a href={shareLinks.vb} target="_blank" rel="noopener noreferrer" className="flex-1 py-2.5 rounded-xl text-[11px] font-bold text-center" style={{ background: 'rgba(168,85,247,0.15)', color: '#a855f7' }}>📞 VB</a>
-              </div>
-
-              <div className="p-2.5 rounded-xl mb-3 text-[10px] text-slate-400 leading-relaxed" style={{ background: 'rgba(255,215,0,0.05)', border: '1px solid rgba(255,215,0,0.1)' }}>
-                💡 <b className="text-white">Как получить бонус:</b><br/>
-                1. Скопируй ссылку выше<br/>
-                2. Отправь минимум 5 друзьям<br/>
-                3. Свяжись со своим спонсором (ID: #{ref})<br/>
-                4. Получи персональную скидку +5-10%!
-              </div>
-
-              <a href="/" className="block w-full py-3 rounded-2xl text-center text-sm font-black mb-2" style={{ background: 'linear-gradient(135deg, #ffd700, #f5a623)', color: '#000' }}>
-                🚀 Войти в приложение
-              </a>
-              <button onClick={() => setShowViralPopup(false)} className="text-[11px] text-slate-500">Закрыть</button>
-            </div>
-          </div>
+        <div className="relative z-10 active:animate-shake select-none transition-transform w-[100px] h-[100px] flex items-center justify-center drop-shadow-lg">
+          <img src={toolSrc} alt={lv.name} className="w-full h-full object-contain drop-shadow-[0_0_12px_rgba(255,215,0,0.3)]" onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block' }} />
+          <span className="text-6xl hidden">{lv.emoji}</span>
         </div>
-      )}
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 text-[11px] px-3 py-1 rounded-full"
+          style={{ color: '#eee8d5', background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}>
+          ⛏ {t('tapHint')} • +{lv.nssPerTap} NSS
+        </div>
+        {effects.map(ef => (
+          <div key={ef.id} className={`absolute pointer-events-none z-20 ${ef.type === 'number' ? 'animate-tap-up font-black text-base' : 'animate-gem-burst text-lg'}`}
+            style={{ left: ef.x, top: ef.y, color: ef.type === 'number' ? 'var(--gold)' : undefined, textShadow: ef.type === 'number' ? '0 0 8px rgba(255,184,0,0.4)' : 'none' }}>
+            {ef.text}
+          </div>
+        ))}
+        {thoughts.map(th => (
+          <div key={th.id} className={`absolute z-30 px-3 py-2 text-xs font-bold max-w-[85%] pointer-events-none flex items-center gap-2 animate-thought thought-${th.color} ${th.shape}`} style={{ left: '8%', top: '30%' }}>
+            <span className="text-xl flex-shrink-0">{th.icon}</span>
+            <span className="leading-snug">{th.text}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-3 gap-1.5 px-3 pb-2">
+        <StatCard value={taps} label={t('taps')} color="text-gold-400" />
+        <StatCard value={totalNss.toFixed(0)} label="NSS" color="text-emerald-400" />
+        <StatCard value={parseFloat(useGameStore.getState().usdt || 0).toFixed(0)} label="USDT" color="text-blue-400" />
+      </div>
+
+      <div className="px-3 py-1.5 border-t border-white/5 overflow-hidden">
+        <div className="flex gap-6 animate-[nscroll_20s_linear_infinite] whitespace-nowrap">
+          {[...news, ...news].map((n, i) => (
+            <span key={i} className="text-[10px] text-slate-500">📢 <span className="text-gold-400">{n}</span></span>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
 
-export default function InvitePage() {
+function StatCard({ value, label, color }) {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center" style={{ background: '#0a0a20' }}><div className="text-white">Loading...</div></div>}>
-      <InviteContent />
-    </Suspense>
+    <div className="glass rounded-xl p-2 text-center">
+      <div className={`text-lg font-black font-display ${color}`}>{value}</div>
+      <div className="text-[9px] text-slate-500">{label}</div>
+    </div>
   )
 }
