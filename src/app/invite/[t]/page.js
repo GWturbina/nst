@@ -109,6 +109,15 @@ function InviteContent() {
               <a href="/" className="block w-full py-3 rounded-2xl text-center text-sm font-black mt-3" style={{ background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff' }}>
                 🚀 Войти в приложение
               </a>
+              {/* SafePal deeplink — для Telegram и мобилы */}
+              <a href={`safepalwallet://open?url=${encodeURIComponent(typeof window !== 'undefined' ? window.location.origin : 'https://nst-murex.vercel.app')}`}
+                className="block w-full py-3 rounded-2xl text-center text-sm font-black mt-2"
+                style={{ background: 'linear-gradient(135deg, #3b82f6, #2563eb)', color: '#fff' }}>
+                🔐 Открыть в SafePal
+              </a>
+              <div className="text-[9px] text-slate-500 mt-1.5 leading-tight">
+                Из Telegram? Нажми «Открыть в SafePal» — кошелёк подключится автоматически
+              </div>
             </div>
           </div>
         )}
