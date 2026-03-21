@@ -4,7 +4,7 @@
  * 
  * Клиент отправляет: { wallet, level, taps (count за сессию) }
  * Сервер проверяет: энергию, cooldown, уровень
- * Сервер возвращает: { ok, earned, energy, totalDct }
+ * Сервер возвращает: { ok, earned, energy, totalNss }
  * 
  * Хранилище: Supabase таблица dc_taps
  */
@@ -27,7 +27,7 @@ const supabase = supabaseUrl && supabaseServiceKey
 const ENERGY_MAX = 200
 const REGEN_MS = 120000  // 1 энергия за 120 сек
 const MIN_TAP_INTERVAL_MS = 150  // Минимум 150мс между тапами (защита от автокликера)
-const DCT_PER_TAP = [0.01, 0.03, 0.05, 0.08, 0.12, 0.16, 0.20, 0.24, 0.28, 0.32, 0.35, 0.38, 0.40]
+const NSS_PER_TAP = [0.01, 0.03, 0.05, 0.08, 0.12, 0.16, 0.20, 0.24, 0.28, 0.32, 0.35, 0.38, 0.40]
 
 // ═══ Проверка Origin ═══
 function checkOrigin(request) {
@@ -61,7 +61,7 @@ export async function POST(request) {
       return NextResponse.json({ ok: false, error: 'Invalid wallet' }, { status: 400 })
     }
     const lv = Math.max(0, Math.min(12, parseInt(level) || 0))
-    const dctPerTap = DCT_PER_TAP[lv] || 0.01
+    const nssPerTap = NSS_PER_TAP[lv] || 0.01
 
     // Получаем или создаём запись игрока
     const walletLower = wallet.toLowerCase()
@@ -80,7 +80,7 @@ export async function POST(request) {
         .insert({
           wallet: walletLower,
           energy: ENERGY_MAX,
-          total_dct: 0,
+          total_nss: 0,
           total_taps: 0,
           last_tap_at: now,
           last_regen_at: now,
@@ -101,7 +101,7 @@ export async function POST(request) {
         ok: false,
         error: 'Too fast',
         energy: player.energy,
-        totalDct: player.total_dct,
+        totalNss: player.total_nss,
       }, { status: 429 })
     }
 
@@ -116,14 +116,14 @@ export async function POST(request) {
         ok: false,
         error: 'No energy',
         energy: 0,
-        totalDct: player.total_dct,
+        totalNss: player.total_nss,
       })
     }
 
     // Начисляем тап
     const newEnergy = currentEnergy - 1
-    const earned = dctPerTap
-    const newTotal = +(player.total_dct + earned).toFixed(4)
+    const earned = nssPerTap
+    const newTotal = +(player.total_nss + earned).toFixed(4)
     const newTaps = (player.total_taps || 0) + 1
 
     // Обновляем в базе
@@ -131,7 +131,7 @@ export async function POST(request) {
       .from('dc_taps')
       .update({
         energy: newEnergy,
-        total_dct: newTotal,
+        total_nss: newTotal,
         total_taps: newTaps,
         last_tap_at: now,
         last_regen_at: regenAmount > 0 ? now : player.last_regen_at,
@@ -148,7 +148,7 @@ export async function POST(request) {
       earned,
       energy: newEnergy,
       maxEnergy: ENERGY_MAX,
-      totalDct: newTotal,
+      totalNss: newTotal,
       totalTaps: newTaps,
     })
 
@@ -180,7 +180,7 @@ export async function GET(request) {
         ok: true,
         energy: ENERGY_MAX,
         maxEnergy: ENERGY_MAX,
-        totalDct: 0,
+        totalNss: 0,
         totalTaps: 0,
       })
     }
@@ -195,7 +195,7 @@ export async function GET(request) {
       ok: true,
       energy: currentEnergy,
       maxEnergy: ENERGY_MAX,
-      totalDct: player.total_dct || 0,
+      totalNss: player.total_nss || 0,
       totalTaps: player.total_taps || 0,
     })
 
