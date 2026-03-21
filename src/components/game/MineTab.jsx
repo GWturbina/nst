@@ -28,6 +28,22 @@ export default function MineTab() {
   const [thoughts, setThoughts] = useState([])
   const tapCountRef = useRef(0)
   const [buyingLevel, setBuyingLevel] = useState(false)
+
+  // Динамические тексты уровней из Supabase
+  const levelTextsRef = useRef({}) // { level: [text1, text2, ...] }
+  const thoughtIndexRef = useRef({}) // { level: currentIndex }
+
+  useEffect(() => {
+    fetch('/api/level-content').then(r => r.json()).then(data => {
+      if (data.ok && data.levels) {
+        const map = {}
+        for (const row of data.levels) {
+          if (row.thoughts?.length > 0) map[row.level] = row.thoughts
+        }
+        levelTextsRef.current = map
+      }
+    }).catch(() => {})
+  }, [])
   const [showRegModal, setShowRegModal] = useState(false)
   const [sponsorInput, setSponsorInput] = useState('')
   const [registering, setRegistering] = useState(false)
@@ -148,10 +164,20 @@ export default function MineTab() {
     ])
     setTimeout(() => setEffects(prev => prev.slice(1)), 800)
 
-    if (tapCountRef.current % 25 === 0 && lv.thought) {
-      const shapes = ['thought-pill', 'thought-cloud', 'thought-crystal', 'thought-bubble']
-      const shape = shapes[Math.floor(Math.random() * shapes.length)]
-      showThought(lv.thought, lv.thoughtColor, lv.thoughtIcon, shape)
+    if (tapCountRef.current % 25 === 0) {
+      const lvl = useGameStore.getState().level
+      const dynamicTexts = levelTextsRef.current[lvl]
+      let thoughtText = lv.thought
+      if (dynamicTexts && dynamicTexts.length > 0) {
+        const idx = (thoughtIndexRef.current[lvl] || 0) % dynamicTexts.length
+        thoughtText = dynamicTexts[idx]
+        thoughtIndexRef.current[lvl] = idx + 1
+      }
+      if (thoughtText) {
+        const shapes = ['thought-pill', 'thought-cloud', 'thought-crystal', 'thought-bubble']
+        const shape = shapes[Math.floor(Math.random() * shapes.length)]
+        showThought(thoughtText, lv.thoughtColor, lv.thoughtIcon, shape)
+      }
     }
   }, [showThought])
 
