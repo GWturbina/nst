@@ -18,11 +18,13 @@ export default function LinksTab() {
     : ''
 
   const shareText = `💎 Бриллианты со скидкой до 70%! Стейкинг от 50% годовых. Бесплатный старт! Присоединяйся:`
+  // Viber плохо обрабатывает эмодзи в deeplink URL — убираем их
+  const viberText = shareText.replace(/[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{27FF}]|[\u{FE00}-\u{FEFF}]|[\u{1F900}-\u{1F9FF}]|[\u{200D}\u{20E3}\u{FE0F}]/gu, '').replace(/\s{2,}/g, ' ').trim()
 
   const shareLinks = {
     tg: `https://t.me/share/url?url=${encodeURIComponent(inviteLink)}&text=${encodeURIComponent(shareText)}`,
     wa: `https://wa.me/?text=${encodeURIComponent(`${shareText}\n${inviteLink}`)}`,
-    vb: `viber://forward?text=${encodeURIComponent(`${shareText}\n${inviteLink}`)}`,
+    vb: `viber://forward?text=${encodeURIComponent(`${viberText}\n${inviteLink}`)}`,
   }
 
   const copy = (text) => {
