@@ -114,7 +114,7 @@ export default function TeamTab() {
   const shareLinks = {
     tg: `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent('💎 NSS — Natural Stone Seekers!')}`,
     wa: `https://wa.me/?text=${encodeURIComponent(`💎 NSS — Join! ${referralLink}`)}`,
-    vb: `viber://forward?text=${encodeURIComponent(`💎 NSS — Join! ${referralLink}`)}`,
+    vb: `viber://forward?text=${encodeURIComponent(`NSS — Natural Stone Seekers! Присоединяйся: ${referralLink}`)}`,
   }
 
   const lv = LEVELS[level] || LEVELS[0]
