@@ -12,7 +12,7 @@ import HelpButton from '@/components/ui/HelpButton'
 const AVATARS = ['👨‍💼','👩‍💻','🧔','👩‍🔬','👨‍🚀','👩‍🎨','🧑‍🔧','👩‍🏫','👨‍🌾','👩‍⚕️','🦸‍♂️','🦸‍♀️','🧙‍♂️','🧙‍♀️','🥷','🤴','👸']
 
 export default function TeamTab() {
-  const { wallet, registered, sponsorId, level, taps, localDct, dct, addNotification, t } = useGameStore()
+  const { wallet, registered, sponsorId, level, taps, localNss, dct, addNotification, t } = useGameStore()
   const [section, setSection] = useState('team')
   const [referralLink, setReferralLink] = useState('')
   const [copied, setCopied] = useState(false)
@@ -118,7 +118,7 @@ export default function TeamTab() {
   }
 
   const lv = LEVELS[level] || LEVELS[0]
-  const totalDct = dct + localDct
+  const totalNss = localNss
 
   const sections = [
     { id: 'profile', icon: '👤', label: t('profile') },
@@ -241,8 +241,8 @@ export default function TeamTab() {
               <div className="text-[9px] text-slate-500">Lv.{level}</div>
             </div>
             <div className="p-3 rounded-2xl glass text-center">
-              <div className="text-lg font-black text-gold-400">{totalDct.toFixed(0)}</div>
-              <div className="text-[9px] text-slate-500">DCT</div>
+              <div className="text-lg font-black text-amber-400">{totalNss.toFixed(0)}</div>
+              <div className="text-[9px] text-slate-500">⛏ NSS</div>
             </div>
             <div className="p-3 rounded-2xl glass text-center">
               <div className="text-lg font-black text-purple-400">{taps}</div>
@@ -256,7 +256,7 @@ export default function TeamTab() {
             <div className="grid grid-cols-4 gap-2">
               {[
                 { icon: '⛏', name: t('firstTap'), done: taps > 0 },
-                { icon: '💎', name: t('collector100'), done: totalDct >= 100 },
+                { icon: '💎', name: t('collector100'), done: totalNss >= 100 },
                 { icon: '🛒', name: t('firstTool'), done: level >= 1 },
                 { icon: '💍', name: t('jeweler'), done: level >= 6 },
                 { icon: '🏗', name: t('builder'), done: level >= 7 },
@@ -420,8 +420,8 @@ export default function TeamTab() {
                   <div className="text-[9px] text-slate-500">Lv.{level}</div>
                 </div>
                 <div className="text-right">
-                  <div className="text-[11px] font-bold text-gold-400">{totalDct.toFixed(0)}</div>
-                  <div className="text-[8px] text-slate-500">DCT</div>
+                  <div className="text-[11px] font-bold text-amber-400">{totalNss.toFixed(0)}</div>
+                  <div className="text-[8px] text-slate-500">⛏ NSS</div>
                 </div>
               </div>
             </div>
