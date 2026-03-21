@@ -3,7 +3,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 
 const TEMPLATES = {
-  gems: { emoji: '💎', title: 'Ищи камни — зарабатывай!', sub: 'Бесплатный старт. Тапай и добывай.', color: '#a855f7', ogImage: 'invite-gems.jpg' },
+  gems: { emoji: '💎', title: 'Ищи бриллианты — зарабатывай!', sub: 'Бесплатный старт. Тапай и добывай.', color: '#a855f7', ogImage: 'invite-gems.jpg' },
   house: { emoji: '🏠', title: 'Свой дом под 0%!', sub: 'Заработай 35% — клуб добавит 65%.', color: '#f59e0b', ogImage: 'invite-house.jpg' },
   money: { emoji: '💰', title: '15 источников дохода!', sub: 'Камни, инвестиции, AI — всё в одном.', color: '#10b981', ogImage: 'invite-money.jpg' },
 }
