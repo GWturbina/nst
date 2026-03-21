@@ -44,7 +44,7 @@ const useGameStore = create(
   energy: ENERGY_CONFIG.maxEnergy,
   maxEnergy: ENERGY_CONFIG.maxEnergy,
   taps: 0,
-  localDct: 0,       // Локальные DCT от тапов (не блокчейн)
+  localNss: 0,       // Локальные NSS от тапов (не блокчейн)
 
   // ═══════════════════════════════════════════════════
   // Evaporation (нерегистрированные)
@@ -78,7 +78,7 @@ const useGameStore = create(
   // News/Quests
   news: ['Добро пожаловать в Diamond Club!', 'DCT — токен с реальным обеспечением'],
   quests: [
-    { name: 'Сделай 100 тапов', reward: '1 DCT', done: false },
+    { name: 'Сделай 100 тапов', reward: '10 NSS', done: false },
     { name: 'Пригласи друга', reward: '5 DCT', done: false },
   ],
 
@@ -146,12 +146,12 @@ const useGameStore = create(
   toggleDayMode: () => set(s => ({ dayMode: !s.dayMode })),
 
   doTap: () => {
-    const { energy, level, localDct, taps, registered, wallet, evapActive } = get()
+    const { energy, level, localNss, taps, registered, wallet, evapActive } = get()
     if (energy <= 0) return null
     const lv = LEVELS[level]
-    const earned = lv.dctPerTap
+    const earned = lv.nssPerTap
     set({
-      localDct: +(localDct + earned).toFixed(4),
+      localNss: +(localNss + earned).toFixed(4),
       energy: energy - 1,
       taps: taps + 1,
     })
@@ -168,13 +168,13 @@ const useGameStore = create(
     const { evapSeconds, evapActive, registered, wallet } = get()
     if (!evapActive || registered || wallet) return null
     if (evapSeconds <= 1) {
-      set({ localDct: 0, evapActive: false, evapSeconds: ENERGY_CONFIG.evapSeconds })
+      set({ localNss: 0, evapActive: false, evapSeconds: ENERGY_CONFIG.evapSeconds })
       return 'expired'
     }
     set({ evapSeconds: evapSeconds - 1 })
     return null
   },
-  evaporate: () => set({ localDct: 0, evapActive: false, evapSeconds: ENERGY_CONFIG.evapSeconds }),
+  evaporate: () => set({ localNss: 0, evapActive: false, evapSeconds: ENERGY_CONFIG.evapSeconds }),
 
   // ═══════════════════════════════════════════════════
   // UI ACTIONS
@@ -198,7 +198,7 @@ const useGameStore = create(
   syncServerTaps: (data) => set({
     energy: data.energy ?? get().energy,
     maxEnergy: data.maxEnergy ?? get().maxEnergy,
-    localDct: data.localDct ?? get().localDct,
+    localNss: data.localNss ?? get().localNss,
     taps: data.taps ?? get().taps,
   }),
 }),
@@ -211,7 +211,7 @@ const useGameStore = create(
         wallet: state.wallet,
         registered: state.registered,
         sponsorId: state.sponsorId,
-        // FIX M9: localDct и taps НЕ сохраняем — серверная тапалка для зарегистрированных
+        // FIX M9: localNss и taps НЕ сохраняем — серверная тапалка для зарегистрированных
         // Для незарегистрированных (без кошелька) — тапы испаряются через 30 мин в любом случае
       }),
       version: 2,
