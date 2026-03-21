@@ -12,6 +12,7 @@ import DCTPage from '@/components/pages/DCTPage'
 import LinksTab from '@/components/pages/LinksTab'
 import VaultTab from '@/components/pages/VaultTab'
 import AdminPanel from '@/components/admin/AdminPanel'
+import AutoRegisterModal from '@/components/ui/AutoRegisterModal'
 
 const TAB_COMPONENTS = {
   mine: MineTab,
@@ -26,7 +27,7 @@ const TAB_COMPONENTS = {
 
 export default function MainPage() {
   useBlockchainInit()
-  const { activeTab, dayMode, level } = useGameStore()
+  const { activeTab, dayMode, level, showAutoRegister } = useGameStore()
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -58,6 +59,8 @@ export default function MainPage() {
         </main>
         <BottomNav />
       </div>
+      {/* Модал регистрации — показывается сразу после подключения незарегистрированного кошелька */}
+      {showAutoRegister && <AutoRegisterModal />}
     </div>
   )
 }
