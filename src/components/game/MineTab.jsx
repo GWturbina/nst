@@ -105,10 +105,14 @@ export default function MineTab() {
             localNss: state.totalNss,
             taps: state.totalTaps,
           })
+          // Предупреждение о сгорании
+          if (state.decay && state.decay.lost > 0) {
+            addNotification(`⚠️ Сгорело ${state.decay.lost.toFixed(0)} NSS (${state.decay.daysInactive} дней неактивности)`)
+          }
         }
       })
     }
-  }, [wallet, registered])
+  }, [wallet, registered, addNotification])
 
   const handleTap = useCallback((e) => {
     // Предотвращаем двойное срабатывание и всплытие
@@ -130,13 +134,15 @@ export default function MineTab() {
       // Отправляем на сервер асинхронно
       serverTap(wallet, level).then(result => {
         if (result && result.ok) {
-          // Синхронизируем с сервером
           useGameStore.getState().syncServerTaps({
             energy: result.energy,
             maxEnergy: result.maxEnergy,
             localNss: result.totalNss,
             taps: result.totalTaps,
           })
+          if (result.decayApplied > 0) {
+            addNotification(`⚠️ Сгорело ${result.decayApplied.toFixed(0)} NSS за неактивность. Тапайте регулярно!`)
+          }
         }
       })
     } else {
