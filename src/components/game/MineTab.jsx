@@ -121,7 +121,7 @@ export default function MineTab() {
           })
           // Предупреждение о сгорании
           if (state.decay && state.decay.lost > 0) {
-            addNotification(`⚠️ Сгорело ${state.decay.lost.toFixed(0)} NSS (${state.decay.daysInactive} дней неактивности)`)
+            addNotification(`⚠️ Сгорело ${state.decay.lost.toFixed(0)} GST (${state.decay.daysInactive} дней неактивности)`)
           }
         }
       })
@@ -155,7 +155,7 @@ export default function MineTab() {
             taps: result.totalTaps,
           })
           if (result.decayApplied > 0) {
-            addNotification(`⚠️ Сгорело ${result.decayApplied.toFixed(0)} NSS за неактивность. Тапайте регулярно!`)
+            addNotification(`⚠️ Сгорело ${result.decayApplied.toFixed(0)} GST за неактивность. Тапайте регулярно!`)
           }
         }
       })
@@ -306,7 +306,7 @@ export default function MineTab() {
         </div>
         <div className="text-right">
           <div className="text-xl font-black font-display" style={{ color: lv.color }}>{totalNss.toFixed(0)}</div>
-          <div className="text-[9px] text-slate-500">⛏ NSS</div>
+          <div className="text-[9px] text-slate-500">⛏ GST</div>
         </div>
         <HelpButton section="mine" />
       </div>
@@ -426,8 +426,8 @@ export default function MineTab() {
       {nextLv && (
         <div className="px-3 mt-1.5">
           <div className="flex items-center justify-between text-[9px] mb-0.5">
-            <span className="text-slate-500">{lv.emoji} Lv.{level} (+{lv.nssPerTap} NSS)</span>
-            <span style={{ color: nextLv.color }} className="font-bold">{nextLv.emoji} {nextLv.name} (+{nextLv.nssPerTap} NSS)</span>
+            <span className="text-slate-500">{lv.emoji} Lv.{level} (+{lv.nssPerTap} GST)</span>
+            <span style={{ color: nextLv.color }} className="font-bold">{nextLv.emoji} {nextLv.name} (+{nextLv.nssPerTap} GST)</span>
           </div>
           <div className="h-1 rounded-full bg-white/5 overflow-hidden">
             <div className="h-full rounded-full" style={{ width: '100%', background: `linear-gradient(90deg, ${lv.color}, ${nextLv.color}40)` }} />
@@ -450,7 +450,7 @@ export default function MineTab() {
         </div>
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 text-[11px] px-3 py-1 rounded-full"
           style={{ color: '#eee8d5', background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}>
-          ⛏ {t('tapHint')} • +{lv.nssPerTap} NSS
+          ⛏ {t('tapHint')} • +{lv.nssPerTap} GST
         </div>
         {effects.map(ef => (
           <div key={ef.id} className={`absolute pointer-events-none z-20 ${ef.type === 'number' ? 'animate-tap-up font-black text-base' : 'animate-gem-burst text-lg'}`}
