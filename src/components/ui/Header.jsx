@@ -64,7 +64,7 @@ export default function Header() {
         </div>
         <div className="flex-1">
           <h1 className="text-sm font-black leading-tight" style={{ color: 'var(--gold)' }}>Diamond Club</h1>
-          <p className="text-[9px]" style={{ color: 'var(--muted)' }}>NSS • DCT Token</p>
+          <p className="text-[9px]" style={{ color: 'var(--muted)' }}>GST • DCT Token</p>
         </div>
 
         {txPending && (
@@ -158,7 +158,7 @@ export default function Header() {
       {/* Token bar — NSS (тап-очки) + DCT (блокчейн) */}
       <div className="flex gap-1.5 px-3 pb-2 overflow-x-auto scrollbar-hide">
         {[
-          ['amber', 'NSS', localNss.toFixed(0), '⛏'],
+          ['amber', 'GST', localNss.toFixed(0), '⛏'],
           ['gold', 'DCT', parseFloat(dct).toFixed(2), '💎'],
           ['emerald', 'USDT', parseFloat(usdt).toFixed(0), '💵'],
           ['purple', 'BNB', bnb.toFixed(3), '🔶'],
