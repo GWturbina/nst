@@ -2,17 +2,17 @@ const BASE_URL = 'https://nst-murex.vercel.app'
 
 const templates = {
   gems: {
-    title: '💎 NSS Diamond Club — Бриллианты по клубной цене',
+    title: '💎 Diamond Club — Бриллианты по клубной цене',
     description: 'Закрытый инвестиционный клуб. Бриллианты от завода со скидкой до 70%. Стейкинг от 50% годовых. Начни бесплатно!',
     image: 'invite-gems.jpg',
   },
   house: {
-    title: '🏠 NSS — Свой дом под 0% годовых',
+    title: '🏠 Diamond Club — Свой дом под 0% годовых',
     description: 'Заработай 35% депозит через клуб — мы добавим 65% под 0% годовых. Дом в любой стране мира. Без банков и кредитов.',
     image: 'invite-house.jpg',
   },
   money: {
-    title: '💰 NSS — 15 источников дохода в одном приложении',
+    title: '💰 Diamond Club — 15 источников дохода в одном приложении',
     description: 'Бриллианты, стейкинг, P2P торговля, DCT токены, реферальная программа. Бесплатный старт — зарабатывай с первого дня.',
     image: 'invite-money.jpg',
   },
@@ -33,7 +33,7 @@ export async function generateMetadata({ params }) {
       title: tpl.title,
       description: tpl.description,
       url: `${BASE_URL}/invite/${t}`,
-      siteName: 'NSS Diamond Club',
+      siteName: 'Diamond Club',
       images: [
         {
           url: `${BASE_URL}/previews/${tpl.image}`,
