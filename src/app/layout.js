@@ -2,10 +2,10 @@ import './globals.css'
 import ErrorBoundary from '@/components/ui/ErrorBoundary'
 
 export const metadata = {
-  title: 'Diamond Club — NSS',
+  title: 'Diamond Club — GST',
   description: 'Инвестиции в драгоценные камни. DCT токен с реальным обеспечением.',
   openGraph: {
-    title: 'Diamond Club — NSS',
+    title: 'Diamond Club — GST',
     description: 'Драгоценные камни и DCT токены',
     images: ['/og-diamond.png'],
   },
