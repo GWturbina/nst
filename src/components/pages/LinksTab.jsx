@@ -103,7 +103,7 @@ export default function LinksTab() {
             <div className="space-y-1.5 text-[11px]">
               <div className="flex items-center gap-2">
                 <span className="text-amber-400">⛏</span>
-                <span className="text-slate-300"><b className="text-white">+50 NSS</b> за каждого зарегистрированного</span>
+                <span className="text-slate-300"><b className="text-white">+50 GST</b> за каждого зарегистрированного</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-amber-400">⛏</span>
