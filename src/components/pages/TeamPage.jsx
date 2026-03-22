@@ -245,7 +245,7 @@ export default function TeamTab() {
             </div>
             <div className="p-3 rounded-2xl glass text-center">
               <div className="text-lg font-black text-amber-400">{totalNss.toFixed(0)}</div>
-              <div className="text-[9px] text-slate-500">⛏ NSS</div>
+              <div className="text-[9px] text-slate-500">⛏ GST</div>
             </div>
             <div className="p-3 rounded-2xl glass text-center">
               <div className="text-lg font-black text-purple-400">{taps}</div>
@@ -424,7 +424,7 @@ export default function TeamTab() {
                 </div>
                 <div className="text-right">
                   <div className="text-[11px] font-bold text-amber-400">{totalNss.toFixed(0)}</div>
-                  <div className="text-[8px] text-slate-500">⛏ NSS</div>
+                  <div className="text-[8px] text-slate-500">⛏ GST</div>
                 </div>
               </div>
             </div>
