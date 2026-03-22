@@ -78,7 +78,7 @@ const useGameStore = create(
   // News/Quests
   news: ['Добро пожаловать в Diamond Club!', 'DCT — токен с реальным обеспечением'],
   quests: [
-    { name: 'Сделай 100 тапов', reward: '10 NSS', done: false },
+    { name: 'Сделай 100 тапов', reward: '10 GST', done: false },
     { name: 'Пригласи друга', reward: '5 DCT', done: false },
   ],
 
