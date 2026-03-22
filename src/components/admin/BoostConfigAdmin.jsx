@@ -138,7 +138,7 @@ export default function BoostConfigAdmin() {
       return await tx.wait()
     })
     setTxPending(false)
-    if (r.ok) { addNotification(`✅ Порог ${customNss} NSS → ${parseInt(customBP)/100}%`); setCustomNss(''); setCustomBP(''); reload() }
+    if (r.ok) { addNotification(`✅ Порог ${customNss} GST → ${parseInt(customBP)/100}%`); setCustomNss(''); setCustomBP(''); reload() }
     else addNotification('❌ ' + r.error)
   }
 
@@ -163,7 +163,7 @@ export default function BoostConfigAdmin() {
         </div>
         <div className="p-2.5 rounded-xl bg-white/5 text-center">
           <div className="text-[12px] font-bold text-orange-400">{parseFloat(totalBurned).toFixed(0)}</div>
-          <div className="text-[8px] text-slate-500">Сожжено NSS</div>
+          <div className="text-[8px] text-slate-500">Сожжено GST</div>
         </div>
       </div>
 
@@ -177,7 +177,7 @@ export default function BoostConfigAdmin() {
             {currentLevels.map((l, i) => (
               <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-white/5 text-[10px]">
                 <span className="text-slate-400">Порог {i + 1}</span>
-                <span className="text-white font-bold">{parseFloat(l.threshold).toLocaleString()} NSS</span>
+                <span className="text-white font-bold">{parseFloat(l.threshold).toLocaleString()} GST</span>
                 <span className="text-emerald-400 font-bold">{l.boostBP / 100}%</span>
               </div>
             ))}
@@ -205,7 +205,7 @@ export default function BoostConfigAdmin() {
         <div className="text-[12px] font-bold text-blue-400 mb-2">➕ Добавить порог вручную</div>
         <div className="grid grid-cols-2 gap-2 mb-2">
           <div>
-            <label className="text-[9px] text-slate-500">NSS</label>
+            <label className="text-[9px] text-slate-500">GST</label>
             <input type="number" value={customNss} onChange={e => setCustomNss(e.target.value)}
               placeholder="16000" className="w-full p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
           </div>
