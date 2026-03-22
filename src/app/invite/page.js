@@ -3,7 +3,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 
 const FEATURES = [
-  { emoji: '⛏', title: 'Бесплатный старт', desc: 'Тапай — зарабатывай NSS очки' },
+  { emoji: '⛏', title: 'Бесплатный старт', desc: 'Тапай — зарабатывай GST очки' },
   { emoji: '💎', title: 'Реальные бриллианты', desc: 'От завода со скидкой до 70%' },
   { emoji: '📈', title: 'Стейкинг от 50%', desc: 'До 75% годовых за активность' },
   { emoji: '👥', title: '9 уровней партнёрки', desc: 'До 10% ПОЖИЗНЕННО от приглашённых' },
@@ -68,7 +68,7 @@ function InviteContent() {
     <div className="min-h-screen" style={{ background: 'linear-gradient(180deg, #0a0a20 0%, #1a1040 50%, #0a0a20 100%)' }}>
       <div className="max-w-[430px] mx-auto px-4 py-6">
         <div className="flex justify-center mb-4">
-          <img src="/icons/logo.png" alt="NSS" className="w-16 h-16 rounded-2xl" onError={e => { e.target.style.display='none' }} />
+          <img src="/icons/logo.png" alt="Diamond Club" className="w-16 h-16 rounded-2xl" onError={e => { e.target.style.display='none' }} />
         </div>
 
         <div className="text-center mb-6">
@@ -84,8 +84,8 @@ function InviteContent() {
         <div className="flex justify-center gap-3 mb-2">
           <span className="text-4xl">💎</span><span className="text-4xl">⛏</span><span className="text-4xl">💰</span>
         </div>
-        <h2 className="text-center text-lg font-black text-white mb-0.5">NSS — Искатели Природных Камней</h2>
-        <p className="text-center text-[12px] text-slate-500 mb-4">Natural Stone Seekers</p>
+        <h2 className="text-center text-lg font-black text-white mb-0.5">GST — Искатели Драгоценных Камней</h2>
+        <p className="text-center text-[12px] text-slate-500 mb-4">Gem Seekers</p>
 
         <div className="space-y-2 mb-6">
           {FEATURES.map((f, i) => (
@@ -156,7 +156,7 @@ function InviteContent() {
           </div>
         )}
 
-        <div className="text-center text-[10px] text-slate-600 mt-4">NSS — Искатели Природных Камней • Powered by GlobalWay</div>
+        <div className="text-center text-[10px] text-slate-600 mt-4">GST — Искатели Драгоценных Камней • Powered by GlobalWay</div>
       </div>
 
       {/* Popup 1: До регистрации */}
