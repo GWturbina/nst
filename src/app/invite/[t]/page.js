@@ -3,7 +3,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useParams } from 'next/navigation'
 
 const TEMPLATES = {
-  gems: { emoji: '💎', title: 'Бриллианты по клубной цене!', sub: 'Экономия до 64%. Стейкинг от 50% годовых.', color: '#a855f7', ogImage: 'invite-gems.jpg' },
+  gems: { emoji: '💎', title: 'Бриллианты по клубной цене!', sub: 'Экономия до 70%. Стейкинг от 50% годовых.', color: '#a855f7', ogImage: 'invite-gems.jpg' },
   house: { emoji: '🏠', title: 'Свой дом под 0%!', sub: 'Заработай 35% — клуб добавит 65%.', color: '#f59e0b', ogImage: 'invite-house.jpg' },
   money: { emoji: '💰', title: '15 источников дохода!', sub: 'Бриллианты, стейкинг, токены — всё в одном.', color: '#10b981', ogImage: 'invite-money.jpg' },
 }
@@ -14,7 +14,7 @@ const FEATURES = [
   { emoji: '🪙', title: 'DCT токен', desc: 'Обеспечен реальными бриллиантами' },
   { emoji: '🏠', title: 'Свой дом под 0%', desc: 'Заработай 35% — клуб добавит 65%!' },
   { emoji: '🧩', title: 'Доли камней', desc: 'Инвестируй от малой суммы в дорогие камни' },
-  { emoji: '👥', title: 'Партнёрская программа', desc: 'До 10% пожизненно от приглашённых' },
+  { emoji: '👥', title: 'Партнёрская программа', desc: 'От 10% пожизненно за каждую покупку или продажу' },
 ]
 
 // API для захвата контактов (CardGift)
@@ -279,9 +279,9 @@ function InviteContent() {
             {captureStep === 1 && (<>
             <div className="text-center mb-4">
               <div className="text-3xl mb-2">📩</div>
-              <h3 className="text-lg font-black text-white mb-1">Получите инструкции</h3>
+              <h3 className="text-lg font-black text-white mb-1">Получить инструкции</h3>
               <p className="text-[12px] text-slate-400 leading-relaxed">
-                Оставьте контакт — пришлём подробную информацию и инструкции по работе с Diamond Club
+                Укажите контакт — куда прислать подробную информацию и инструкции по работе с Diamond Club как быстрее быть владельцем бриллианта
               </p>
             </div>
 
@@ -412,7 +412,7 @@ function InviteContent() {
               <p className="text-[12px] text-slate-400 mb-4">Ты в одном шаге от вступления в клуб</p>
               <div className="space-y-2 mb-4 text-left">
                 <div className="flex items-center gap-2 text-[12px]"><span className="text-emerald-400">✓</span><span className="text-slate-300">Бесплатная регистрация</span></div>
-                <div className="flex items-center gap-2 text-[12px]"><span className="text-emerald-400">✓</span><span className="text-slate-300">Бриллианты со скидкой до 64%</span></div>
+                <div className="flex items-center gap-2 text-[12px]"><span className="text-emerald-400">✓</span><span className="text-slate-300">Бриллианты со скидкой до 70%</span></div>
                 <div className="flex items-center gap-2 text-[12px]"><span className="text-emerald-400">✓</span><span className="text-slate-300">Стейкинг от 50% годовых</span></div>
                 <div className="flex items-center gap-2 text-[12px]"><span className="text-emerald-400">✓</span><span className="text-slate-300">Свой дом под 0% годовых</span></div>
               </div>
