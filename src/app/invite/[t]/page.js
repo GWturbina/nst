@@ -18,7 +18,7 @@ const FEATURES = [
 ]
 
 // API для захвата контактов (CardGift)
-const CAPTURE_API = 'https://cardgift.top/api/viral-registration'
+const CAPTURE_API = 'https://cgm-brown.vercel.app/api/viral-registration'
 
 function InviteContent() {
   const searchParams = useSearchParams()
