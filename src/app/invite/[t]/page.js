@@ -29,11 +29,14 @@ function InviteContent() {
 
   const [registered, setRegistered] = useState(false)
   const [showCaptureModal, setShowCaptureModal] = useState(false)
+  const [captureStep, setCaptureStep] = useState(1) // 1=форма, 2=успех+бот
   const [showExitPopup, setShowExitPopup] = useState(false)
   const [showViralPopup, setShowViralPopup] = useState(false)
   const [copied, setCopied] = useState(false)
   const [tempId, setTempId] = useState(null)
   const [submitting, setSubmitting] = useState(false)
+
+  const BOT_USERNAME = 'NSTCGbot'
 
   // Восстанавливаем temp ID из localStorage
   useEffect(() => {
@@ -95,6 +98,7 @@ function InviteContent() {
       localStorage.setItem('dc_ref', ref)
     }
     setShowExitPopup(false)
+    setCaptureStep(1)
     setShowCaptureModal(true)
   }
 
@@ -142,7 +146,13 @@ function InviteContent() {
     }
 
     setSubmitting(false)
+    setCaptureStep(2) // Показываем успех + кнопку бота
+  }
+
+  // ═══ ЗАКРЫТЬ МОДАЛКУ ПОСЛЕ БОТА ═══
+  const finishCapture = () => {
     setShowCaptureModal(false)
+    setCaptureStep(1)
     setRegistered(true)
   }
 
@@ -264,6 +274,9 @@ function InviteContent() {
       {showCaptureModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.9)' }}>
           <div className="max-w-[380px] w-full p-5 rounded-3xl" style={{ background: 'linear-gradient(180deg, #1a1040, #0a0a20)', border: '1px solid rgba(168,85,247,0.3)' }}>
+
+            {/* ── ШАГ 1: ФОРМА ── */}
+            {captureStep === 1 && (<>
             <div className="text-center mb-4">
               <div className="text-3xl mb-2">📩</div>
               <h3 className="text-lg font-black text-white mb-1">Получите инструкции</h3>
@@ -328,6 +341,63 @@ function InviteContent() {
             >
               Пропустить →
             </button>
+            </>)}
+
+            {/* ── ШАГ 2: УСПЕХ + КНОПКА БОТА ── */}
+            {captureStep === 2 && (<>
+            <div className="text-center mb-4">
+              <div className="text-4xl mb-3">🎉</div>
+              <h3 className="text-lg font-black text-white mb-1">Контакт сохранён!</h3>
+              <p className="text-[12px] text-slate-400 leading-relaxed">
+                Скоро вы получите информацию о Diamond Club
+              </p>
+            </div>
+
+            {/* Блок с подарком — мотивация нажать Start */}
+            <div className="p-4 rounded-2xl mb-4" style={{ background: 'linear-gradient(135deg, rgba(168,85,247,0.12), rgba(124,58,237,0.08))', border: '1px solid rgba(168,85,247,0.3)' }}>
+              <div className="text-center mb-3">
+                <div className="text-2xl mb-1">🎁</div>
+                <div className="text-[14px] font-black text-white">Получите бонус в Telegram!</div>
+                <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                  Запустите бот — получите автоматические инструкции, калькулятор скидок и персональные уведомления о лучших предложениях
+                </p>
+              </div>
+
+              <a
+                href={`https://t.me/${BOT_USERNAME}?start=ref_${tempId || ref}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block w-full py-3.5 rounded-2xl text-center text-[15px] font-black mb-2"
+                style={{ background: 'linear-gradient(135deg, #0088cc, #0066aa)', color: '#fff', textDecoration: 'none' }}
+              >
+                🤖 Запустить бот Diamond Club
+              </a>
+
+              <div className="text-center text-[10px] text-slate-500">
+                Нажмите Start в Telegram — бот пришлёт инструкции
+              </div>
+            </div>
+
+            <button
+              onClick={finishCapture}
+              className="w-full py-3 rounded-2xl text-[14px] font-black"
+              style={{ background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff', border: 'none', cursor: 'pointer' }}
+            >
+              🚀 Продолжить в Diamond Club
+            </button>
+
+            <button
+              onClick={finishCapture}
+              className="w-full text-[12px] text-slate-500 py-2 mt-1"
+              style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+            >
+              Пропустить →
+            </button>
+            </>)}
+
+          </div>
+        </div>
+      )}
           </div>
         </div>
       )}
