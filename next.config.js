@@ -20,7 +20,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "img-src 'self' data: https: blob:",
               "font-src 'self' data: https://fonts.gstatic.com",
-              "connect-src 'self' https://opbnb-mainnet-rpc.bnbchain.org https://*.supabase.co wss://*.supabase.co https://cardgift.top",
+              "connect-src 'self' https://opbnb-mainnet-rpc.bnbchain.org https://*.supabase.co wss://*.supabase.co https://cgm-brown.vercel.app",
               "frame-ancestors 'self' https://web.telegram.org",
             ].join('; ')
           },
