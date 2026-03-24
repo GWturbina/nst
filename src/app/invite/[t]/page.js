@@ -17,6 +17,9 @@ const FEATURES = [
   { emoji: '👥', title: 'Партнёрская программа', desc: 'До 10% пожизненно от приглашённых' },
 ]
 
+// API для захвата контактов (CardGift)
+const CAPTURE_API = 'https://cardgift.top/api/viral-registration'
+
 function InviteContent() {
   const searchParams = useSearchParams()
   const params = useParams()
@@ -25,12 +28,27 @@ function InviteContent() {
   const tpl = TEMPLATES[t] || TEMPLATES.gems
 
   const [registered, setRegistered] = useState(false)
+  const [showCaptureModal, setShowCaptureModal] = useState(false)
   const [showExitPopup, setShowExitPopup] = useState(false)
   const [showViralPopup, setShowViralPopup] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [tempId, setTempId] = useState(null)
+  const [submitting, setSubmitting] = useState(false)
+
+  // Восстанавливаем temp ID из localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('dc_capture_id')
+    if (saved) {
+      setTempId(saved)
+      setRegistered(true)
+    }
+  }, [])
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://nst-murex.vercel.app'
-  const myLink = `${baseUrl}/invite/${t}?ref=${ref}`
+
+  // Ссылка для шаринга: если есть tempId — используем его, иначе ref спонсора
+  const shareRef = tempId || ref
+  const myLink = `${baseUrl}/invite/${t}?ref=${shareRef}`
   const shareText = `💎 Бриллианты со скидкой до 70%! Стейкинг от 50% годовых. Бесплатный старт! Присоединяйся:`
   const viberText = 'Бриллианты со скидкой до 70%! Стейкинг от 50% годовых. Бесплатный старт! Присоединяйся:'
 
@@ -71,12 +89,67 @@ function InviteContent() {
     }
   }, [registered])
 
-  const handleRegister = () => {
+  // ═══ КНОПКА "ПРИСОЕДИНИТЬСЯ" → показать модалку захвата ═══
+  const handleJoin = () => {
     if (ref && ref !== '0') {
       localStorage.setItem('dc_ref', ref)
     }
-    setRegistered(true)
     setShowExitPopup(false)
+    setShowCaptureModal(true)
+  }
+
+  // ═══ ОТПРАВКА КОНТАКТА ═══
+  const submitCapture = async () => {
+    const name = document.getElementById('capName')?.value?.trim() || 'Гость'
+    const messenger = document.getElementById('capMessenger')?.value || 'telegram'
+    const contact = document.getElementById('capContact')?.value?.trim()
+    const pushConsent = document.getElementById('capPush')?.checked || false
+
+    if (!contact) {
+      document.getElementById('capContact').style.borderColor = '#ff4444'
+      return
+    }
+
+    setSubmitting(true)
+
+    try {
+      const res = await fetch(CAPTURE_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          referrerId: ref,
+          name: name,
+          messenger: messenger,
+          contact: contact,
+          pushConsent: pushConsent,
+          cardId: 'dc_invite_' + t
+        })
+      })
+
+      const data = await res.json()
+      console.log('Capture result:', data)
+
+      if (data.tempId) {
+        setTempId(data.tempId)
+        localStorage.setItem('dc_capture_id', data.tempId)
+      }
+    } catch (e) {
+      console.error('Capture error:', e)
+      // Создаём локальный temp ID при ошибке
+      const localId = 'CG_TEMP_' + Date.now()
+      setTempId(localId)
+      localStorage.setItem('dc_capture_id', localId)
+    }
+
+    setSubmitting(false)
+    setShowCaptureModal(false)
+    setRegistered(true)
+  }
+
+  // ═══ ПРОПУСТИТЬ ФОРМУ ═══
+  const skipCapture = () => {
+    setShowCaptureModal(false)
+    setRegistered(true)
   }
 
   return (
@@ -119,7 +192,7 @@ function InviteContent() {
         </div>
 
         {!registered ? (
-          <button onClick={handleRegister} className="w-full py-4 rounded-2xl text-lg font-black mb-4" style={{ background: 'linear-gradient(135deg, #ffd700, #f5a623)', color: '#000' }}>
+          <button onClick={handleJoin} className="w-full py-4 rounded-2xl text-lg font-black mb-4" style={{ background: 'linear-gradient(135deg, #ffd700, #f5a623)', color: '#000' }}>
             🎁 Присоединиться — БЕСПЛАТНО
           </button>
         ) : (
@@ -131,7 +204,6 @@ function InviteContent() {
                 <a href="/" className="block w-full py-3 rounded-2xl text-center text-sm font-black mt-3" style={{ background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff' }}>
                   🚀 Войти в приложение
                 </a>
-                {/* SafePal deeplink — для Telegram и мобилы */}
                 <a href={`safepalwallet://open?url=${encodeURIComponent(baseUrl)}`}
                   className="block w-full py-3 rounded-2xl text-center text-sm font-black mt-2"
                   style={{ background: 'linear-gradient(135deg, #3b82f6, #2563eb)', color: '#fff' }}>
@@ -188,6 +260,79 @@ function InviteContent() {
         </div>
       </div>
 
+      {/* ═══ МОДАЛЬНОЕ ОКНО ЗАХВАТА КОНТАКТА ═══ */}
+      {showCaptureModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.9)' }}>
+          <div className="max-w-[380px] w-full p-5 rounded-3xl" style={{ background: 'linear-gradient(180deg, #1a1040, #0a0a20)', border: '1px solid rgba(168,85,247,0.3)' }}>
+            <div className="text-center mb-4">
+              <div className="text-3xl mb-2">📩</div>
+              <h3 className="text-lg font-black text-white mb-1">Получите инструкции</h3>
+              <p className="text-[12px] text-slate-400 leading-relaxed">
+                Оставьте контакт — пришлём подробную информацию и инструкции по работе с Diamond Club
+              </p>
+            </div>
+
+            <input
+              type="text"
+              id="capName"
+              placeholder="Имя (необязательно)"
+              className="w-full py-3 px-4 rounded-xl mb-3 text-[14px] text-white outline-none"
+              style={{ background: '#2a2a4a', border: '1px solid #444' }}
+            />
+
+            <select
+              id="capMessenger"
+              className="w-full py-3 px-4 rounded-xl mb-3 text-[14px] text-white outline-none"
+              style={{ background: '#2a2a4a', border: '1px solid #444' }}
+            >
+              <option value="telegram">📱 Telegram</option>
+              <option value="whatsapp">💬 WhatsApp</option>
+              <option value="viber">📞 Viber</option>
+              <option value="phone">📞 Телефон</option>
+              <option value="email">📧 Email</option>
+            </select>
+
+            <input
+              type="text"
+              id="capContact"
+              placeholder="@username или +номер"
+              className="w-full py-3 px-4 rounded-xl mb-3 text-[14px] text-white outline-none"
+              style={{ background: '#2a2a4a', border: '1px solid #444' }}
+            />
+
+            <label className="flex items-start gap-2.5 p-3 rounded-xl mb-4 cursor-pointer" style={{ background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.15)' }}>
+              <input type="checkbox" id="capPush" defaultChecked className="mt-0.5 w-4 h-4 flex-shrink-0" />
+              <span className="text-[11px] text-slate-400 leading-relaxed">
+                Согласен получать уведомления о скидках и новостях Diamond Club
+              </span>
+            </label>
+
+            <button
+              onClick={submitCapture}
+              disabled={submitting}
+              className="w-full py-3.5 rounded-2xl text-[15px] font-black mb-2"
+              style={{
+                background: submitting ? '#555' : 'linear-gradient(135deg, #a855f7, #7c3aed)',
+                color: '#fff',
+                border: 'none',
+                cursor: submitting ? 'wait' : 'pointer'
+              }}
+            >
+              {submitting ? '⏳ Сохраняю...' : '✅ Отправить и продолжить'}
+            </button>
+
+            <button
+              onClick={skipCapture}
+              className="w-full text-[12px] text-slate-500 py-2"
+              style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+            >
+              Пропустить →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ EXIT POPUP ═══ */}
       {showExitPopup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.85)' }}>
           <div className="max-w-[380px] w-full p-5 rounded-3xl" style={{ background: 'linear-gradient(180deg, #1a1040, #0a0a20)', border: '1px solid rgba(255,215,0,0.2)' }}>
@@ -201,10 +346,10 @@ function InviteContent() {
                 <div className="flex items-center gap-2 text-[12px]"><span className="text-emerald-400">✓</span><span className="text-slate-300">Стейкинг от 50% годовых</span></div>
                 <div className="flex items-center gap-2 text-[12px]"><span className="text-emerald-400">✓</span><span className="text-slate-300">Свой дом под 0% годовых</span></div>
               </div>
-              <button onClick={handleRegister} className="w-full py-3 rounded-2xl text-base font-black mb-2" style={{ background: 'linear-gradient(135deg, #ffd700, #f5a623)', color: '#000' }}>
+              <button onClick={handleJoin} className="w-full py-3 rounded-2xl text-base font-black mb-2" style={{ background: 'linear-gradient(135deg, #ffd700, #f5a623)', color: '#000' }}>
                 🎁 Присоединиться
               </button>
-              <button onClick={() => setShowExitPopup(false)} className="text-[11px] text-slate-500 hover:text-slate-400">
+              <button onClick={() => setShowExitPopup(false)} className="text-[11px] text-slate-500 hover:text-slate-400" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
                 Нет, спасибо
               </button>
             </div>
@@ -212,7 +357,7 @@ function InviteContent() {
         </div>
       )}
 
-      {/* Popup 2: После регистрации — вирусный */}
+      {/* ═══ VIRAL POPUP ═══ */}
       {showViralPopup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.9)' }}>
           <div className="max-w-[380px] w-full p-5 rounded-3xl" style={{ background: 'linear-gradient(180deg, #1a1040, #0a0a20)', border: '1px solid rgba(255,215,0,0.3)' }}>
@@ -247,7 +392,7 @@ function InviteContent() {
               <a href="/" className="block w-full py-3 rounded-2xl text-center text-sm font-black mb-2" style={{ background: 'linear-gradient(135deg, #ffd700, #f5a623)', color: '#000' }}>
                 🚀 Войти в приложение
               </a>
-              <button onClick={() => setShowViralPopup(false)} className="text-[11px] text-slate-500">Закрыть</button>
+              <button onClick={() => setShowViralPopup(false)} className="text-[11px] text-slate-500" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>Закрыть</button>
             </div>
           </div>
         </div>
