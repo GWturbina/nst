@@ -217,6 +217,9 @@ const useGameStore = create(
         wallet: state.wallet,
         registered: state.registered,
         sponsorId: state.sponsorId,
+        // Подпись кошелька — нужна для серверных тапов после перезагрузки
+        authSig: state.authSig,
+        authTs: state.authTs,
         // FIX M9: localNss и taps НЕ сохраняем — серверная тапалка для зарегистрированных
         // Для незарегистрированных (без кошелька) — тапы испаряются через 30 мин в любом случае
       }),
