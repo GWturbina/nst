@@ -1,19 +1,14 @@
 'use client'
 import { useRef, useState, useEffect, useCallback } from 'react'
 import useGameStore from '@/lib/store'
-import { LEVELS, LEVEL_BACKGROUNDS, ENERGY_CONFIG } from '@/lib/gameData'
+import { LEVELS, LEVEL_BACKGROUNDS } from '@/lib/gameData'
 import { useBlockchain } from '@/lib/useBlockchain'
 import { useTelegram } from '@/lib/useTelegram'
-import { serverTap, localTapAllowed, loadTapState } from '@/lib/tapService'
 import * as C from '@/lib/contracts'
-import web3 from '@/lib/web3'
-import HelpButton from '@/components/ui/HelpButton'
-import SafePalPrompt from '@/components/ui/SafePalPrompt'
 
 export default function MineTab() {
   const bnbPrice = useGameStore(s => s.bnbPrice)
-  const showAutoRegister = useGameStore(s => s.showAutoRegister)
-  const { level, localNss, energy, maxEnergy, taps, registered, wallet,
+  const { level, localNst, nst, energy, maxEnergy, taps, registered, wallet,
     evapActive, evapSeconds, doTap, tickEvap, news, setTab, addNotification,
     setTxPending, txPending, setLevel, t } = useGameStore()
   const { connect } = useBlockchain()
@@ -21,6 +16,7 @@ export default function MineTab() {
   const lv = LEVELS[level]
   const nextLv = LEVELS[level + 1] || null
 
+  // Живой курс: BNB → $
   const fmtUsd = (bnb) => {
     if (!bnb || !bnbPrice) return ''
     const usd = bnb * bnbPrice
@@ -31,51 +27,25 @@ export default function MineTab() {
   const [thoughts, setThoughts] = useState([])
   const tapCountRef = useRef(0)
   const [buyingLevel, setBuyingLevel] = useState(false)
-
-  // Динамические тексты уровней из Supabase
-  const levelTextsRef = useRef({}) // { level: [text1, text2, ...] }
-  const thoughtIndexRef = useRef({}) // { level: currentIndex }
-
-  useEffect(() => {
-    fetch('/api/level-content').then(r => r.json()).then(data => {
-      if (data.ok && data.levels) {
-        const map = {}
-        for (const row of data.levels) {
-          if (row.thoughts?.length > 0) map[row.level] = row.thoughts
-        }
-        levelTextsRef.current = map
-      }
-    }).catch(() => {})
-  }, [])
   const [showRegModal, setShowRegModal] = useState(false)
   const [sponsorInput, setSponsorInput] = useState('')
   const [registering, setRegistering] = useState(false)
-  const [refFromLink, setRefFromLink] = useState(false)
-  const [showSafePal, setShowSafePal] = useState(false)
+  const [refFromLink, setRefFromLink] = useState(false) // реф пришёл из ссылки?
 
-  // Умное подключение — показать SafePal prompt если нет кошелька
-  const smartConnect = async () => {
-    const walletType = web3.detectWallet()
-    if (!walletType) {
-      setShowSafePal(true)
-      return
-    }
-    await connect()
-  }
+  const totalNst = nst + localNst
 
-  const totalNss = localNss
-
-  // Автозаполнение спонсора
+  // ═══════════════════════════════════════════════════
+  // АВТОЗАПОЛНЕНИЕ СПОНСОРА из реферальной ссылки
+  // ═══════════════════════════════════════════════════
   useEffect(() => {
     if (typeof window === 'undefined') return
-    const savedRef = localStorage.getItem('dc_ref')
+    const savedRef = localStorage.getItem('nss_ref')
     if (savedRef && /^\d+$/.test(savedRef)) {
       setSponsorInput(savedRef)
       setRefFromLink(true)
     }
   }, [])
 
-  // Испарение
   useEffect(() => {
     if (!evapActive || registered) return
     const interval = setInterval(() => {
@@ -87,13 +57,8 @@ export default function MineTab() {
     return () => clearInterval(interval)
   }, [evapActive, registered, tickEvap, t])
 
-  // ═══════════════════════════════════════════════════
-  // ЭНЕРГИЯ — МЕДЛЕННОЕ ВОССТАНОВЛЕНИЕ
-  // 1 единица каждые 120 секунд (2 минуты)
-  // Полная зарядка 200 → ~6.7 часов
-  // ═══════════════════════════════════════════════════
   useEffect(() => {
-    const interval = setInterval(() => useGameStore.getState().regenEnergy(), ENERGY_CONFIG.regenIntervalMs)
+    const interval = setInterval(() => useGameStore.getState().regenEnergy(), 10000)
     return () => clearInterval(interval)
   }, [])
 
@@ -103,108 +68,39 @@ export default function MineTab() {
     setTimeout(() => setThoughts(prev => prev.filter(t => t.id !== id)), 4500)
   }, [])
 
-  // ═══════════════════════════════════════════════════
-  // FIX C1+C4+C7: Серверные тапы + throttle + без двойного срабатывания
-  // ═══════════════════════════════════════════════════
-  const isTapping = useRef(false)
-
-  // Загрузить серверное состояние при подключении кошелька
-  useEffect(() => {
-    if (wallet && registered) {
-      loadTapState(wallet).then(state => {
-        if (state) {
-          useGameStore.getState().syncServerTaps({
-            energy: state.energy,
-            maxEnergy: state.maxEnergy,
-            localNss: state.totalNss,
-            taps: state.totalTaps,
-          })
-          // Предупреждение о сгорании
-          if (state.decay && state.decay.lost > 0) {
-            addNotification(`⚠️ Сгорело ${state.decay.lost.toFixed(0)} GST (${state.decay.daysInactive} дней неактивности)`)
-          }
-        }
-      })
-    }
-  }, [wallet, registered, addNotification])
-
   const handleTap = useCallback((e) => {
-    // Предотвращаем двойное срабатывание и всплытие
     e.preventDefault()
-    e.stopPropagation()
-    if (isTapping.current) return
-    isTapping.current = true
-    setTimeout(() => { isTapping.current = false }, 120)
+    const earned = doTap()
+    if (!earned) return
 
-    if (wallet && registered) {
-      // ═══ СЕРВЕРНЫЙ ТАП (для зарегистрированных) ═══
-      // Оптимистичное обновление UI + серверная верификация
-      const earned = doTap()
-      if (!earned) { isTapping.current = false; return }
+    if (isInTelegram) haptic('light')
 
-      if (isInTelegram) haptic('light')
-      showTapEffect(e)
-
-      // Отправляем на сервер асинхронно
-      serverTap(wallet, level).then(result => {
-        if (result && result.ok) {
-          useGameStore.getState().syncServerTaps({
-            energy: result.energy,
-            maxEnergy: result.maxEnergy,
-            localNss: result.totalNss,
-            taps: result.totalTaps,
-          })
-          if (result.decayApplied > 0) {
-            addNotification(`⚠️ Сгорело ${result.decayApplied.toFixed(0)} GST за неактивность. Тапайте регулярно!`)
-          }
-        }
-      })
-    } else {
-      // ═══ ЛОКАЛЬНЫЙ ТАП (незарегистрированные — с throttle) ═══
-      if (!localTapAllowed()) { isTapping.current = false; return }
-      const earned = doTap()
-      if (!earned) { isTapping.current = false; return }
-      if (isInTelegram) haptic('light')
-      showTapEffect(e)
-    }
-  }, [doTap, wallet, registered, level, isInTelegram, haptic])
-
-  // Визуальный эффект тапа (отделён от логики)
-  const showTapEffect = useCallback((e) => {
     tapCountRef.current++
     const rect = tapAreaRef.current?.getBoundingClientRect()
     if (!rect) return
-    const touch = e.touches?.[0] || e.changedTouches?.[0] || e
+    const touch = e.touches?.[0] || e
     const x = touch.clientX - rect.left
     const y = touch.clientY - rect.top
-    const lv = LEVELS[useGameStore.getState().level]
 
     setEffects(prev => [...prev,
-      { id: Date.now() + Math.random(), x: `${x}px`, y: `${y - 10}px`, text: `+${lv.nssPerTap}`, type: 'number' },
+      { id: Date.now() + Math.random(), x: `${x}px`, y: `${y - 10}px`, text: `+${earned}`, type: 'number' },
     ])
     setTimeout(() => setEffects(prev => prev.slice(1)), 800)
 
-    if (tapCountRef.current % 25 === 0) {
-      const lvl = useGameStore.getState().level
-      const dynamicTexts = levelTextsRef.current[lvl]
-      let thoughtText = lv.thought
-      if (dynamicTexts && dynamicTexts.length > 0) {
-        const idx = (thoughtIndexRef.current[lvl] || 0) % dynamicTexts.length
-        thoughtText = dynamicTexts[idx]
-        thoughtIndexRef.current[lvl] = idx + 1
-      }
-      if (thoughtText) {
-        const shapes = ['thought-pill', 'thought-cloud', 'thought-crystal', 'thought-bubble']
-        const shape = shapes[Math.floor(Math.random() * shapes.length)]
-        showThought(thoughtText, lv.thoughtColor, lv.thoughtIcon, shape)
-      }
+    if (tapCountRef.current % 25 === 0 && lv.thought) {
+      const shapes = ['thought-pill', 'thought-cloud', 'thought-crystal', 'thought-bubble']
+      const shape = shapes[Math.floor(Math.random() * shapes.length)]
+      showThought(lv.thought, lv.thoughtColor, lv.thoughtIcon, shape)
     }
-  }, [showThought])
+  }, [doTap, lv, showThought, isInTelegram, haptic])
 
-  // Регистрация
+  // ═══════════════════════════════════════════════════
+  // РЕГИСТРАЦИЯ — открытие модала
+  // ═══════════════════════════════════════════════════
   const openRegModal = () => {
     if (!wallet) return
-    const savedRef = typeof window !== 'undefined' ? localStorage.getItem('dc_ref') || '' : ''
+    // Подгружаем реф из localStorage (мог появиться после первого рендера)
+    const savedRef = typeof window !== 'undefined' ? localStorage.getItem('nss_ref') || '' : ''
     if (savedRef && /^\d+$/.test(savedRef)) {
       setSponsorInput(savedRef)
       setRefFromLink(true)
@@ -212,15 +108,80 @@ export default function MineTab() {
     setShowRegModal(true)
   }
 
+  // Открыть модал регистрации если НЕ зарегистрирован в GlobalWay, иначе купить уровень
   const handleBuyNextLevel = () => {
     if (!wallet || !nextLv) return
-    if (!registered) { openRegModal(); return }
+    if (!registered) {
+      openRegModal()
+      return
+    }
+    // Уже зарегистрирован в GlobalWay — просто покупаем уровень
     doBuyLevel()
   }
 
+  // ═══════════════════════════════════════════════════
+  // РЕГИСТРАЦИЯ — отправка транзакции
+  // Идёт сразу через мост в GlobalWay — это правильно и быстро
+  // ═══════════════════════════════════════════════════
+  const handleRegisterAndBuy = async () => {
+    const sid = parseInt(sponsorInput)
+    if (!sid || sid <= 0) {
+      addNotification('❌ ' + t('enterValidSponsorId'))
+      return
+    }
+    setRegistering(true)
+    setTxPending(true)
+    try {
+      addNotification(`⏳ ${t('registering')} #${sid}...`)
+      // register() → NSSPlatform → bridge.registerUser → MatrixRegistry → GlobalWay
+      await C.register(sid)
+      addNotification('✅ ' + t('registrationSuccess'))
+      setShowRegModal(false)
+
+      // Ждём подтверждения регистрации в блокчейне (до 15 сек)
+      addNotification(`⏳ ${t('waitingConfirmation')}...`)
+      const confirmed = await C.waitForRegistration(wallet)
+      if (confirmed) {
+        // Обновляем статус из блокчейна
+        const gwStatus = await C.getGWUserStatus(wallet).catch(() => null)
+        if (gwStatus) {
+          useGameStore.getState().updateRegistration(gwStatus.isRegistered, gwStatus.odixId || sid)
+          if (gwStatus.maxPackage > 0) useGameStore.getState().setLevel(gwStatus.maxPackage)
+        } else {
+          useGameStore.getState().updateRegistration(true, sid)
+        }
+        // Регистрация подтверждена — покупаем уровень
+        await doBuyLevel()
+      } else {
+        // Регистрация прошла но bridge ещё не видит — пробуем купить
+        useGameStore.getState().updateRegistration(true, sid)
+        addNotification('⚠️ ' + t('slowConfirmation'))
+        await doBuyLevel()
+      }
+    } catch (err) {
+      const msg = err?.reason || err?.shortMessage || err?.message || 'Ошибка'
+      if (msg.includes('Already registered')) {
+        addNotification('ℹ️ ' + t('alreadyRegistered'))
+        useGameStore.getState().updateRegistration(true, sid)
+        setShowRegModal(false)
+        await doBuyLevel()
+      } else if (msg.includes('Sponsor not found') || msg.includes('Invalid sponsor')) {
+        addNotification(`❌ ${t('sponsorNotFound')} #${sid}`)
+      } else {
+        addNotification(`❌ ${msg.slice(0, 100)}`)
+      }
+    }
+    setTxPending(false)
+    setRegistering(false)
+  }
+
+  // Только регистрация БЕЗ покупки уровня
   const handleRegisterOnly = async () => {
     const sid = parseInt(sponsorInput)
-    if (!sid || sid <= 0) { addNotification('❌ ' + t('enterValidSponsorId')); return }
+    if (!sid || sid <= 0) {
+      addNotification('❌ ' + t('enterValidSponsorId'))
+      return
+    }
     setRegistering(true)
     setTxPending(true)
     try {
@@ -228,6 +189,7 @@ export default function MineTab() {
       await C.register(sid)
       addNotification('✅ ' + t('registrationSuccess'))
       setShowRegModal(false)
+      // Обновляем статус из блокчейна
       const confirmed = await C.waitForRegistration(wallet)
       const gwStatus = await C.getGWUserStatus(wallet).catch(() => null)
       if (gwStatus) {
@@ -259,8 +221,10 @@ export default function MineTab() {
     try {
       addNotification(`⏳ ${t('buyingLevel')} ${nextLv.name}...`)
       await C.buyLevel(nextLv.id)
+      // Обновляем уровень локально сразу
       setLevel(nextLv.id)
       addNotification(`✅ ${nextLv.name} ${t('levelActivated')}`)
+      // Подтверждаем из блокчейна через 3 сек
       setTimeout(async () => {
         const gwStatus = await C.getGWUserStatus(wallet).catch(() => null)
         if (gwStatus) {
@@ -289,10 +253,6 @@ export default function MineTab() {
   const lvBg = LEVEL_BACKGROUNDS[level] || LEVEL_BACKGROUNDS[0]
   const bgSrc = `/icons/backgrounds/levels/${lvBg.file}`
 
-  // Время до полной зарядки
-  const missingEnergy = maxEnergy - energy
-  const rechargeMinutes = Math.ceil(missingEnergy * ENERGY_CONFIG.regenIntervalMs / 60000)
-
   return (
     <div className="flex flex-col flex-1">
       <div className="mx-3 mt-2 p-3 rounded-2xl border flex items-center gap-3" style={{ background: 'linear-gradient(135deg, var(--bg-card), rgba(13,26,46,0.9))', borderColor: `${lv.color}25`, boxShadow: `0 2px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.03)` }}>
@@ -305,16 +265,14 @@ export default function MineTab() {
           <div className="text-[10px] text-slate-400">{lv.sub} • Lv.{level}</div>
         </div>
         <div className="text-right">
-          <div className="text-xl font-black font-display" style={{ color: lv.color }}>{totalNss.toFixed(0)}</div>
-          <div className="text-[9px] text-slate-500">⛏ GST</div>
+          <div className="text-xl font-black font-display" style={{ color: lv.color }}>{totalNst.toFixed(1)}</div>
+          <div className="text-[9px] text-slate-500">CHT</div>
         </div>
-        <HelpButton section="mine" />
       </div>
 
-      {/* Энергия — показываем время до полной зарядки */}
       <div className="px-3 mt-2">
         <div className="flex justify-between text-[10px] mb-1">
-          <span className="text-slate-400">⚡ {t('energy')}{missingEnergy > 0 ? ` • ${rechargeMinutes} мин` : ''}</span>
+          <span className="text-slate-400">⚡ {t('energy')}</span>
           <span className="text-emerald-400 font-extrabold">{energy}/{maxEnergy}</span>
         </div>
         <div className="h-[7px] rounded-full bg-white/5 overflow-hidden">
@@ -325,30 +283,32 @@ export default function MineTab() {
       </div>
 
       <div className="px-3 mt-2 space-y-1.5">
+        {/* ═══ КНОПКИ ДЛЯ НЕЗАЛОГИНЕННЫХ ═══ */}
         {!wallet && taps === 0 && (
-          <button onClick={smartConnect} className="w-full p-2.5 rounded-xl text-xs font-bold text-center bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 hover:bg-emerald-500/15 transition-all">
+          <button onClick={connect} className="w-full p-2.5 rounded-xl text-xs font-bold text-center bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 hover:bg-emerald-500/15 transition-all">
             🚀 {t('connectSaveStones')}
           </button>
         )}
         {!wallet && taps > 0 && (
-          <button onClick={smartConnect} className="w-full p-2.5 rounded-xl text-xs font-bold text-center flex items-center justify-center gap-2 bg-red-500/10 border border-red-500/25 text-red-400 animate-pulse">
+          <button onClick={connect} className="w-full p-2.5 rounded-xl text-xs font-bold text-center flex items-center justify-center gap-2 bg-red-500/10 border border-red-500/25 text-red-400 animate-pulse">
             ⚠️ {t('stonesEvaporating')} <span className="font-display text-lg">{evapMin}:{evapSec < 10 ? '0' : ''}{evapSec}</span> 💨
           </button>
         )}
 
-        {/* SafePal Prompt — когда кошелёк не найден */}
-        {showSafePal && !wallet && (
-          <SafePalPrompt compact onClose={() => setShowSafePal(false)} />
-        )}
-
-        {wallet && !registered && !showRegModal && !showAutoRegister && (
+        {/* ═══ КНОПКА РЕГИСТРАЦИИ (кошелёк есть, регистрации нет) ═══ */}
+        {wallet && !registered && !showRegModal && (
           <button onClick={openRegModal}
             className="w-full p-2.5 rounded-xl text-[11px] font-bold text-center bg-yellow-500/8 border border-yellow-500/25 text-yellow-400 hover:bg-yellow-500/12 transition-all">
             🆔 {t('registerInNSS')}
           </button>
         )}
 
-        {/* Модал регистрации */}
+        {/* ═══════════════════════════════════════════════════
+            МОДАЛ РЕГИСТРАЦИИ — улучшенный UX
+            • Автозаполнение спонсора из реферальной ссылки
+            • Объяснение что происходит
+            • Подсказка для Telegram-пользователей
+            ═══════════════════════════════════════════════════ */}
         {showRegModal && (
           <div className="fixed inset-0 z-50 flex items-end justify-center pb-6 px-3" style={{ background: 'rgba(0,0,0,0.7)' }}
             onClick={() => setShowRegModal(false)}>
@@ -358,35 +318,74 @@ export default function MineTab() {
               <div className="text-center">
                 <div className="text-2xl mb-1">🆔</div>
                 <div className="text-sm font-black text-white">{t('regModalTitle')}</div>
-                <div className="text-[10px] text-slate-400 mt-1 leading-relaxed">{t('regModalDesc')}</div>
+                <div className="text-[10px] text-slate-400 mt-1 leading-relaxed">
+                  {t('regModalDesc')}
+                </div>
               </div>
 
+              {/* Поле спонсора */}
               <div>
                 <label className="text-[10px] text-slate-500 mb-1 block">{t('sponsorIdLabel')}:</label>
                 {refFromLink && sponsorInput ? (
+                  // Реф из ссылки — показываем как факт, но даём изменить
                   <div>
                     <div className="w-full p-3 rounded-xl text-sm text-white flex items-center justify-between"
                       style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(34,197,94,0.3)' }}>
                       <span>✅ #{sponsorInput}</span>
                       <span className="text-[9px] text-emerald-400">{t('fromReferralLink')}</span>
                     </div>
-                    <button onClick={() => setRefFromLink(false)} className="text-[9px] text-slate-500 mt-1 underline">{t('changeSponsor')}</button>
+                    <button onClick={() => setRefFromLink(false)}
+                      className="text-[9px] text-slate-500 mt-1 underline">
+                      {t('changeSponsor')}
+                    </button>
                   </div>
                 ) : (
+                  // Ручной ввод
                   <div>
-                    <input type="number" value={sponsorInput} onChange={e => setSponsorInput(e.target.value)}
+                    <input
+                      type="number"
+                      value={sponsorInput}
+                      onChange={e => setSponsorInput(e.target.value)}
                       placeholder={t('sponsorIdPlaceholder')}
                       className="w-full p-3 rounded-xl text-sm text-white outline-none"
                       style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,215,0,0.2)' }}
-                      autoFocus />
-                    {!sponsorInput && <div className="text-[9px] text-slate-500 mt-1">💡 {t('sponsorIdHint')}</div>}
+                      autoFocus
+                    />
+                    {sponsorInput && parseInt(sponsorInput) <= 0 && (
+                      <div className="text-[10px] text-red-400 mt-1">❌ {t('invalidSponsorId')}</div>
+                    )}
+                    {!sponsorInput && (
+                      <div className="text-[9px] text-slate-500 mt-1">
+                        💡 {t('sponsorIdHint')}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
 
+              {/* Подсказка для Telegram */}
+              {isInTelegram && (
+                <div className="p-2.5 rounded-xl text-[10px] leading-relaxed"
+                  style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)' }}>
+                  <span className="text-blue-400 font-bold">📱 Telegram:</span>{' '}
+                  <span className="text-slate-400">
+                    {t('telegramWalletHint')}
+                  </span>
+                </div>
+              )}
+
+              {/* Что даёт регистрация */}
+              <div className="p-2.5 rounded-xl text-[10px] text-slate-500 leading-relaxed"
+                style={{ background: 'rgba(255,215,0,0.04)', border: '1px solid rgba(255,215,0,0.1)' }}>
+                ✨ {t('regBenefits')}
+              </div>
+
+              {/* Кнопки */}
               <div className="flex gap-2">
                 <button onClick={() => setShowRegModal(false)}
-                  className="flex-1 py-3 rounded-2xl text-[11px] font-bold text-slate-400 border border-white/10">{t('cancel')}</button>
+                  className="flex-1 py-3 rounded-2xl text-[11px] font-bold text-slate-400 border border-white/10">
+                  {t('cancel')}
+                </button>
                 <button onClick={handleRegisterOnly}
                   disabled={registering || !sponsorInput || parseInt(sponsorInput) <= 0}
                   className="flex-1 py-3 rounded-2xl text-[11px] font-black gold-btn"
@@ -398,16 +397,19 @@ export default function MineTab() {
           </div>
         )}
 
-        {/* Кнопка покупки уровня */}
+        {/* ═══ КНОПКА ПОКУПКИ СЛЕДУЮЩЕГО РАНГА ═══ */}
         {wallet && nextLv && (
           <button onClick={handleBuyNextLevel} disabled={buyingLevel || txPending}
             className="w-full p-3 rounded-2xl font-bold text-sm transition-all active:scale-[0.98] border-2 flex items-center justify-center gap-2"
             style={{
               background: `linear-gradient(135deg, ${nextLv.color}20, ${nextLv.color}08)`,
-              borderColor: `${nextLv.color}50`, color: nextLv.color,
+              borderColor: `${nextLv.color}50`,
+              color: nextLv.color,
               opacity: (buyingLevel || txPending) ? 0.6 : 1,
             }}>
-            {buyingLevel ? <span>⏳ {t('buying')}</span> : (
+            {buyingLevel ? (
+              <span>⏳ {t('buying')}</span>
+            ) : (
               <>
                 <span className="text-lg">{nextLv.emoji}</span>
                 <span>{t('buy')} {nextLv.name}</span>
@@ -426,8 +428,8 @@ export default function MineTab() {
       {nextLv && (
         <div className="px-3 mt-1.5">
           <div className="flex items-center justify-between text-[9px] mb-0.5">
-            <span className="text-slate-500">{lv.emoji} Lv.{level} (+{lv.nssPerTap} GST)</span>
-            <span style={{ color: nextLv.color }} className="font-bold">{nextLv.emoji} {nextLv.name} (+{nextLv.nssPerTap} GST)</span>
+            <span className="text-slate-500">{lv.emoji} Lv.{level} (+{lv.nstPerTap})</span>
+            <span style={{ color: nextLv.color }} className="font-bold">{nextLv.emoji} {nextLv.name} (+{nextLv.nstPerTap})</span>
           </div>
           <div className="h-1 rounded-full bg-white/5 overflow-hidden">
             <div className="h-full rounded-full" style={{ width: '100%', background: `linear-gradient(90deg, ${lv.color}, ${nextLv.color}40)` }} />
@@ -435,13 +437,16 @@ export default function MineTab() {
         </div>
       )}
 
-      <div ref={tapAreaRef} onPointerDown={handleTap}
+      <div ref={tapAreaRef} onClick={handleTap} onTouchStart={handleTap}
         className="flex-1 mx-3 my-2 rounded-2xl relative overflow-hidden flex items-center justify-center cursor-pointer select-none min-h-[200px] border transition-all duration-700"
         style={{ borderColor: `${lv.color}20`, background: 'var(--lv-ambient)', boxShadow: `inset 0 0 60px ${lvBg.glow}, 0 0 20px ${lvBg.glow}` }}>
+        {/* ═══ Фоновая картинка уровня ═══ */}
         <div className="absolute inset-0 bg-cover bg-center transition-all duration-1000"
           style={{ backgroundImage: `url(${bgSrc})`, filter: 'brightness(0.85)' }} />
+        {/* ═══ Оверлей с цветом уровня ═══ */}
         <div className="absolute inset-0 transition-all duration-700"
           style={{ background: `linear-gradient(180deg, ${lvBg.overlay} 0%, ${lv.color}15 50%, ${lvBg.overlay} 100%)` }} />
+        {/* ═══ Виньетка по краям ═══ */}
         <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at 50% 50%, transparent 40%, rgba(0,0,0,0.5) 100%)' }} />
 
         <div className="relative z-10 active:animate-shake select-none transition-transform w-[100px] h-[100px] flex items-center justify-center drop-shadow-lg">
@@ -450,7 +455,7 @@ export default function MineTab() {
         </div>
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 text-[11px] px-3 py-1 rounded-full"
           style={{ color: '#eee8d5', background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}>
-          ⛏ {t('tapHint')} • +{lv.nssPerTap} GST
+          ⛏ {t('tapHint')} • +{lv.nstPerTap} {t('nstPerTap')}
         </div>
         {effects.map(ef => (
           <div key={ef.id} className={`absolute pointer-events-none z-20 ${ef.type === 'number' ? 'animate-tap-up font-black text-base' : 'animate-gem-burst text-lg'}`}
@@ -468,7 +473,7 @@ export default function MineTab() {
 
       <div className="grid grid-cols-3 gap-1.5 px-3 pb-2">
         <StatCard value={taps} label={t('taps')} color="text-gold-400" />
-        <StatCard value={totalNss.toFixed(0)} label="NSS" color="text-emerald-400" />
+        <StatCard value={useGameStore.getState().cgt.toFixed(1)} label="CGT" color="text-emerald-400" />
         <StatCard value={parseFloat(useGameStore.getState().usdt || 0).toFixed(0)} label="USDT" color="text-blue-400" />
       </div>
 
