@@ -178,6 +178,19 @@ export function useBlockchainInit() {
     if (wallet && !_refreshInterval) {
       refreshDataForAddress(wallet)
       startRefreshCycle(wallet)
+      
+      // Проверить и обновить подпись (для серверных тапов)
+      const store = useGameStore.getState()
+      const authAge = store.authTs ? Date.now() - store.authTs * 1000 : Infinity
+      if (!store.authSig || authAge > 12 * 60 * 60 * 1000) {
+        // Подпись отсутствует или старше 12 часов — запросить новую
+        const hasWallet = web3.detectWallet()
+        if (hasWallet && store.registered) {
+          web3.signAuthMessage().then(auth => {
+            if (auth) useGameStore.getState().setAuth(auth)
+          }).catch(() => {})
+        }
+      }
     }
     if (!wallet) stopRefreshCycle()
   }, [wallet])
