@@ -6,27 +6,22 @@ import Header from '@/components/ui/Header'
 import BottomNav from '@/components/ui/BottomNav'
 import MineTab from '@/components/game/MineTab'
 import LevelsTab from '@/components/game/LevelsTab'
-import { StakingTab, HomeTab, ExchangeTab } from '@/components/pages/ContentPages'
-import { LinksTab, VaultTab } from '@/components/pages/ExtraPages'
 import TeamTab from '@/components/pages/TeamPage'
-import LoanTab from '@/components/pages/LoanTab'
-import CHTExchangeTab from '@/components/pages/CHTExchangeTab'
+import DiamondClubTab from '@/components/pages/DiamondClubPage'
+import DCTPage from '@/components/pages/DCTPage'
+import LinksTab from '@/components/pages/LinksTab'
+import VaultTab from '@/components/pages/VaultTab'
 import AdminPanel from '@/components/admin/AdminPanel'
 import AutoRegisterModal from '@/components/ui/AutoRegisterModal'
-import ClubHousesTab from '@/components/pages/ClubHousesTab'
 
 const TAB_COMPONENTS = {
   mine: MineTab,
-  staking: StakingTab,
-  exchange: ExchangeTab,
-  home: HomeTab,
-  loan: LoanTab,
-  chtExchange: CHTExchangeTab,
-  houses: ClubHousesTab,
+  diamond: DiamondClubTab,
+  exchange: DCTPage,
+  vault: VaultTab,
   levels: LevelsTab,
   team: TeamTab,
   links: LinksTab,
-  vault: VaultTab,
   admin: AdminPanel,
 }
 
@@ -34,28 +29,20 @@ export default function MainPage() {
   useBlockchainInit()
   const { activeTab, dayMode, level, showAutoRegister } = useGameStore()
 
-  // ═══════════════════════════════════════════════════
-  // ЗАХВАТ РЕФЕРАЛЬНОЙ ССЫЛКИ
-  // ?ref=12345 из URL  ИЛИ  start_param из Telegram
-  // ═══════════════════════════════════════════════════
   useEffect(() => {
     if (typeof window === 'undefined') return
-
-    // 1) Из URL: https://nss.globalway.app/?ref=12345
     const urlParams = new URLSearchParams(window.location.search)
     const refFromUrl = urlParams.get('ref')
     if (refFromUrl && /^\d+$/.test(refFromUrl)) {
-      localStorage.setItem('nss_ref', String(parseInt(refFromUrl, 10)))
+      localStorage.setItem('dc_ref', refFromUrl)
       const cleanUrl = window.location.pathname + window.location.hash
       window.history.replaceState({}, '', cleanUrl)
     }
-
-    // 2) Из Telegram: bot?start=12345
     const tg = window.Telegram?.WebApp
     if (tg) {
       const startParam = tg.initDataUnsafe?.start_param
       if (startParam && /^\d+$/.test(startParam)) {
-        localStorage.setItem('nss_ref', String(parseInt(startParam, 10)))
+        localStorage.setItem('dc_ref', startParam)
       }
     }
   }, [])
@@ -72,8 +59,7 @@ export default function MainPage() {
         </main>
         <BottomNav />
       </div>
-
-      {/* AutoRegister — показывается после подключения кошелька если не зарегистрирован */}
+      {/* Модал регистрации — показывается сразу после подключения незарегистрированного кошелька */}
       {showAutoRegister && <AutoRegisterModal />}
     </div>
   )
