@@ -3,26 +3,19 @@ import { useEffect, useCallback } from 'react'
 import useGameStore from './store'
 import web3 from './web3'
 import * as C from './contracts'
+import { getDCTTokenInfo, getDCTUserInfo } from './dctContracts'
 
-// ═══════════════════════════════════════════════════
-// СИНГЛТОН: только один рефреш-цикл на всё приложение
-// ═══════════════════════════════════════════════════
 let _refreshInterval = null
 let _listenersAttached = false
 
-/** Загрузить все данные пользователя (модульная функция) */
+/** Загрузить все данные пользователя */
 async function refreshDataForAddress(address) {
   if (!address) return
   try {
-    // Сначала получаем полный статус из GlobalWayBridge — это главный источник правды
     const gwStatus = await C.getGWUserStatus(address).catch(() => null)
 
-    const [balances, tables, pending, charity, house, bnbPrice] = await Promise.all([
-      C.getBalances(address).catch(() => ({ bnb: '0', usdt: '0', cgt: '0', nst: '0' })),
-      C.getUserAllTables(address).catch(() => [null, null, null]),
-      C.getMyPendingWithdrawal(address).catch(() => 0n),
-      C.canGiveGift(address).catch(() => null),
-      C.getHouseInfo(address).catch(() => null),
+    const [balances, bnbPrice] = await Promise.all([
+      C.getBalances(address).catch(() => ({ bnb: '0', usdt: '0' })),
       C.getBNBPrice().catch(() => null),
     ])
 
@@ -30,44 +23,50 @@ async function refreshDataForAddress(address) {
     store.updateBalances(balances)
     if (bnbPrice) store.setBnbPrice(bnbPrice)
 
-    // Синхронизируем статус регистрации и уровень из GlobalWay
+    // GlobalWay status
     if (gwStatus) {
-      // isRegistered = зарегистрирован в GlobalWay (достаточно для покупки уровней)
       store.updateRegistration(gwStatus.isRegistered, gwStatus.odixId || null)
-      // maxPackage = реальный уровень из GlobalWay (0-12), НЕ ранг (0-5)!
       if (gwStatus.maxPackage > 0) store.setLevel(gwStatus.maxPackage)
-    } else {
-      // Fallback: читаем из NSSPlatform напрямую
-      const nssReg = await C.isNSSRegistered(address).catch(() => false)
-      store.updateRegistration(nssReg, null)
     }
 
-    store.updateTables(tables)
-    if (pending) store.updatePending((Number(pending) / 1e18).toFixed(2))
-    if (charity) store.updateCharity((Number(charity[1]) / 1e18).toFixed(2), charity[2])
-    if (house) store.updateHouse(house)
-
-    // owner для admin-проверки
-    const owner = await C.getOwner('RealEstateMatrix').catch(() => null)
-    if (owner) store.setOwnerWallet(owner)
-
-    // Синхронизация тапалки с сервером (Supabase)
-    store.syncTapState()
-
-    // Загрузка бонусов за уровни
+    // DCT token info
     try {
-      const { getUserBonuses, isSupabaseAvailable } = await import('./tapService')
-      if (isSupabaseAvailable()) {
-        const bonuses = await getUserBonuses(address)
-        if (bonuses) store.setLevelBonuses(bonuses)
+      const dctUser = await getDCTUserInfo(address)
+      if (dctUser) {
+        store.updateDCT({
+          total: dctUser.total,
+          locked: dctUser.locked,
+          free: dctUser.free,
+          price: dctUser.valueUSDT && dctUser.total > 0
+            ? (parseFloat(dctUser.valueUSDT) / parseFloat(dctUser.total)).toFixed(6)
+            : '0',
+        })
       }
     } catch {}
+
+    // DCT price (if no user balance)
+    try {
+      const tokenInfo = await getDCTTokenInfo()
+      if (tokenInfo) {
+        // FIX #8: updateDCT ожидает объект, не функцию
+        const current = store
+        store.updateDCT({
+          total: current.dct || 0,
+          locked: current.dctLocked || 0,
+          free: current.dctFree || 0,
+          price: tokenInfo.price,
+        })
+      }
+    } catch {}
+
+    // Owner для admin-проверки (GemVaultV2)
+    const owner = await C.getOwner('NSSPlatform').catch(() => null)
+    if (owner) store.setOwnerWallet(owner)
   } catch (err) {
     console.error('refreshData error:', err)
   }
 }
 
-/** Подключить кошелёк */
 async function doConnect() {
   const store = useGameStore.getState()
   store.setConnecting(true)
@@ -76,21 +75,39 @@ async function doConnect() {
     store.setWallet(result)
     store.addNotification(`✅ Кошелёк: ${result.address.slice(0, 6)}...${result.address.slice(-4)}`)
 
-    // Загрузить данные один раз
-    await refreshDataForAddress(result.address)
+    // ═══ СНАЧАЛА проверяем регистрацию (без подписи!) ═══
+    const gwStatus = await C.getGWUserStatus(result.address).catch(() => null)
+    const isReg = gwStatus?.isRegistered || false
 
-    // Запустить авторефреш (если ещё нет)
-    startRefreshCycle(result.address)
+    if (isReg) {
+      // Зарегистрирован → обновляем данные + запрашиваем подпись
+      store.updateRegistration(true, gwStatus.odixId || null)
+      if (gwStatus.maxPackage > 0) store.setLevel(gwStatus.maxPackage)
 
-    // ═══ AUTO-REGISTER: если не зарегистрирован — показать модал ═══
-    const currentStore = useGameStore.getState()
-    if (!currentStore.registered) {
-      const savedRef = typeof localStorage !== 'undefined' ? localStorage.getItem('nss_ref') : null
-      if (savedRef && /^\d+$/.test(savedRef)) {
-        store.setAutoRegister(parseInt(savedRef, 10))
-      } else {
-        store.setAutoRegister(null) // Покажет модал с ручным вводом
+      // Подпись — только для зарегистрированных (не пугаем новичков)
+      const authAge = store.authTs ? Date.now() - store.authTs * 1000 : Infinity
+      if (!store.authSig || authAge > 12 * 60 * 60 * 1000) {
+        try {
+          const auth = await web3.signAuthMessage()
+          store.setAuth(auth)
+        } catch (authErr) {
+          console.warn('Auth signature declined')
+        }
       }
+
+      await refreshDataForAddress(result.address)
+      startRefreshCycle(result.address)
+    } else {
+      // НЕ зарегистрирован → показать модал регистрации (без подписи!)
+      store.updateRegistration(false, null)
+      const savedRef = typeof localStorage !== 'undefined' ? localStorage.getItem('dc_ref') : null
+      store.setAutoRegister(savedRef && /^\d+$/.test(savedRef) ? savedRef : null)
+
+      // Загружаем балансы (BNB для оплаты уровня)
+      const balances = await C.getBalances(result.address).catch(() => ({ bnb: '0', usdt: '0' }))
+      store.updateBalances(balances)
+      const bnbPrice = await C.getBNBPrice().catch(() => null)
+      if (bnbPrice) store.setBnbPrice(bnbPrice)
     }
 
     return true
@@ -102,21 +119,18 @@ async function doConnect() {
   }
 }
 
-/** Отключить кошелёк */
 function doDisconnect() {
   web3.disconnect()
   stopRefreshCycle()
-  C.resetContractsCache()        // сброс кеша bridge адреса
+  C.resetContractsCache()
   useGameStore.getState().clearWallet()
 }
 
-/** Запуск авторефреша (30 сек) — ОДИН на всё приложение */
 function startRefreshCycle(address) {
   stopRefreshCycle()
   _refreshInterval = setInterval(() => refreshDataForAddress(address), 30000)
 }
 
-/** Остановка авторефреша */
 function stopRefreshCycle() {
   if (_refreshInterval) {
     clearInterval(_refreshInterval)
@@ -124,25 +138,14 @@ function stopRefreshCycle() {
   }
 }
 
-// ═══════════════════════════════════════════════════
-// ХУКИ
-// ═══════════════════════════════════════════════════
-
-/**
- * useBlockchainInit() — вызывается ОДИН РАЗ в корневом page.js
- * Подписывается на события кошелька и запускает рефреш при наличии wallet.
- */
 export function useBlockchainInit() {
   const wallet = useGameStore(s => s.wallet)
 
-  // Слушаем события кошелька — один раз
   useEffect(() => {
     if (_listenersAttached) return
     _listenersAttached = true
 
-    const onDisconnected = () => {
-      doDisconnect()
-    }
+    const onDisconnected = () => doDisconnect()
     const onAccountChanged = (e) => {
       const newAddr = e.detail?.address
       if (newAddr) {
@@ -171,32 +174,14 @@ export function useBlockchainInit() {
     }
   }, [])
 
-  // Если wallet уже есть (reload) — попробовать восстановить signer
   useEffect(() => {
     if (wallet && !_refreshInterval) {
-      // После перезагрузки signer = null, нужно переподключить
-      if (!web3.signer) {
-        // Тихое переподключение без уведомлений
-        web3.connect().then((result) => {
-          const store = useGameStore.getState()
-          store.setWallet(result)
-          refreshDataForAddress(result.address)
-          startRefreshCycle(result.address)
-        }).catch(() => {
-          // Кошелёк недоступен — сбрасываем
-          useGameStore.getState().clearWallet()
-        })
-      } else {
-        refreshDataForAddress(wallet)
-        startRefreshCycle(wallet)
-      }
+      refreshDataForAddress(wallet)
+      startRefreshCycle(wallet)
     }
-    if (!wallet) {
-      stopRefreshCycle()
-    }
+    if (!wallet) stopRefreshCycle()
   }, [wallet])
 
-  // Загружаем курс BNB при старте (даже без кошелька — для отображения цен)
   useEffect(() => {
     C.getBNBPrice().then(price => {
       if (price) useGameStore.getState().setBnbPrice(price)
@@ -204,24 +189,29 @@ export function useBlockchainInit() {
   }, [])
 }
 
-/**
- * useBlockchain() — безопасно вызывать из ЛЮБОГО компонента.
- * НЕ создаёт интервалы, НЕ подписывается на события.
- * Просто возвращает connect / disconnect / refreshData.
- */
 export function useBlockchain() {
   const wallet = useGameStore(s => s.wallet)
-
   return {
     connect: doConnect,
     disconnect: doDisconnect,
     refreshData: () => refreshDataForAddress(wallet),
+    /** Вызвать после успешной регистрации — подпись + полная загрузка данных */
+    afterRegistration: async () => {
+      const store = useGameStore.getState()
+      const addr = store.wallet
+      if (!addr) return
+      // Теперь запрашиваем подпись (пользователь уже знаком с приложением)
+      try {
+        const auth = await web3.signAuthMessage()
+        store.setAuth(auth)
+      } catch {}
+      store.clearAutoRegister()
+      await refreshDataForAddress(addr)
+      startRefreshCycle(addr)
+    },
   }
 }
 
-/**
- * useTx() — обёртка для транзакций с loading state и уведомлениями
- */
 export function useTx() {
   const { setTxPending, addNotification } = useGameStore()
   const wallet = useGameStore(s => s.wallet)
@@ -230,10 +220,8 @@ export function useTx() {
     setTxPending(true)
     const result = await C.safeCall(fn)
     setTxPending(false)
-
     if (result.ok) {
       addNotification(successMsg || '✅ Транзакция выполнена!')
-      // Рефреш данных через 2 сек (дождаться блок)
       setTimeout(() => refreshDataForAddress(wallet), 2000)
       return { ok: true, data: result.data }
     } else {
