@@ -1,23 +1,27 @@
 'use client'
 /**
- * SafePalPrompt — Кнопка SafePal deeplink + инструкция
+ * SafePalPrompt — Блок с кнопкой SafePal deeplink + инструкция
  * 
  * Показывается когда window.ethereum не обнаружен:
  *   - В Telegram WebApp (встроенный браузер без кошельков)
  *   - В обычном мобильном браузере без SafePal
  *   - На десктопе без расширения SafePal
+ * 
+ * Предлагает открыть текущую страницу в SafePal Browser.
  */
 import { useState } from 'react'
 import useGameStore from '@/lib/store'
 
-const SITE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://nss-azure.vercel.app'
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://nst-murex.vercel.app'
 
 export default function SafePalPrompt({ compact = false, onClose }) {
   const { t } = useGameStore()
   const [showSteps, setShowSteps] = useState(false)
 
+  // SafePal deeplink — откроет страницу во встроенном браузере SafePal
   const deeplink = `safepalwallet://open?url=${encodeURIComponent(SITE_URL)}`
 
+  // Определяем окружение
   const isInTelegram = typeof window !== 'undefined' && !!window.Telegram?.WebApp
   const isMobile = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
 
@@ -56,15 +60,17 @@ export default function SafePalPrompt({ compact = false, onClose }) {
           <p className="text-[12px] text-slate-400 mb-4">
             {isInTelegram
               ? 'Telegram открывает ссылки во встроенном браузере — кошелёк SafePal туда не подключается. Нажмите кнопку ниже, чтобы открыть приложение в SafePal.'
-              : 'Для работы с клубными домами и CHT токенами нужен криптокошелёк SafePal.'}
+              : 'Для работы с бриллиантами и DCT токенами нужен криптокошелёк SafePal.'}
           </p>
 
+          {/* Основная кнопка — SafePal deeplink */}
           <a href={deeplink}
             className="block w-full py-3.5 rounded-2xl text-center text-[14px] font-black transition-all mb-3"
             style={{ background: 'linear-gradient(135deg, #3b82f6, #2563eb)', color: '#fff' }}>
             🔐 Открыть в SafePal Browser
           </a>
 
+          {/* Пошаговая инструкция */}
           <button onClick={() => setShowSteps(!showSteps)}
             className="w-full py-2 text-[11px] text-blue-400 font-bold mb-2">
             {showSteps ? '▲ Скрыть инструкцию' : '📋 Первый раз? Пошаговая инструкция'}
@@ -72,6 +78,7 @@ export default function SafePalPrompt({ compact = false, onClose }) {
 
           {showSteps && <InstallSteps isMobile={isMobile} isInTelegram={isInTelegram} />}
 
+          {/* Ссылка для копирования (если deeplink не сработал) */}
           <div className="mt-3 p-2.5 rounded-xl text-[9px] text-slate-500 leading-relaxed"
             style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
             💡 Если кнопка не открыла SafePal — скопируйте ссылку и вставьте в SafePal Browser вручную:
@@ -96,14 +103,16 @@ function InstallSteps({ isMobile, isInTelegram }) {
     <div className="mt-2 p-3 rounded-xl text-left text-[11px] space-y-2"
       style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
       {!isMobile ? (
+        // Десктоп
         <>
           <Step n={1} text="Установите SafePal на телефон (App Store / Google Play)" />
           <Step n={2} text="Создайте или импортируйте кошелёк в SafePal" />
           <Step n={3} text="Откройте Browser внутри SafePal (иконка 🌐 внизу)" />
-          <Step n={4} text={`Вставьте ссылку: ${SITE_URL}`} />
+          <Step n={4} text={`Вставьте ссылку: ${process.env.NEXT_PUBLIC_SITE_URL || 'nst-murex.vercel.app'}`} />
           <Step n={5} text="Подключите кошелёк — готово!" />
         </>
       ) : (
+        // Мобила (и Telegram)
         <>
           {!isInTelegram && <Step n={1} text="Установите SafePal из App Store / Google Play" />}
           {!isInTelegram && <Step n={2} text="Создайте или импортируйте кошелёк" />}
