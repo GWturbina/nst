@@ -13,6 +13,7 @@ import LoanTab from '@/components/pages/LoanTab'
 import CHTExchangeTab from '@/components/pages/CHTExchangeTab'
 import AdminPanel from '@/components/admin/AdminPanel'
 import AutoRegisterModal from '@/components/ui/AutoRegisterModal'
+import ClubHousesTab from '@/components/pages/ClubHousesTab'
 
 const TAB_COMPONENTS = {
   mine: MineTab,
@@ -21,6 +22,7 @@ const TAB_COMPONENTS = {
   home: HomeTab,
   loan: LoanTab,
   chtExchange: CHTExchangeTab,
+  houses: ClubHousesTab,
   levels: LevelsTab,
   team: TeamTab,
   links: LinksTab,
