@@ -4,6 +4,7 @@ import useGameStore from './store'
 import web3 from './web3'
 import * as C from './contracts'
 import { getDCTTokenInfo, getDCTUserInfo } from './dctContracts'
+import { loadTapState } from './tapService'
 
 let _refreshInterval = null
 let _listenersAttached = false
@@ -29,6 +30,22 @@ async function refreshDataForAddress(address) {
       if (gwStatus.maxPackage > 0) store.setLevel(gwStatus.maxPackage)
     }
 
+    // ═══ FIX ISSUE-10: Загружаем тапы с сервера на уровне приложения ═══
+    // Так GST баланс в Header будет актуальным на ЛЮБОЙ вкладке
+    if (store.registered) {
+      try {
+        const tapState = await loadTapState(address)
+        if (tapState) {
+          store.syncServerTaps({
+            energy: tapState.energy,
+            maxEnergy: tapState.maxEnergy,
+            localNss: tapState.totalNss,
+            taps: tapState.totalTaps,
+          })
+        }
+      } catch {}
+    }
+
     // DCT token info
     try {
       const dctUser = await getDCTUserInfo(address)
@@ -48,7 +65,6 @@ async function refreshDataForAddress(address) {
     try {
       const tokenInfo = await getDCTTokenInfo()
       if (tokenInfo) {
-        // FIX #8: updateDCT ожидает объект, не функцию
         const current = store
         store.updateDCT({
           total: current.dct || 0,
@@ -195,8 +211,8 @@ export function useBlockchainInit() {
             if (gwStatus.maxPackage > 0) store.setLevel(gwStatus.maxPackage)
 
             // Подпись: используем сохранённую если она свежее 12 часов
-            const authAge = store.authTs ? (Date.now() / 1000) - store.authTs : Infinity
-            if (!store.authSig || authAge > 12 * 60 * 60) {
+            const authAge = store.authTs ? Date.now() - store.authTs * 1000 : Infinity
+            if (!store.authSig || authAge > 12 * 60 * 60 * 1000) {
               // Подпись устарела или отсутствует — запрашиваем новую
               try {
                 const auth = await web3.signAuthMessage()
