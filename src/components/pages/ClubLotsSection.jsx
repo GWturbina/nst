@@ -70,18 +70,30 @@ export default function ClubLotsSection() {
     if (!buyModal || !wallet) return
     setTxPending(true)
 
+    // FIX BUG-5: Используем contract_lot_id для блокчейна, fallback на Supabase id
+    const contractLotId = buyModal.contract_lot_id
+    if (contractLotId === null || contractLotId === undefined) {
+      addNotification('❌ Лот ещё не привязан к контракту. Обратитесь к администратору.')
+      setTxPending(false)
+      return
+    }
+
     const result = await safeCall(async () => {
       if (useBalance) {
-        return await CL.buyShareFromBalance(buyModal.contract_lot_id ?? buyModal.id, buyCount)
+        return await CL.buyShareFromBalance(contractLotId, buyCount)
       } else {
-        return await CL.buyShare(buyModal.contract_lot_id ?? buyModal.id, buyCount)
+        return await CL.buyShare(contractLotId, buyCount)
       }
     })
 
     if (result.ok) {
-      // Записать в Supabase
+      // FIX: Извлекаем txHash из receipt (ethers v6: receipt.hash)
+      const txHash = result.data?.hash || result.data?.transactionHash || ''
+
+      // FIX ISSUE-7: Записать в Supabase С обработкой ошибок
+      let supabaseOk = false
       try {
-        await authFetch('/api/lots', {
+        const res = await authFetch('/api/lots', {
           method: 'PATCH',
           body: {
             action: 'record_purchase',
@@ -89,12 +101,20 @@ export default function ClubLotsSection() {
             lotId: buyModal.id,
             sharesCount: buyCount,
             usdtAmount: buyModal.share_price * buyCount,
-            txHash: result.data?.hash || '',
+            txHash,
           }
         })
+        const data = await res.json()
+        supabaseOk = data.ok
       } catch {}
 
-      addNotification(`✅ Куплено ${buyCount} доля(ей) в лоте «${buyModal.title}»!`)
+      if (supabaseOk) {
+        addNotification(`✅ Куплено ${buyCount} доля(ей) в лоте «${buyModal.title}»!`)
+      } else {
+        // Блокчейн-транзакция прошла, но запись в БД не удалась
+        addNotification(`⚠️ Доля куплена (tx: ${txHash.slice(0, 10)}...), но запись не сохранилась. Обратитесь к администратору с хэшем транзакции.`)
+      }
+
       setBuyModal(null)
       setBuyCount(1)
       reload()
