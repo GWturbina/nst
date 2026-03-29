@@ -75,7 +75,7 @@ export async function getBalances(address) {
 
   return {
     bnb: fmt(bnbRaw),
-    usdt: ethers.formatEther(usdtBal),
+    usdt: ethers.formatUnits(usdtBal, 6),
   }
 }
 
