@@ -54,6 +54,7 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status') || 'all'
     const wallet = searchParams.get('wallet')
+    const detail = searchParams.get('detail') // 'purchases' — подробные данные о покупках
     const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 200)
 
     let query = supabase
@@ -69,11 +70,16 @@ export async function GET(request) {
 
     // Если запросили для конкретного кошелька — достать его доли
     let myShares = {}
+    let myPurchases = []
+
     if (wallet && /^0x[a-fA-F0-9]{40}$/.test(wallet)) {
+      const walletLower = wallet.toLowerCase()
+
+      // Базовые данные — суммарные доли на лот
       const { data: shares } = await supabase
         .from('dc_lot_shares')
         .select('lot_id, shares_count')
-        .eq('wallet', wallet.toLowerCase())
+        .eq('wallet', walletLower)
         .eq('is_reserved', false)
 
       if (shares) {
@@ -81,9 +87,60 @@ export async function GET(request) {
           myShares[s.lot_id] = (myShares[s.lot_id] || 0) + s.shares_count
         }
       }
+
+      // ═══ Подробные данные о каждой покупке (для раздела "Мои покупки") ═══
+      if (detail === 'purchases') {
+        const { data: purchaseRecords } = await supabase
+          .from('dc_lot_shares')
+          .select('id, lot_id, shares_count, usdt_amount, tx_hash, is_gift, is_reserved, confirmed, created_at')
+          .eq('wallet', walletLower)
+          .eq('is_reserved', false)
+          .order('created_at', { ascending: false })
+
+        if (purchaseRecords && lots) {
+          const lotsMap = {}
+          for (const l of lots) lotsMap[l.id] = l
+
+          myPurchases = purchaseRecords.map(p => {
+            const lot = lotsMap[p.lot_id]
+            return {
+              // Данные покупки
+              purchaseId: p.id,
+              lotId: p.lot_id,
+              sharesCount: p.shares_count,
+              usdtAmount: p.usdt_amount,
+              txHash: p.tx_hash,
+              isGift: p.is_gift,
+              confirmed: p.confirmed,
+              purchaseDate: p.created_at,
+              // Данные лота
+              lotTitle: lot?.title || `Лот #${p.lot_id}`,
+              lotStatus: lot?.status || 'unknown',
+              gemType: lot?.gem_type,
+              shape: lot?.shape,
+              clarity: lot?.clarity,
+              color: lot?.color,
+              carats: lot?.carats,
+              hasCert: lot?.has_cert,
+              sharePrice: lot?.share_price,
+              totalShares: lot?.total_shares || 0,
+              soldShares: lot?.sold_shares || 0,
+              winnerWallet: lot?.winner_wallet,
+              unlockAt: lot?.unlock_at,
+              // Доля владения
+              ownershipPct: lot?.total_shares
+                ? +(p.shares_count / lot.total_shares * 100).toFixed(2)
+                : 0,
+              isWinner: lot?.winner_wallet
+                ? lot.winner_wallet.toLowerCase() === walletLower
+                : false,
+            }
+          })
+        }
+      }
     }
 
-    return NextResponse.json({ ok: true, lots: lots || [], myShares })
+    return NextResponse.json({ ok: true, lots: lots || [], myShares, myPurchases })
   } catch {
     return NextResponse.json({ ok: false, error: 'Ошибка загрузки' }, { status: 500 })
   }
@@ -326,6 +383,38 @@ export async function PATCH(request) {
 
       await supabase.from('dc_lots').update({ status: 'cancelled' }).eq('id', lotId)
       await addLog(lotId, 'CANCELLED', adminWallet)
+      return NextResponse.json({ ok: true })
+    }
+
+    // ═══ LINK_CONTRACT — привязать блокчейн-лот к Supabase-записи ═══
+    if (action === 'link_contract') {
+      const verified = await verifyWallet(body, 'adminWallet')
+      if (!verified) return NextResponse.json({ ok: false, error: 'Неверная подпись' }, { status: 401 })
+
+      const { adminWallet, lotId, contractLotId, contractTxHash } = body
+      if (!(await isAdmin(adminWallet))) return NextResponse.json({ ok: false, error: 'Нет прав' }, { status: 403 })
+
+      if (contractLotId === undefined || contractLotId === null) {
+        return NextResponse.json({ ok: false, error: 'Не указан ID лота в контракте' }, { status: 400 })
+      }
+
+      // Проверка: не привязан ли уже другой лот с таким contract_lot_id
+      const { data: existing } = await supabase
+        .from('dc_lots')
+        .select('id')
+        .eq('contract_lot_id', parseInt(contractLotId))
+        .limit(1)
+      if (existing && existing.length > 0 && existing[0].id !== lotId) {
+        return NextResponse.json({ ok: false, error: `Contract lot #${contractLotId} уже привязан к лоту #${existing[0].id}` }, { status: 409 })
+      }
+
+      const updates = {
+        contract_lot_id: parseInt(contractLotId),
+      }
+      if (contractTxHash) updates.contract_tx_hash = clean(contractTxHash)
+
+      await supabase.from('dc_lots').update(updates).eq('id', lotId)
+      await addLog(lotId, 'LINKED_CONTRACT', adminWallet, `contract_lot_id=${contractLotId} tx:${clean(contractTxHash || '').slice(0, 10)}`)
       return NextResponse.json({ ok: true })
     }
 
