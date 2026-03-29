@@ -209,7 +209,7 @@ const useGameStore = create(
   }),
 }),
     {
-      name: 'dc-storage-v2',
+      name: 'dc-storage-v3',
       partialize: (state) => ({
         lang: state.lang,
         ownerWallet: state.ownerWallet,
@@ -217,14 +217,18 @@ const useGameStore = create(
         wallet: state.wallet,
         registered: state.registered,
         sponsorId: state.sponsorId,
-        // FIX M9: localNss и taps НЕ сохраняем — серверная тапалка для зарегистрированных
-        // Для незарегистрированных (без кошелька) — тапы испаряются через 30 мин в любом случае
+        // FIX: authSig + authTs СОХРАНЯЕМ — чтобы не спрашивать подпись каждый раз
+        // Подпись живёт 24 часа (проверяется сервером), реально обновляем каждые 12ч
+        authSig: state.authSig,
+        authTs: state.authTs,
       }),
-      version: 2,
+      version: 3,
       migrate: (persisted, version) => ({
         ...persisted,
         wallet: persisted.wallet ?? null,
         registered: persisted.registered ?? false,
+        authSig: persisted.authSig ?? null,
+        authTs: persisted.authTs ?? null,
       }),
     }
   )
