@@ -176,10 +176,9 @@ export function useBlockchainInit() {
 
   // ═══ FIX BUG-6: Восстановление сессии ═══
   // Если wallet восстановлен из persist, но web3 не подключён —
-  // автоматически переподключаем и получаем новый authSig
+  // автоматически переподключаем. Подпись НЕ запрашиваем если она свежая.
   useEffect(() => {
     if (wallet && !web3.isConnected) {
-      // wallet в store, но web3 singleton не подключён — reconnect
       const autoReconnect = async () => {
         try {
           const walletType = web3.detectWallet()
@@ -195,20 +194,23 @@ export function useBlockchainInit() {
             store.updateRegistration(true, gwStatus.odixId || null)
             if (gwStatus.maxPackage > 0) store.setLevel(gwStatus.maxPackage)
 
-            // Получаем свежую подпись (authSig)
-            try {
-              const auth = await web3.signAuthMessage()
-              store.setAuth(auth)
-            } catch {
-              // Пользователь отклонил подпись — тапы не будут работать, но остальное OK
-              console.warn('Auth signature declined on auto-reconnect')
+            // Подпись: используем сохранённую если она свежее 12 часов
+            const authAge = store.authTs ? (Date.now() / 1000) - store.authTs : Infinity
+            if (!store.authSig || authAge > 12 * 60 * 60) {
+              // Подпись устарела или отсутствует — запрашиваем новую
+              try {
+                const auth = await web3.signAuthMessage()
+                store.setAuth(auth)
+              } catch {
+                console.warn('Auth signature declined on auto-reconnect')
+              }
             }
+            // Если authSig свежая — ничего не делаем, используем сохранённую
           }
 
           await refreshDataForAddress(result.address)
           startRefreshCycle(result.address)
         } catch {
-          // Авто-реконнект не удался — пользователь подключится вручную
           useGameStore.getState().clearWallet()
         }
       }
