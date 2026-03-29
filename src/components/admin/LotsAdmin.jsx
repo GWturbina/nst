@@ -47,6 +47,71 @@ export default function LotsAdmin() {
     setSecret(num.toString())
   }
 
+  // ═══ Задеплоить лот в контракт ClubLots и привязать ═══
+  const handleDeployToContract = async (lot) => {
+    if (!wallet) return
+    if (!secret) {
+      generateSecret()
+      addNotification('⚠️ Сгенерирован секрет — нажмите ещё раз для деплоя')
+      return
+    }
+
+    setTxPending(true)
+    try {
+      addNotification(`⏳ Создаю лот «${lot.title}» в контракте...`)
+
+      // 1. Создать лот в контракте ClubLots
+      const result = await safeCall(() =>
+        CL.createLotOnChain(
+          lot.gem_cost,          // gemCostUSDT
+          lot.share_price,       // sharePriceUSDT
+          lot.min_gw_level || 4, // minGWLevel
+          BigInt(secret)         // secretNumber
+        )
+      )
+
+      if (!result.ok) {
+        addNotification(`❌ Контракт: ${result.error}`)
+        setTxPending(false)
+        return
+      }
+
+      const contractLotId = result.data?.lotId
+      const txHash = result.data?.receipt?.hash || ''
+
+      if (contractLotId === null || contractLotId === undefined) {
+        addNotification(`⚠️ TX прошла (${txHash.slice(0, 10)}...) но lotId не считан. Привяжите вручную.`)
+        setTxPending(false)
+        return
+      }
+
+      // 2. Привязать в Supabase
+      const res = await authFetch('/api/lots', {
+        method: 'PATCH',
+        body: {
+          action: 'link_contract',
+          adminWallet: wallet,
+          lotId: lot.id,
+          contractLotId,
+          contractTxHash: txHash,
+        }
+      })
+      const data = await res.json()
+
+      if (data.ok) {
+        addNotification(`✅ Лот «${lot.title}» задеплоен! Contract lot #${contractLotId}`)
+        addNotification(`📋 СОХРАНИ СЕКРЕТ: ${secret}`)
+        setSecret('')
+        reload()
+      } else {
+        addNotification(`⚠️ Контракт создан (lot #${contractLotId}), но привязка не удалась: ${data.error}`)
+      }
+    } catch (err) {
+      addNotification(`❌ ${err.message || 'Ошибка деплоя'}`)
+    }
+    setTxPending(false)
+  }
+
   // ═══ Создать лот ═══
   const handleCreate = async () => {
     if (!form.title || !form.gemCost) return addNotification('❌ Укажите название и цену камня')
@@ -226,12 +291,34 @@ export default function LotsAdmin() {
               <div className="text-[12px] font-bold text-white">#{lot.id} {lot.title}</div>
               <div className="text-[10px] text-slate-500">{lot.status}</div>
             </div>
-            <div className="text-[10px] text-slate-400 mb-2">
+            <div className="text-[10px] text-slate-400 mb-1">
               ${parseFloat(lot.gem_cost).toLocaleString()} камень | ${lot.share_price} доля | {lot.sold_shares}/{lot.total_shares} продано | Резерв: {lot.reserved_shares || 0}
             </div>
 
+            {/* Статус привязки к контракту */}
+            {lot.contract_lot_id !== null && lot.contract_lot_id !== undefined ? (
+              <div className="text-[10px] text-emerald-400 font-bold mb-2">
+                ✅ Контракт: lot #{lot.contract_lot_id}
+                {lot.contract_tx_hash && (
+                  <a href={`https://opbnb.bscscan.com/tx/${lot.contract_tx_hash}`} target="_blank" rel="noopener noreferrer"
+                    className="ml-1 text-blue-400 underline">tx↗</a>
+                )}
+              </div>
+            ) : (
+              <div className="text-[10px] text-amber-400 font-bold mb-2">
+                ⚠️ Не привязан к контракту — покупка долей невозможна
+              </div>
+            )}
+
             {lot.status === 'active' && (
               <div className="flex gap-1 flex-wrap">
+                {/* Деплой в контракт (если ещё не привязан) */}
+                {(lot.contract_lot_id === null || lot.contract_lot_id === undefined) && (
+                  <button onClick={() => handleDeployToContract(lot)} disabled={txPending}
+                    className="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-gold-400/15 border border-gold-400/25 text-gold-400">
+                    🔗 Задеплоить в контракт
+                  </button>
+                )}
                 <button onClick={() => handleReserve(lot.id, 3)} disabled={txPending}
                   className="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-blue-500/15 border border-blue-500/25 text-blue-400">
                   +3 резерв
