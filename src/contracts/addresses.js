@@ -12,6 +12,10 @@ const ADDRESSES = {
   GlobalWayBridge:   '0x4489851e530924eB25e684E6b97c7C47364780F5',
   MatrixRegistry:    '0xD62945edFF7605dFc77A4bF607c96Da72E03cd0C',
   GWTToken:          '0x933B0Cb1f43170f3F0fcf082572CC931D6e93b5F',
+  // ═══ GlobalWay Stats + Marketing ═══
+  GlobalWayStats:    '0x1c5A63AfC7dd0b057B9dcAA3B6B47B4078a5A808',
+  CardGiftMarketing: '0x67dD9ed3E63bA44047A70DA70AeC508101F048b7',
+  MatrixPaymentsV2:  '0x959217Aab60f01cc582373E1a2bc36e7a076bc39',
   NSTToken:          '0xE9a2758F4BB29C4869d3Eee8fB9c9b176Fc4816A',
   SwapHelper:        '0xFF0e9BFFf1cc5A6B65f689bF2442056627686Bf5',
   // ═══ Diamond Club v10.2 ═══
