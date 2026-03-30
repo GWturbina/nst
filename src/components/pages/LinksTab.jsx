@@ -1,23 +1,25 @@
 'use client'
 import { useState } from 'react'
 import useGameStore from '@/lib/store'
+import HelpButton from '@/components/ui/HelpButton'
 
 export default function LinksTab() {
   const { wallet, sponsorId, t } = useGameStore()
   const [copied, setCopied] = useState(false)
 
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://nss-azure.vercel.app'
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://nst-murex.vercel.app'
 
   const inviteLink = sponsorId
     ? `${baseUrl}/invite?ref=${sponsorId}`
     : wallet ? `${baseUrl}/invite?ref=${wallet.slice(2, 10)}` : ''
 
   const tgBotLink = sponsorId
-    ? `https://t.me/MetrKvadratnyBot?start=${sponsorId}`
+    ? `https://t.me/DiamondClubNSSBot?start=${sponsorId}`
     : ''
 
-  const shareText = '🏠 Свой дом под 0%! Тапай — копи метры — строй дом! Бесплатный старт! Присоединяйся:'
-  const viberText = 'Свой дом под 0%! Тапай - копи метры - строй дом! Бесплатный старт! Присоединяйся:'
+  const shareText = `💎 Бриллианты со скидкой до 70%! Стейкинг от 50% годовых. Бесплатный старт! Присоединяйся:`
+  // Viber плохо обрабатывает эмодзи в deeplink URL — убираем их
+  const viberText = shareText.replace(/[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{27FF}]|[\u{FE00}-\u{FEFF}]|[\u{1F900}-\u{1F9FF}]|[\u{200D}\u{20E3}\u{FE0F}]/gu, '').replace(/\s{2,}/g, ' ').trim()
 
   const shareLinks = {
     tg: `https://t.me/share/url?url=${encodeURIComponent(inviteLink)}&text=${encodeURIComponent(shareText)}`,
@@ -36,6 +38,7 @@ export default function LinksTab() {
     <div className="px-3 py-4 space-y-3">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-black" style={{ color: 'var(--gold)' }}>✂️ {t('tabLinks')}</h2>
+        <HelpButton section="links" />
       </div>
 
       {!wallet ? (
@@ -99,20 +102,16 @@ export default function LinksTab() {
             <div className="text-[12px] font-bold mb-2" style={{ color: '#ffd700' }}>🎁 Бонусы за приглашение</div>
             <div className="space-y-1.5 text-[11px]">
               <div className="flex items-center gap-2">
-                <span className="text-amber-400">🏠</span>
-                <span className="text-slate-300"><b className="text-white">+50 CHT</b> за каждого зарегистрированного</span>
+                <span className="text-amber-400">⛏</span>
+                <span className="text-slate-300"><b className="text-white">+50 GST</b> за каждого зарегистрированного</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-amber-400">⛏</span>
                 <span className="text-slate-300"><b className="text-white">+10%</b> от тапов приглашённых (постоянно)</span>
               </div>
               <div className="flex items-center gap-2">
-                <span style={{ color: '#ffd700' }}>💰</span>
-                <span className="text-slate-300"><b className="text-white">9 уровней</b> партнёрки от покупок бизнесов</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-emerald-400">🏡</span>
-                <span className="text-slate-300"><b className="text-white">Свой дом</b> при достижении порога заработка</span>
+                <span style={{ color: '#ffd700' }}>💎</span>
+                <span className="text-slate-300"><b className="text-white">9 уровней</b> партнёрки от покупок камней</span>
               </div>
             </div>
           </div>
