@@ -3,9 +3,9 @@ import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 
 const FEATURES = [
-  { emoji: '⛏', title: 'Бесплатный старт', desc: 'Тапай — зарабатывай CHT очки каждый день' },
-  { emoji: '🏠', title: 'Свой дом под 0%', desc: 'Заработай 35% — клуб добавит 65% без процентов' },
-  { emoji: '💰', title: '3 бизнеса = 3 источника дохода', desc: 'Малый $50, Средний $250, Большой $1000' },
+  { emoji: '⛏', title: 'Бесплатный старт', desc: 'Тапай — зарабатывай GST очки' },
+  { emoji: '💎', title: 'Реальные бриллианты', desc: 'От завода со скидкой до 70%' },
+  { emoji: '📈', title: 'Стейкинг от 50%', desc: 'До 75% годовых за активность' },
   { emoji: '👥', title: '9 уровней партнёрки', desc: 'До 10% ПОЖИЗНЕННО от приглашённых' },
 ]
 
@@ -20,8 +20,8 @@ function InviteContent() {
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
   const myLink = `${baseUrl}/invite?ref=${ref}`
-  const shareText = '🏠 Свой дом под 0%! Тапай — копи метры — строй дом! Бесплатный старт! Присоединяйся:'
-  const viberText = 'Свой дом под 0%! Тапай - копи метры - строй дом! Бесплатный старт! Присоединяйся:'
+  const shareText = `💎 Бриллианты со скидкой до 70%! Бесплатный старт + стейкинг от 50%! Присоединяйся:`
+  const viberText = 'Бриллианты со скидкой до 70%! Бесплатный старт + стейкинг от 50%! Присоединяйся:'
 
   const shareLinks = {
     tg: `https://t.me/share/url?url=${encodeURIComponent(myLink)}&text=${encodeURIComponent(shareText)}`,
@@ -52,7 +52,7 @@ function InviteContent() {
   }, [registered])
 
   const handleRegister = () => {
-    if (ref && ref !== '0') localStorage.setItem('cht_ref', ref)
+    if (ref && ref !== '0') localStorage.setItem('dc_ref', ref)
     setRegistered(true)
     setShowExitPopup(false)
   }
@@ -65,27 +65,27 @@ function InviteContent() {
   }
 
   return (
-    <div className="min-h-screen" style={{ background: 'linear-gradient(180deg, #0a0a20 0%, #0d1a2d 50%, #0a0a20 100%)' }}>
+    <div className="min-h-screen" style={{ background: 'linear-gradient(180deg, #0a0a20 0%, #1a1040 50%, #0a0a20 100%)' }}>
       <div className="max-w-[430px] mx-auto px-4 py-6">
         <div className="flex justify-center mb-4">
-          <img src="/icons/logo.png" alt="Метр²" className="w-16 h-16 rounded-2xl" onError={e => { e.target.style.display='none' }} />
+          <img src="/icons/logo.png" alt="Diamond Club" className="w-16 h-16 rounded-2xl" onError={e => { e.target.style.display='none' }} />
         </div>
 
         <div className="text-center mb-6">
-          <h1 className="text-2xl font-black text-white mb-1">🏠 Свой дом под 0% годовых!</h1>
-          <p className="text-sm text-slate-400">Тапай — зарабатывай — строй свой дом</p>
+          <h1 className="text-2xl font-black text-white mb-1">💎 Бриллианты со скидкой до 70%!</h1>
+          <p className="text-sm text-slate-400">Закрытый клуб. Бесплатный старт.</p>
         </div>
 
         <div className="p-3 rounded-2xl mb-4 text-center" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
           <div className="text-[12px] text-slate-400">Тебя пригласил участник</div>
-          <div className="text-lg font-black text-emerald-400">ID: {ref}</div>
+          <div className="text-lg font-black text-purple-400">ID: {ref}</div>
         </div>
 
         <div className="flex justify-center gap-3 mb-2">
-          <span className="text-4xl">🏠</span><span className="text-4xl">💰</span><span className="text-4xl">🏗</span>
+          <span className="text-4xl">💎</span><span className="text-4xl">⛏</span><span className="text-4xl">💰</span>
         </div>
-        <h2 className="text-center text-lg font-black text-white mb-0.5">Метр² — Путь к своему дому</h2>
-        <p className="text-center text-[12px] text-slate-500 mb-4">Club House • GlobalWay</p>
+        <h2 className="text-center text-lg font-black text-white mb-0.5">GST — Искатели Драгоценных Камней</h2>
+        <p className="text-center text-[12px] text-slate-500 mb-4">Gem Seekers</p>
 
         <div className="space-y-2 mb-6">
           {FEATURES.map((f, i) => (
@@ -101,7 +101,7 @@ function InviteContent() {
 
         {!registered ? (
           <button onClick={handleRegister} className="w-full py-4 rounded-2xl text-lg font-black mb-4" style={{ background: 'linear-gradient(135deg, #ffd700, #f5a623)', color: '#000' }}>
-            🎁 Начать бесплатно — СТАРТ
+            🎁 Получить подарок — БЕСПЛАТНО
           </button>
         ) : (
           <div className="space-y-3 mb-4">
@@ -112,6 +112,7 @@ function InviteContent() {
                 <a href="/" className="block w-full py-3 rounded-2xl text-center text-sm font-black mt-3" style={{ background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff' }}>
                   🚀 Войти в приложение
                 </a>
+                {/* SafePal deeplink — для Telegram и мобилы */}
                 <a href={`safepalwallet://open?url=${encodeURIComponent(baseUrl)}`}
                   className="block w-full py-3 rounded-2xl text-center text-sm font-black mt-2"
                   style={{ background: 'linear-gradient(135deg, #3b82f6, #2563eb)', color: '#fff' }}>
@@ -127,9 +128,9 @@ function InviteContent() {
             <div className="p-4 rounded-2xl" style={{ background: 'linear-gradient(135deg, rgba(255,215,0,0.08), rgba(245,166,35,0.08))', border: '1px solid rgba(255,215,0,0.25)' }}>
               <div className="text-center mb-3">
                 <div className="text-2xl mb-1">🔥</div>
-                <div className="text-[14px] font-black text-white">Хочешь быстрее к своему дому?</div>
-                <div className="text-[11px] font-bold mt-1" style={{ color: '#ffd700' }}>Пригласи 5 друзей → каждый приближает тебя к дому!</div>
-                <div className="text-[10px] text-slate-400 mt-1">+10% от заработка каждого приглашённого <b className="text-white">ПОЖИЗНЕННО</b></div>
+                <div className="text-[14px] font-black text-white">Хочешь ещё больше скидку?</div>
+                <div className="text-[11px] font-bold mt-1" style={{ color: '#ffd700' }}>Отправь 5 друзьям → получи от +5% до +10%!</div>
+                <div className="text-[10px] text-slate-400 mt-1">Итого до <b className="text-white">80% скидки</b> на бриллианты!</div>
               </div>
 
               <div className="p-2 rounded-xl bg-black/30 text-[9px] text-white break-all mb-2 font-mono">{myLink}</div>
@@ -155,25 +156,25 @@ function InviteContent() {
           </div>
         )}
 
-        <div className="text-center text-[10px] text-slate-600 mt-4">Метр² — Путь к своему дому • Powered by GlobalWay</div>
+        <div className="text-center text-[10px] text-slate-600 mt-4">GST — Искатели Драгоценных Камней • Powered by GlobalWay</div>
       </div>
 
-      {/* Exit popup — до регистрации */}
+      {/* Popup 1: До регистрации */}
       {showExitPopup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.85)' }}>
-          <div className="max-w-[380px] w-full p-5 rounded-3xl" style={{ background: 'linear-gradient(180deg, #0d1a2d, #0a0a20)', border: '1px solid rgba(255,215,0,0.2)' }}>
+          <div className="max-w-[380px] w-full p-5 rounded-3xl" style={{ background: 'linear-gradient(180deg, #1a1040, #0a0a20)', border: '1px solid rgba(255,215,0,0.2)' }}>
             <div className="text-center">
               <div className="text-4xl mb-2">⏳</div>
               <h3 className="text-xl font-black text-white mb-1">Не спеши уходить!</h3>
-              <p className="text-[12px] text-slate-400 mb-4">Ты в одном шаге от <b style={{ color: '#ffd700' }}>своего дома</b></p>
+              <p className="text-[12px] text-slate-400 mb-4">Мало <b style={{ color: '#ffd700' }}>-70%</b>? Пригласи друзей и получи ещё!</p>
               <div className="space-y-2 mb-4 text-left">
-                <div className="flex items-center gap-2 text-[12px]"><span className="text-emerald-400">✓</span><span className="text-slate-300">Бесплатный старт — тапай и зарабатывай</span></div>
-                <div className="flex items-center gap-2 text-[12px]"><span className="text-emerald-400">✓</span><span className="text-slate-300">3 бизнеса — доход от $50 до $12,800</span></div>
-                <div className="flex items-center gap-2 text-[12px]"><span className="text-emerald-400">✓</span><span className="text-slate-300">Свой дом под 0% годовых</span></div>
-                <div className="flex items-center gap-2 text-[12px]"><span style={{ color: '#ffd700' }}>🔥</span><span className="text-slate-300"><b style={{ color: '#ffd700' }}>+10%</b> от заработка приглашённых навсегда</span></div>
+                <div className="flex items-center gap-2 text-[12px]"><span className="text-emerald-400">✓</span><span className="text-slate-300">Бесплатная регистрация</span></div>
+                <div className="flex items-center gap-2 text-[12px]"><span className="text-emerald-400">✓</span><span className="text-slate-300">Бриллианты со скидкой до 70%</span></div>
+                <div className="flex items-center gap-2 text-[12px]"><span style={{ color: '#ffd700' }}>🔥</span><span className="text-slate-300"><b style={{ color: '#ffd700' }}>+5-10%</b> если пригласишь 5 друзей</span></div>
+                <div className="flex items-center gap-2 text-[12px]"><span className="text-emerald-400">✓</span><span className="text-slate-300">Стейкинг от 50% до 75% годовых</span></div>
               </div>
               <button onClick={handleRegister} className="w-full py-3 rounded-2xl text-base font-black mb-2" style={{ background: 'linear-gradient(135deg, #ffd700, #f5a623)', color: '#000' }}>
-                🎁 Начать бесплатно!
+                🎁 Получить подарок + бонус!
               </button>
               <button onClick={() => setShowExitPopup(false)} className="text-[11px] text-slate-500">Нет, спасибо</button>
             </div>
@@ -181,16 +182,16 @@ function InviteContent() {
         </div>
       )}
 
-      {/* Viral popup — после регистрации */}
+      {/* Popup 2: После регистрации — вирусный */}
       {showViralPopup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.9)' }}>
-          <div className="max-w-[380px] w-full p-5 rounded-3xl" style={{ background: 'linear-gradient(180deg, #0d1a2d, #0a0a20)', border: '1px solid rgba(255,215,0,0.3)' }}>
+          <div className="max-w-[380px] w-full p-5 rounded-3xl" style={{ background: 'linear-gradient(180deg, #1a1040, #0a0a20)', border: '1px solid rgba(255,215,0,0.3)' }}>
             <div className="text-center">
               <div className="text-4xl mb-2">🔥</div>
               <h3 className="text-xl font-black text-white mb-1">Не уходи с пустыми руками!</h3>
-              <div className="text-[13px] font-bold mb-1" style={{ color: '#ffd700' }}>Пригласи друзей — строй дом быстрее!</div>
+              <div className="text-[13px] font-bold mb-1" style={{ color: '#ffd700' }}>Получи дополнительные 5-10% скидки!</div>
               <p className="text-[11px] text-slate-400 mb-4">
-                Отправь ссылку <b className="text-white">5 друзьям</b> → получай <b style={{ color: '#ffd700' }}>+10% от их заработка</b> пожизненно!
+                Отправь эту ссылку <b className="text-white">5 друзьям</b> → свяжись с приглашающим → получи <b style={{ color: '#ffd700' }}>до 80% скидки</b>!
               </p>
 
               <div className="p-2.5 rounded-xl bg-black/40 text-[10px] text-white break-all mb-3 font-mono border border-white/10">{myLink}</div>
@@ -209,8 +210,8 @@ function InviteContent() {
                 💡 <b className="text-white">Как получить бонус:</b><br/>
                 1. Скопируй ссылку выше<br/>
                 2. Отправь минимум 5 друзьям<br/>
-                3. Каждый зарегистрированный = +10% от его заработка<br/>
-                4. Чем больше команда — тем быстрее свой дом!
+                3. Свяжись со своим спонсором (ID: #{ref})<br/>
+                4. Получи персональную скидку +5-10%!
               </div>
 
               <a href="/" className="block w-full py-3 rounded-2xl text-center text-sm font-black mb-2" style={{ background: 'linear-gradient(135deg, #ffd700, #f5a623)', color: '#000' }}>
