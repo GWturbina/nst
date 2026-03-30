@@ -1,30 +1,30 @@
-const BASE_URL = 'https://nss-azure.vercel.app'
+const BASE_URL = 'https://nst-murex.vercel.app'
 
 const templates = {
+  gems: {
+    title: '💎 Diamond Club — Бриллианты по клубной цене',
+    description: 'Закрытый инвестиционный клуб. Бриллианты от завода со скидкой до 70%. Стейкинг от 50% годовых. Начни бесплатно!',
+    image: 'invite-gems.jpg',
+  },
   house: {
-    title: '🏠 Метр² — Свой дом под 0% годовых',
+    title: '🏠 Diamond Club — Свой дом под 0% годовых',
     description: 'Заработай 35% депозит через клуб — мы добавим 65% под 0% годовых. Дом в любой стране мира. Без банков и кредитов.',
     image: 'invite-house.jpg',
   },
-  business: {
-    title: '💰 Метр² — 3 бизнеса = 3 источника дохода',
-    description: 'Малый $50, Средний $250, Большой $1000. Реинвесты, 9 уровней партнёрки. Бесплатный старт — тапай и зарабатывай!',
-    image: 'invite-business.jpg',
-  },
-  earn: {
-    title: '⛏ Метр² — Тапай и зарабатывай каждый день',
-    description: 'Бесплатная тапалка + реальный бизнес. CHT токены, клубные дома, свой дом под 0%. Присоединяйся!',
-    image: 'invite-earn.jpg',
+  money: {
+    title: '💰 Diamond Club — 15 источников дохода в одном приложении',
+    description: 'Бриллианты, стейкинг, P2P торговля, DCT токены, реферальная программа. Бесплатный старт — зарабатывай с первого дня.',
+    image: 'invite-money.jpg',
   },
 }
 
 export function generateStaticParams() {
-  return [{ t: 'house' }, { t: 'business' }, { t: 'earn' }]
+  return [{ t: 'gems' }, { t: 'house' }, { t: 'money' }]
 }
 
 export async function generateMetadata({ params }) {
-  const t = params.t || 'house'
-  const tpl = templates[t] || templates.house
+  const t = params.t || 'gems'
+  const tpl = templates[t] || templates.gems
 
   return {
     title: tpl.title,
@@ -33,7 +33,7 @@ export async function generateMetadata({ params }) {
       title: tpl.title,
       description: tpl.description,
       url: `${BASE_URL}/invite/${t}`,
-      siteName: 'Метр²',
+      siteName: 'Diamond Club',
       images: [
         {
           url: `${BASE_URL}/previews/${tpl.image}`,
