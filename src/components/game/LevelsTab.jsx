@@ -35,6 +35,17 @@ export default function LevelsTab() {
     return usd >= 1 ? `~$${Math.round(usd)}` : `~$${usd.toFixed(2)}`
   }
 
+  // Динамический расчёт потенциального дохода с уровня
+  const calcEarnUsd = (lv) => {
+    if (!lv.team || !lv.bnb || !bnbPrice) return null
+    // Комиссия: 60% для уровней 0-1, 50% для 2+
+    const pct = lv.id <= 1 ? 0.60 : 0.50
+    const earnBnb = lv.team * pct * lv.bnb
+    const earnUsd = earnBnb * bnbPrice
+    if (earnUsd < 1) return `${earnBnb.toFixed(4)} BNB (~$${earnUsd.toFixed(2)})`
+    return `${earnBnb.toFixed(3)} BNB (~$${Math.round(earnUsd)})`
+  }
+
   const handleBuy = async (lv) => {
     if (!wallet) { addNotification(`❌ ${t('connectWalletFirst')}`); return }
 
@@ -196,14 +207,18 @@ export default function LevelsTab() {
                     </div>
                     <div className="flex-1 p-2 rounded-lg bg-white/5 text-center">
                       <div className="font-bold text-emerald-400">+{lv.nssBonus}</div>
-                      <div className="text-slate-500">{t('nssBonus')}</div>
+                      <div className="text-slate-500">GST {t('nssBonus')}</div>
                     </div>
-                    <div className="flex-1 p-2 rounded-lg bg-white/5 text-center">
-                      <div className="font-bold text-purple-400">+{lv.nssBonus}</div>
-                      <div className="text-slate-500">{t('nssBonus')}</div>
-                    </div>
+                    {bnbPrice > 0 && lv.bnb > 0 && (
+                      <div className="flex-1 p-2 rounded-lg bg-white/5 text-center">
+                        <div className="font-bold text-purple-400">{fmtUsd(lv.bnb)}</div>
+                        <div className="text-slate-500">{t('levelPrice') || 'Цена'}</div>
+                      </div>
+                    )}
                   </div>
-                  <div className="mt-1 text-[10px] text-slate-400">💰 {t('income')}: {lv.earn}</div>
+                  <div className="mt-1 text-[10px] text-slate-400">
+                    💰 {t('income')}: {lv.team > 0 && bnbPrice > 0 ? calcEarnUsd(lv) : lv.earn}
+                  </div>
 
                   {isNext && (
                     <button onClick={(e) => { e.stopPropagation(); handleBuy(lv) }}
