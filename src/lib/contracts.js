@@ -84,12 +84,26 @@ export async function getBalances(address) {
 // ═══════════════════════════════════════════════════
 
 export async function getBNBPrice() {
+  // Primary: API route (Binance/CoinGecko — точный биржевой курс)
+  try {
+    const res = await fetch('/api/bnb-price')
+    if (res.ok) {
+      const data = await res.json()
+      if (data.ok && data.price > 10) return data.price
+    }
+  } catch {}
+  // Fallback: SwapHelper on-chain (opBNB USDT = 18 decimals!)
   try {
     const swap = getReadContract('SwapHelper')
     if (!swap) return null
     const price = await swap.getBNBPrice()
-    return Number(ethers.formatUnits(price, 6))
-  } catch { return null }
+    const parsed = Number(ethers.formatEther(price))
+    if (parsed > 10) return parsed
+    // Если контракт возвращает в 6 decimals — попробовать так
+    const parsed6 = Number(ethers.formatUnits(price, 6))
+    if (parsed6 > 10) return parsed6
+  } catch {}
+  return null
 }
 
 // ═══════════════════════════════════════════════════
