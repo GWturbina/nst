@@ -59,7 +59,7 @@ function InviteContent() {
   const [sending, setSending] = useState(false)
   const [formError, setFormError] = useState('')
 
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://nst-murex.vercel.app'
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://gws.ink'
   const myLink = `${baseUrl}/invite/${t}?ref=${ref}`
   const shareText = `💎 Бриллианты со скидкой до 70%! Стейкинг от 50% годовых. Бесплатный старт! Присоединяйся:`
   const viberText = 'Бриллианты со скидкой до 70%! Стейкинг от 50% годовых. Бесплатный старт! Присоединяйся:'
