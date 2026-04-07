@@ -1,4 +1,4 @@
-const BASE_URL = 'https://nst-murex.vercel.app'
+const BASE_URL = 'https://gws.ink'
 
 const templates = {
   gems: {
