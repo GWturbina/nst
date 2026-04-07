@@ -12,7 +12,7 @@
 import { useState } from 'react'
 import useGameStore from '@/lib/store'
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://nst-murex.vercel.app'
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://gws.ink'
 
 export default function SafePalPrompt({ compact = false, onClose }) {
   const { t } = useGameStore()
@@ -108,7 +108,7 @@ function InstallSteps({ isMobile, isInTelegram }) {
           <Step n={1} text="Установите SafePal на телефон (App Store / Google Play)" />
           <Step n={2} text="Создайте или импортируйте кошелёк в SafePal" />
           <Step n={3} text="Откройте Browser внутри SafePal (иконка 🌐 внизу)" />
-          <Step n={4} text={`Вставьте ссылку: ${process.env.NEXT_PUBLIC_SITE_URL || 'nst-murex.vercel.app'}`} />
+          <Step n={4} text={`Вставьте ссылку: ${process.env.NEXT_PUBLIC_SITE_URL || 'gws.ink'}`} />
           <Step n={5} text="Подключите кошелёк — готово!" />
         </>
       ) : (
