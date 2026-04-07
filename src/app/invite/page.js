@@ -17,7 +17,7 @@ const FEATURES = [
   { emoji: '👥', title: 'Партнёрская программа', desc: 'До 10% пожизненно от приглашённых' },
 ]
 
-const CAPTURE_API = process.env.NEXT_PUBLIC_CARDGIFT_API || 'https://cgm-brown.vercel.app/api/viral-registration'
+const CAPTURE_API = process.env.NEXT_PUBLIC_CARDGIFT_API || 'https://cgift.club/api/viral-registration'
 
 const PLACEHOLDERS = {
   telegram: '@username (латиница, мин. 5 символов)',
@@ -64,7 +64,7 @@ function InviteContent() {
 
   useEffect(() => { const s = localStorage.getItem('dc_capture_id'); if (s) { setTempId(s); setRegistered(true) } }, [])
 
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://nst-murex.vercel.app'
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://gws.ink'
   const shareRef = tempId || ref; const myLink = `${baseUrl}/invite/${t}?ref=${shareRef}`
   const shareText = '💎 Бриллианты со скидкой до 70%! Стейкинг от 50% годовых. Присоединяйся:'
   const shareLinks = {
