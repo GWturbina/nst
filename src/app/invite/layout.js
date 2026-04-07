@@ -1,5 +1,5 @@
 export async function generateMetadata() {
-  const baseUrl = 'https://nst-murex.vercel.app'
+  const baseUrl = 'https://gws.ink'
   return {
     title: '💎 Diamond Club — Бриллианты со скидкой до 70%',
     description: 'Закрытый инвестиционный клуб. Бриллианты от завода со скидкой до 70%. Стейкинг от 50% годовых.',
