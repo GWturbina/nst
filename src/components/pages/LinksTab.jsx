@@ -7,7 +7,7 @@ export default function LinksTab() {
   const { wallet, sponsorId, t } = useGameStore()
   const [copied, setCopied] = useState(false)
 
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://nst-murex.vercel.app'
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://gws.ink'
 
   const inviteLink = sponsorId
     ? `${baseUrl}/invite?ref=${sponsorId}`
