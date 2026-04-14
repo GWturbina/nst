@@ -174,7 +174,7 @@ const useGameStore = create(
     if (data.maxEnergy != null) updates.maxEnergy = data.maxEnergy
     if (data.totalNss != null) updates.localNss = data.totalNss
     if (data.totalTaps != null) updates.taps = data.totalTaps
-    if (data.level != null) updates.level = data.level
+    // level НЕ берём из tap API — он приходит ТОЛЬКО из блокчейна (gwStatus.maxPackage)
     if (Object.keys(updates).length > 0) set(updates)
   },
 
@@ -242,6 +242,7 @@ const useGameStore = create(
         sponsorId: state.sponsorId,
         authSig: state.authSig,
         authTs: state.authTs,
+        level: state.level,  // Сохраняем уровень — чтобы не моргал при перезагрузке
       }),
       version: 3,
       migrate: (persisted, version) => ({
@@ -250,6 +251,7 @@ const useGameStore = create(
         registered: persisted.registered ?? false,
         authSig: persisted.authSig ?? null,
         authTs: persisted.authTs ?? null,
+        level: persisted.level ?? 0,
       }),
     }
   )
