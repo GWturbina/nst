@@ -30,18 +30,14 @@ async function refreshDataForAddress(address) {
       if (gwStatus.maxPackage > 0) store.setLevel(gwStatus.maxPackage)
     }
 
-    // ═══ FIX ISSUE-10: Загружаем тапы с сервера на уровне приложения ═══
-    // Так GST баланс в Header будет актуальным на ЛЮБОЙ вкладке
+    // ═══ Загружаем тапы с сервера ═══
+    // Конфликтов нет: для зарегистрированных сервер — единственный источник правды.
+    // Локальное состояние тапов — только отображение, перезапись безопасна.
     if (store.registered) {
       try {
         const tapState = await loadTapState(address)
         if (tapState) {
-          store.syncServerTaps({
-            energy: tapState.energy,
-            maxEnergy: tapState.maxEnergy,
-            localNss: tapState.totalNss,
-            taps: tapState.totalTaps,
-          })
+          store.syncFromServer(tapState)
         }
       } catch {}
     }
