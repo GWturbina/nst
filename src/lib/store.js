@@ -1,324 +1,258 @@
 'use client'
-import { useEffect, useCallback } from 'react'
-import useGameStore from './store'
-import web3 from './web3'
-import * as C from './contracts'
-import { getDCTTokenInfo, getDCTUserInfo } from './dctContracts'
-import { loadTapState } from './tapService'
+import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
+import { LEVELS, ENERGY_CONFIG } from './gameData'
+import { translations } from '@/locales'
 
-let _refreshInterval = null
-let _listenersAttached = false
-let _reconnectAttempt = 0
-const MAX_RECONNECT_ATTEMPTS = 3
+const useGameStore = create(
+  persist(
+    (set, get) => ({
+  // ═══════════════════════════════════════════════════
+  // LANGUAGE
+  // ═══════════════════════════════════════════════════
+  lang: 'ru',
+  setLang: (lang) => set({ lang }),
+  t: (key) => {
+    const { lang } = get()
+    return translations[lang]?.[key] || translations['en']?.[key] || key
+  },
 
-/** Загрузить все данные пользователя */
-async function refreshDataForAddress(address) {
-  if (!address) return
-  try {
-    const gwStatus = await C.getGWUserStatus(address).catch(() => null)
+  // ═══════════════════════════════════════════════════
+  // WALLET STATE
+  // ═══════════════════════════════════════════════════
+  wallet: null,
+  chainId: null,
+  walletType: null,
+  isConnecting: false,
+  registered: false,
+  sponsorId: null,
 
-    const [balances, bnbPrice] = await Promise.all([
-      C.getBalances(address).catch(() => ({ bnb: '0', usdt: '0' })),
-      C.getBNBPrice().catch(() => null),
-    ])
+  // ═══════════════════════════════════════════════════
+  // БАЛАНСЫ (из блокчейна)
+  // ═══════════════════════════════════════════════════
+  bnb: 0,
+  usdt: 0,
+  dct: 0,
+  dctLocked: 0,
+  dctFree: 0,
+  dctPrice: 0,
 
-    const store = useGameStore.getState()
-    store.updateBalances(balances)
-    if (bnbPrice) store.setBnbPrice(bnbPrice)
+  // ═══════════════════════════════════════════════════
+  // GAME STATE
+  // Для зарегистрированных: всё приходит С СЕРВЕРА.
+  // Локальные значения — только отображение между ответами.
+  // Для незарегистрированных: локальный doTap (испаряется).
+  // ═══════════════════════════════════════════════════
+  level: 0,
+  energy: ENERGY_CONFIG.maxEnergy,
+  maxEnergy: ENERGY_CONFIG.maxEnergy,
+  taps: 0,
+  localNss: 0,
 
-    // GlobalWay status — обновляем ТОЛЬКО если RPC вернул данные
-    // Если gwStatus === null (RPC упал) — НЕ трогаем registered
-    if (gwStatus) {
-      store.updateRegistration(gwStatus.isRegistered, gwStatus.odixId || null)
-      if (gwStatus.maxPackage > 0) store.setLevel(gwStatus.maxPackage)
-    }
+  // Evaporation (только незарегистрированные)
+  evapSeconds: ENERGY_CONFIG.evapSeconds,
+  evapActive: false,
 
-    // ═══ Загружаем тапы с сервера ═══
-    // Сервер — единственный источник правды для зарегистрированных
-    if (store.registered) {
-      try {
-        const tapState = await loadTapState(address)
-        if (tapState) {
-          store.syncFromServer(tapState)
-        }
-      } catch {}
-    }
+  // ═══════════════════════════════════════════════════
+  // UI STATE
+  // ═══════════════════════════════════════════════════
+  dayMode: false,
+  activeTab: 'mine',
+  notifications: [],
+  unreadCount: 0,
+  isLoading: false,
+  txPending: false,
+  lastError: null,
 
-    // DCT token info
-    try {
-      const dctUser = await getDCTUserInfo(address)
-      if (dctUser) {
-        store.updateDCT({
-          total: dctUser.total,
-          locked: dctUser.locked,
-          free: dctUser.free,
-          price: dctUser.valueUSDT && dctUser.total > 0
-            ? (parseFloat(dctUser.valueUSDT) / parseFloat(dctUser.total)).toFixed(6)
-            : '0',
-        })
-      }
-    } catch {}
+  // Admin
+  ownerWallet: null,
+  isAdmin: false,
 
-    // DCT price (if no user balance)
-    try {
-      const tokenInfo = await getDCTTokenInfo()
-      if (tokenInfo) {
-        const current = store
-        store.updateDCT({
-          total: current.dct || 0,
-          locked: current.dctLocked || 0,
-          free: current.dctFree || 0,
-          price: tokenInfo.price,
-        })
-      }
-    } catch {}
+  // Auth (подпись кошелька)
+  authSig: null,
+  authTs: null,
 
-    // Owner для admin-проверки
-    const owner = await C.getOwner('NSSPlatform').catch(() => null)
-    if (owner) store.setOwnerWallet(owner)
-  } catch (err) {
-    console.error('refreshData error:', err)
-  }
-}
+  // Курс BNB
+  bnbPrice: 0,
+  setBnbPrice: (price) => set({ bnbPrice: price }),
 
-async function doConnect() {
-  const store = useGameStore.getState()
-  store.setConnecting(true)
-  try {
-    const result = await web3.connect()
-    store.setWallet(result)
-    store.addNotification(`✅ Кошелёк: ${result.address.slice(0, 6)}...${result.address.slice(-4)}`)
+  // News/Quests
+  news: ['Добро пожаловать в Diamond Club!', 'DCT — токен с реальным обеспечением'],
+  quests: [
+    { name: 'Сделай 100 тапов', reward: '10 GST', done: false },
+    { name: 'Пригласи друга', reward: '5 DCT', done: false },
+  ],
 
-    const gwStatus = await C.getGWUserStatus(result.address).catch(() => null)
-    const isReg = gwStatus?.isRegistered || false
+  // ═══════════════════════════════════════════════════
+  // WALLET ACTIONS
+  // ═══════════════════════════════════════════════════
+  setWallet: (data) => set((s) => ({
+    wallet: data.address,
+    chainId: data.chainId,
+    walletType: data.walletType,
+    evapActive: false,
+    isAdmin: s.ownerWallet
+      ? data.address.toLowerCase() === s.ownerWallet.toLowerCase()
+      : false,
+  })),
 
-    if (isReg) {
-      store.updateRegistration(true, gwStatus.odixId || null)
-      if (gwStatus.maxPackage > 0) store.setLevel(gwStatus.maxPackage)
+  clearWallet: () => set({
+    wallet: null, chainId: null, walletType: null,
+    registered: false, sponsorId: null,
+    bnb: 0, usdt: 0, dct: 0, dctLocked: 0, dctFree: 0,
+    level: 0,
+    evapActive: false,
+    evapSeconds: ENERGY_CONFIG.evapSeconds,
+    authSig: null, authTs: null,
+  }),
+  setConnecting: (v) => set({ isConnecting: v }),
+  setAuth: (authData) => set({ authSig: authData.authSig, authTs: authData.authTs }),
 
-      const authAge = store.authTs ? Date.now() - store.authTs * 1000 : Infinity
-      if (!store.authSig || authAge > 12 * 60 * 60 * 1000) {
-        try {
-          const auth = await web3.signAuthMessage()
-          store.setAuth(auth)
-        } catch (authErr) {
-          console.warn('Auth signature declined')
-        }
-      }
+  // ═══ AUTO-REGISTER ═══
+  showAutoRegister: false,
+  pendingRefId: null,
+  setAutoRegister: (refId) => set({ showAutoRegister: true, pendingRefId: refId }),
+  clearAutoRegister: () => set({ showAutoRegister: false, pendingRefId: null }),
 
-      await refreshDataForAddress(result.address)
-      startRefreshCycle(result.address)
-    } else {
-      store.updateRegistration(false, null)
-      const savedRef = typeof localStorage !== 'undefined' ? localStorage.getItem('dc_ref') : null
-      store.setAutoRegister(savedRef && /^\d+$/.test(savedRef) ? savedRef : null)
+  // ═══════════════════════════════════════════════════
+  // BLOCKCHAIN SYNC
+  // ═══════════════════════════════════════════════════
+  updateBalances: (balances) => set({
+    bnb: parseFloat(balances.bnb) || 0,
+    usdt: parseFloat(balances.usdt) || 0,
+  }),
+  updateDCT: (info) => set({
+    dct: parseFloat(info.total) || 0,
+    dctLocked: parseFloat(info.locked) || 0,
+    dctFree: parseFloat(info.free) || 0,
+    dctPrice: parseFloat(info.price) || 0,
+  }),
+  updateRegistration: (isReg, id) => set({ registered: isReg, sponsorId: id }),
+  setOwnerWallet: (addr) => {
+    const w = get().wallet
+    set({
+      ownerWallet: addr,
+      isAdmin: w && addr && w.toLowerCase() === addr.toLowerCase(),
+    })
+  },
 
-      const balances = await C.getBalances(result.address).catch(() => ({ bnb: '0', usdt: '0' }))
-      store.updateBalances(balances)
-      const bnbPrice = await C.getBNBPrice().catch(() => null)
-      if (bnbPrice) store.setBnbPrice(bnbPrice)
-    }
+  // ═══════════════════════════════════════════════════
+  // TX STATE
+  // ═══════════════════════════════════════════════════
+  setLoading: (v) => set({ isLoading: v }),
+  setTxPending: (v) => set({ txPending: v }),
+  setError: (err) => set({ lastError: err }),
+  clearError: () => set({ lastError: null }),
 
+  // ═══════════════════════════════════════════════════
+  // GAME ACTIONS
+  // ═══════════════════════════════════════════════════
+  setTab: (tab) => set({ activeTab: tab }),
+  toggleDayMode: () => set(s => ({ dayMode: !s.dayMode })),
+
+  /**
+   * decrementEnergy — уменьшить энергию на 1 для визуального отклика.
+   * Используется ТОЛЬКО для зарегистрированных перед отправкой на сервер.
+   * Реальное значение придёт в ответе сервера.
+   * Возвращает false если энергия = 0 (тапать нельзя).
+   */
+  decrementEnergy: () => {
+    const { energy } = get()
+    if (energy <= 0) return false
+    set({ energy: energy - 1 })
     return true
-  } catch (err) {
-    store.addNotification(`❌ ${err.message}`)
-    return false
-  } finally {
-    store.setConnecting(false)
-  }
-}
+  },
 
-function doDisconnect() {
-  web3.disconnect()
-  stopRefreshCycle()
-  C.resetContractsCache()
-  useGameStore.getState().clearWallet()
-}
+  /**
+   * syncFromServer — обновить ВСЁ из ответа сервера.
+   * Это единственный источник правды для зарегистрированных.
+   * Вызывается из: ответа serverTap(), loadTapState(), 30-сек refresh.
+   */
+  syncFromServer: (data) => {
+    const updates = {}
+    if (data.energy != null) updates.energy = data.energy
+    if (data.maxEnergy != null) updates.maxEnergy = data.maxEnergy
+    if (data.totalNss != null) updates.localNss = data.totalNss
+    if (data.totalTaps != null) updates.taps = data.totalTaps
+    if (data.level != null) updates.level = data.level
+    if (Object.keys(updates).length > 0) set(updates)
+  },
 
-function startRefreshCycle(address) {
-  stopRefreshCycle()
-  _refreshInterval = setInterval(() => refreshDataForAddress(address), 30000)
-}
+  /**
+   * doTap — ТОЛЬКО для незарегистрированных (локальный тап).
+   * Для зарегистрированных НЕ используется.
+   */
+  doTap: () => {
+    const { energy, level, localNss, taps, registered, wallet, evapActive } = get()
+    if (energy <= 0) return null
+    if (registered || wallet) return null  // Зарегистрированные — только через сервер
+    const lv = LEVELS[level]
+    const earned = lv.nssPerTap
+    set({
+      localNss: +(localNss + earned).toFixed(4),
+      energy: energy - 1,
+      taps: taps + 1,
+    })
+    if (!evapActive && taps === 0) set({ evapActive: true })
+    return earned
+  },
 
-function stopRefreshCycle() {
-  if (_refreshInterval) {
-    clearInterval(_refreshInterval)
-    _refreshInterval = null
-  }
-}
+  regenEnergy: () => {
+    const { energy, maxEnergy } = get()
+    if (energy < maxEnergy) set({ energy: Math.min(energy + ENERGY_CONFIG.regenAmount, maxEnergy) })
+  },
 
-export function useBlockchainInit() {
-  const wallet = useGameStore(s => s.wallet)
-
-  useEffect(() => {
-    if (_listenersAttached) return
-    _listenersAttached = true
-
-    const onDisconnected = () => doDisconnect()
-    const onAccountChanged = (e) => {
-      const newAddr = e.detail?.address
-      if (newAddr) {
-        const store = useGameStore.getState()
-        store.setWallet({ address: newAddr, chainId: web3.chainId, walletType: web3.walletType })
-        refreshDataForAddress(newAddr)
-        startRefreshCycle(newAddr)
-      }
+  tickEvap: () => {
+    const { evapSeconds, evapActive, registered, wallet } = get()
+    if (!evapActive || registered || wallet) return null
+    if (evapSeconds <= 1) {
+      set({ localNss: 0, evapActive: false, evapSeconds: ENERGY_CONFIG.evapSeconds })
+      return 'expired'
     }
-    const onChainChanged = (e) => {
-      const chainId = e.detail?.chainId
-      if (chainId !== 204 && chainId !== 5611) {
-        useGameStore.getState().addNotification('⚠️ Переключитесь на сеть opBNB!')
-      }
+    set({ evapSeconds: evapSeconds - 1 })
+    return null
+  },
+  evaporate: () => set({ localNss: 0, evapActive: false, evapSeconds: ENERGY_CONFIG.evapSeconds }),
+
+  // ═══════════════════════════════════════════════════
+  // UI ACTIONS
+  // ═══════════════════════════════════════════════════
+  addNotification: (text) => set(s => ({
+    notifications: [{ id: Date.now(), text, read: false, time: new Date().toLocaleString() }, ...s.notifications],
+    unreadCount: s.unreadCount + 1,
+  })),
+  markAllRead: () => set(s => ({
+    notifications: s.notifications.map(n => ({ ...n, read: true })),
+    unreadCount: 0,
+  })),
+
+  addNews: (text) => set(s => ({ news: [...s.news, text] })),
+  removeNews: (i) => set(s => ({ news: s.news.filter((_, idx) => idx !== i) })),
+  addQuest: (quest) => set(s => ({ quests: [...s.quests, quest] })),
+  removeQuest: (i) => set(s => ({ quests: s.quests.filter((_, idx) => idx !== i) })),
+  setLevel: (lv) => set({ level: lv }),
+}),
+    {
+      name: 'dc-storage-v3',
+      partialize: (state) => ({
+        lang: state.lang,
+        ownerWallet: state.ownerWallet,
+        wallet: state.wallet,
+        registered: state.registered,
+        sponsorId: state.sponsorId,
+        authSig: state.authSig,
+        authTs: state.authTs,
+      }),
+      version: 3,
+      migrate: (persisted, version) => ({
+        ...persisted,
+        wallet: persisted.wallet ?? null,
+        registered: persisted.registered ?? false,
+        authSig: persisted.authSig ?? null,
+        authTs: persisted.authTs ?? null,
+      }),
     }
+  )
+)
 
-    window.addEventListener('wallet:disconnected', onDisconnected)
-    window.addEventListener('wallet:accountChanged', onAccountChanged)
-    window.addEventListener('wallet:chainChanged', onChainChanged)
-
-    return () => {
-      window.removeEventListener('wallet:disconnected', onDisconnected)
-      window.removeEventListener('wallet:accountChanged', onAccountChanged)
-      window.removeEventListener('wallet:chainChanged', onChainChanged)
-      _listenersAttached = false
-    }
-  }, [])
-
-  // ═══ Безопасное восстановление сессии ═══
-  // Если wallet восстановлен из persist, но web3 не подключён —
-  // пробуем переподключить. При ошибке НЕ сбрасываем состояние,
-  // а ждём и пробуем снова (SafePal может загружаться медленно).
-  useEffect(() => {
-    if (wallet && !web3.isConnected) {
-      _reconnectAttempt = 0
-
-      const autoReconnect = async () => {
-        const store = useGameStore.getState()
-
-        try {
-          const walletType = web3.detectWallet()
-
-          if (!walletType) {
-            // SafePal ещё не загрузился — пробуем через 1 секунду
-            if (_reconnectAttempt < MAX_RECONNECT_ATTEMPTS) {
-              _reconnectAttempt++
-              setTimeout(autoReconnect, 1000)
-              return
-            }
-            // Все попытки исчерпаны, но НЕ сбрасываем —
-            // подгружаем данные тапов с сервера (GET не требует web3)
-            if (store.registered && wallet) {
-              try {
-                const tapState = await loadTapState(wallet)
-                if (tapState) store.syncFromServer(tapState)
-              } catch {}
-            }
-            return
-          }
-
-          const result = await web3.connect()
-          store.setWallet(result)
-          _reconnectAttempt = 0
-
-          // Проверяем регистрацию
-          const gwStatus = await C.getGWUserStatus(result.address).catch(() => null)
-          if (gwStatus?.isRegistered) {
-            store.updateRegistration(true, gwStatus.odixId || null)
-            if (gwStatus.maxPackage > 0) store.setLevel(gwStatus.maxPackage)
-
-            const authAge = store.authTs ? Date.now() - store.authTs * 1000 : Infinity
-            if (!store.authSig || authAge > 12 * 60 * 60 * 1000) {
-              try {
-                const auth = await web3.signAuthMessage()
-                store.setAuth(auth)
-              } catch {
-                console.warn('Auth signature declined on auto-reconnect')
-              }
-            }
-          }
-          // Если gwStatus === null (RPC упал) — НЕ трогаем registered.
-          // Persist хранит registered: true — доверяем ему.
-
-          await refreshDataForAddress(result.address)
-          startRefreshCycle(result.address)
-
-        } catch (err) {
-          console.warn('Auto-reconnect failed:', err.message || err)
-
-          // ═══ КРИТИЧНЫЙ FIX: НЕ вызываем clearWallet() ═══
-          // Данные из persist остаются. Лучше показать старые данные
-          // чем сбросить всё в ноль.
-
-          // Retry если ещё не исчерпали попытки
-          if (_reconnectAttempt < MAX_RECONNECT_ATTEMPTS) {
-            _reconnectAttempt++
-            setTimeout(autoReconnect, 1500)
-            return
-          }
-
-          // Все попытки исчерпаны — подгружаем хотя бы тапы с сервера
-          if (store.registered && wallet) {
-            try {
-              const tapState = await loadTapState(wallet)
-              if (tapState) store.syncFromServer(tapState)
-            } catch {}
-          }
-        }
-      }
-      autoReconnect()
-    }
-
-    if (wallet && web3.isConnected && !_refreshInterval) {
-      refreshDataForAddress(wallet)
-      startRefreshCycle(wallet)
-    }
-    if (!wallet) stopRefreshCycle()
-  }, [wallet])
-
-  useEffect(() => {
-    C.getBNBPrice().then(price => {
-      if (price) useGameStore.getState().setBnbPrice(price)
-    }).catch(() => {})
-  }, [])
-}
-
-export function useBlockchain() {
-  const wallet = useGameStore(s => s.wallet)
-  return {
-    connect: doConnect,
-    disconnect: doDisconnect,
-    refreshData: () => refreshDataForAddress(wallet),
-    afterRegistration: async () => {
-      const store = useGameStore.getState()
-      const addr = store.wallet
-      if (!addr) return
-      try {
-        const auth = await web3.signAuthMessage()
-        store.setAuth(auth)
-      } catch {}
-      store.clearAutoRegister()
-      await refreshDataForAddress(addr)
-      startRefreshCycle(addr)
-    },
-  }
-}
-
-export function useTx() {
-  const { setTxPending, addNotification } = useGameStore()
-  const wallet = useGameStore(s => s.wallet)
-
-  const exec = useCallback(async (fn, successMsg, errorMsg) => {
-    setTxPending(true)
-    const result = await C.safeCall(fn)
-    setTxPending(false)
-    if (result.ok) {
-      addNotification(successMsg || '✅ Транзакция выполнена!')
-      setTimeout(() => refreshDataForAddress(wallet), 2000)
-      return { ok: true, data: result.data }
-    } else {
-      addNotification(errorMsg || `❌ ${result.error}`)
-      return { ok: false, error: result.error }
-    }
-  }, [setTxPending, addNotification, wallet])
-
-  return exec
-}
+export default useGameStore
