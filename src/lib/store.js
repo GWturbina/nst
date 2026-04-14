@@ -32,23 +32,24 @@ const useGameStore = create(
   // ═══════════════════════════════════════════════════
   bnb: 0,
   usdt: 0,
-  dct: 0,           // DCT баланс из блокчейна
-  dctLocked: 0,     // Заблокированный DCT
-  dctFree: 0,       // Свободный DCT
-  dctPrice: 0,      // Текущая цена DCT в USDT
+  dct: 0,
+  dctLocked: 0,
+  dctFree: 0,
+  dctPrice: 0,
 
   // ═══════════════════════════════════════════════════
-  // GAME STATE (тапалка — локальная)
+  // GAME STATE
+  // Для зарегистрированных: всё приходит С СЕРВЕРА.
+  // Локальные значения — только отображение между ответами.
+  // Для незарегистрированных: локальный doTap (испаряется).
   // ═══════════════════════════════════════════════════
   level: 0,
   energy: ENERGY_CONFIG.maxEnergy,
   maxEnergy: ENERGY_CONFIG.maxEnergy,
   taps: 0,
-  localNss: 0,       // Локальные NSS от тапов (не блокчейн)
+  localNss: 0,
 
-  // ═══════════════════════════════════════════════════
-  // Evaporation (нерегистрированные)
-  // ═══════════════════════════════════════════════════
+  // Evaporation (только незарегистрированные)
   evapSeconds: ENERGY_CONFIG.evapSeconds,
   evapActive: false,
 
@@ -67,7 +68,7 @@ const useGameStore = create(
   ownerWallet: null,
   isAdmin: false,
 
-  // FIX #7: Подпись кошелька (не сохраняется между сессиями)
+  // Auth (подпись кошелька)
   authSig: null,
   authTs: null,
 
@@ -95,21 +96,19 @@ const useGameStore = create(
       : false,
   })),
 
-  clearWallet: () => set((s) => ({
+  clearWallet: () => set({
     wallet: null, chainId: null, walletType: null,
     registered: false, sponsorId: null,
     bnb: 0, usdt: 0, dct: 0, dctLocked: 0, dctFree: 0,
     level: 0,
     evapActive: false,
     evapSeconds: ENERGY_CONFIG.evapSeconds,
-    authSig: null, authTs: null, // FIX #7
-  })),
+    authSig: null, authTs: null,
+  }),
   setConnecting: (v) => set({ isConnecting: v }),
-
-  // FIX #7: Установить подпись после подключения кошелька
   setAuth: (authData) => set({ authSig: authData.authSig, authTs: authData.authTs }),
 
-  // ═══ AUTO-REGISTER (показ модала регистрации после подключения) ═══
+  // ═══ AUTO-REGISTER ═══
   showAutoRegister: false,
   pendingRefId: null,
   setAutoRegister: (refId) => set({ showAutoRegister: true, pendingRefId: refId }),
@@ -146,14 +145,47 @@ const useGameStore = create(
   clearError: () => set({ lastError: null }),
 
   // ═══════════════════════════════════════════════════
-  // GAME ACTIONS (тапалка — СБАЛАНСИРОВАННАЯ)
+  // GAME ACTIONS
   // ═══════════════════════════════════════════════════
   setTab: (tab) => set({ activeTab: tab }),
   toggleDayMode: () => set(s => ({ dayMode: !s.dayMode })),
 
+  /**
+   * decrementEnergy — уменьшить энергию на 1 для визуального отклика.
+   * Используется ТОЛЬКО для зарегистрированных перед отправкой на сервер.
+   * Реальное значение придёт в ответе сервера.
+   * Возвращает false если энергия = 0 (тапать нельзя).
+   */
+  decrementEnergy: () => {
+    const { energy } = get()
+    if (energy <= 0) return false
+    set({ energy: energy - 1 })
+    return true
+  },
+
+  /**
+   * syncFromServer — обновить ВСЁ из ответа сервера.
+   * Это единственный источник правды для зарегистрированных.
+   * Вызывается из: ответа serverTap(), loadTapState(), 30-сек refresh.
+   */
+  syncFromServer: (data) => {
+    const updates = {}
+    if (data.energy != null) updates.energy = data.energy
+    if (data.maxEnergy != null) updates.maxEnergy = data.maxEnergy
+    if (data.totalNss != null) updates.localNss = data.totalNss
+    if (data.totalTaps != null) updates.taps = data.totalTaps
+    if (data.level != null) updates.level = data.level
+    if (Object.keys(updates).length > 0) set(updates)
+  },
+
+  /**
+   * doTap — ТОЛЬКО для незарегистрированных (локальный тап).
+   * Для зарегистрированных НЕ используется.
+   */
   doTap: () => {
     const { energy, level, localNss, taps, registered, wallet, evapActive } = get()
     if (energy <= 0) return null
+    if (registered || wallet) return null  // Зарегистрированные — только через сервер
     const lv = LEVELS[level]
     const earned = lv.nssPerTap
     set({
@@ -161,7 +193,7 @@ const useGameStore = create(
       energy: energy - 1,
       taps: taps + 1,
     })
-    if (!registered && !wallet && !evapActive && taps === 0) set({ evapActive: true })
+    if (!evapActive && taps === 0) set({ evapActive: true })
     return earned
   },
 
@@ -199,26 +231,15 @@ const useGameStore = create(
   addQuest: (quest) => set(s => ({ quests: [...s.quests, quest] })),
   removeQuest: (i) => set(s => ({ quests: s.quests.filter((_, idx) => idx !== i) })),
   setLevel: (lv) => set({ level: lv }),
-
-  // ═══ Серверная синхронизация тапов ═══
-  syncServerTaps: (data) => set({
-    energy: data.energy ?? get().energy,
-    maxEnergy: data.maxEnergy ?? get().maxEnergy,
-    localNss: data.localNss ?? get().localNss,
-    taps: data.taps ?? get().taps,
-  }),
 }),
     {
       name: 'dc-storage-v3',
       partialize: (state) => ({
         lang: state.lang,
         ownerWallet: state.ownerWallet,
-        // Кошелёк и регистрация — нужны для восстановления сессии
         wallet: state.wallet,
         registered: state.registered,
         sponsorId: state.sponsorId,
-        // FIX: authSig + authTs СОХРАНЯЕМ — чтобы не спрашивать подпись каждый раз
-        // Подпись живёт 24 часа (проверяется сервером), реально обновляем каждые 12ч
         authSig: state.authSig,
         authTs: state.authTs,
       }),
