@@ -14,7 +14,8 @@ export default function MineTab() {
   const bnbPrice = useGameStore(s => s.bnbPrice)
   const showAutoRegister = useGameStore(s => s.showAutoRegister)
   const { level, localNss, energy, maxEnergy, taps, registered, wallet,
-    evapActive, evapSeconds, doTap, tickEvap, news, setTab, addNotification,
+    evapActive, evapSeconds, doTap, decrementEnergy, syncFromServer, tickEvap,
+    news, setTab, addNotification,
     setTxPending, txPending, setLevel, t } = useGameStore()
   const { connect } = useBlockchain()
   const { haptic, isInTelegram } = useTelegram()
@@ -113,12 +114,7 @@ export default function MineTab() {
     if (wallet && registered) {
       loadTapState(wallet).then(state => {
         if (state) {
-          useGameStore.getState().syncServerTaps({
-            energy: state.energy,
-            maxEnergy: state.maxEnergy,
-            localNss: state.totalNss,
-            taps: state.totalTaps,
-          })
+          useGameStore.getState().syncFromServer(state)
           // Предупреждение о сгорании
           if (state.decay && state.decay.lost > 0) {
             addNotification(`⚠️ Сгорело ${state.decay.lost.toFixed(0)} GST (${state.decay.daysInactive} дней неактивности)`)
@@ -138,24 +134,31 @@ export default function MineTab() {
 
     if (wallet && registered) {
       // ═══ СЕРВЕРНЫЙ ТАП (для зарегистрированных) ═══
-      // Оптимистичное обновление UI + серверная верификация
-      const earned = doTap()
-      if (!earned) { isTapping.current = false; return }
+      // 1. Проверяем энергию (из последнего ответа сервера)
+      // 2. Уменьшаем энергию визуально
+      // 3. Отправляем на сервер
+      // 4. Из ответа сервера обновляем ВСЁ (energy, GST, taps)
+      const canTap = decrementEnergy()
+      if (!canTap) return // energy = 0 — ждём восстановления
 
       if (isInTelegram) haptic('light')
       showTapEffect(e)
 
-      // Отправляем на сервер асинхронно
+      // Сервер — единственный источник правды
       serverTap(wallet, level).then(result => {
-        if (result && result.ok) {
-          useGameStore.getState().syncServerTaps({
-            energy: result.energy,
-            maxEnergy: result.maxEnergy,
-            localNss: result.totalNss,
-            taps: result.totalTaps,
-          })
+        if (!result) return // сеть или auth ошибка — ничего не делаем
+
+        if (result.ok) {
+          // Сервер подтвердил тап — обновляем всё из ответа
+          useGameStore.getState().syncFromServer(result)
           if (result.decayApplied > 0) {
             addNotification(`⚠️ Сгорело ${result.decayApplied.toFixed(0)} GST за неактивность. Тапайте регулярно!`)
+          }
+        } else {
+          // Сервер отклонил тап (No energy / Too fast) —
+          // синхронизируем реальное состояние
+          if (result.energy != null || result.totalNss != null) {
+            useGameStore.getState().syncFromServer(result)
           }
         }
       })
@@ -167,7 +170,7 @@ export default function MineTab() {
       if (isInTelegram) haptic('light')
       showTapEffect(e)
     }
-  }, [doTap, wallet, registered, level, isInTelegram, haptic])
+  }, [doTap, decrementEnergy, wallet, registered, level, isInTelegram, haptic, addNotification])
 
   // Визуальный эффект тапа (отделён от логики)
   const showTapEffect = useCallback((e) => {
