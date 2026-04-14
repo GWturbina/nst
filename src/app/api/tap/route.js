@@ -65,11 +65,35 @@ async function getSponsorWallet(walletAddress) {
 }
 
 function checkOrigin(request) {
-  const origin = request.headers.get('origin') || request.headers.get('referer') || ''
-  const allowed = process.env.NEXT_PUBLIC_SITE_URL || ''
-  if (process.env.NODE_ENV === 'production' && allowed && !origin.startsWith(allowed)) return false
-  if (process.env.NODE_ENV === 'production' && !allowed) return false
-  return true
+  // В development — пропускаем всё
+  if (process.env.NODE_ENV !== 'production') return true
+
+  const origin = request.headers.get('origin') || ''
+  const referer = request.headers.get('referer') || ''
+
+  // Список разрешённых доменов
+  const allowedDomains = ['gws.ink']
+  // Добавляем NEXT_PUBLIC_SITE_URL если задан
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || ''
+  if (siteUrl) {
+    try {
+      const u = new URL(siteUrl)
+      allowedDomains.push(u.hostname)
+    } catch {}
+  }
+
+  // Vercel preview deployments
+  if (origin.includes('.vercel.app') || referer.includes('.vercel.app')) return true
+
+  // Next.js server-side requests (no origin header) — same origin
+  if (!origin && !referer) return true
+
+  // Проверяем origin ИЛИ referer
+  for (const domain of allowedDomains) {
+    if (origin.includes(domain) || referer.includes(domain)) return true
+  }
+
+  return false
 }
 
 // ═══ Начислить NSS спонсору ═══
