@@ -197,7 +197,7 @@ export async function GET(request) {
     const { data: player } = await supabase.from('dc_taps').select('*').eq('wallet', walletLower).single()
 
     if (!player) {
-      return NextResponse.json({ ok: true, energy: ENERGY_MAX, maxEnergy: ENERGY_MAX, totalNss: 0, totalTaps: 0, referralNss: 0 })
+      return NextResponse.json({ ok: true, energy: ENERGY_MAX, maxEnergy: ENERGY_MAX, totalNss: 0, totalTaps: 0, referralNss: 0, level: 0 })
     }
 
     const now = Date.now()
@@ -211,6 +211,7 @@ export async function GET(request) {
       ok: true, energy: currentEnergy, maxEnergy: ENERGY_MAX,
       totalNss: decay.remaining, totalTaps: player.total_taps || 0,
       referralNss: player.referral_nss || 0,
+      level: player.level ?? 0,
       decay: decay.decayed > 0 ? { lost: decay.decayed, daysInactive: decay.daysInactive, pct: decay.decayPct } : null,
     })
   } catch { return NextResponse.json({ ok: false, error: 'Server error' }, { status: 500 }) }
