@@ -99,14 +99,16 @@ const useGameStore = create(
     wallet: null, chainId: null, walletType: null,
     registered: false, sponsorId: null,
     bnb: 0, usdt: 0, dct: 0, dctLocked: 0, dctFree: 0,
-    // FIX: НЕ сбрасываем level и localNss — чтобы не моргало при переподключении
-    // level: 0 — убрано, сохраняем из persist
     energy: ENERGY_CONFIG.maxEnergy,
     evapActive: false,
     evapSeconds: ENERGY_CONFIG.evapSeconds,
-    authSig: null, authTs: null,
+    // FIX: НЕ стираем authSig/authTs — подпись валидна 24ч
+    // SafePal делает session refresh (disconnect→reconnect) и без подписи будет бесконечный цикл
+    // При ручном отключении — стираем отдельно через clearAuth
     isAdmin: false,
   })),
+  // Ручная очистка подписи (при нажатии "Отключить")
+  clearAuth: () => set({ authSig: null, authTs: null }),
   setConnecting: (v) => set({ isConnecting: v }),
 
   // FIX #7: Установить подпись после подключения кошелька
