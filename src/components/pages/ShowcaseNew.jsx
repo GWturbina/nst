@@ -392,81 +392,212 @@ export default function ShowcaseNew() {
 }
 
 // ═══════════════════════════════════════════════════
-// PHOTO GALLERY с навигацией стрелками
+// PHOTO GALLERY — большие фото + полноэкранный зум
 // ═══════════════════════════════════════════════════
 function PhotoGallery({ photos, videoUrl }) {
   const [currentIdx, setCurrentIdx] = useState(0)
-  const touchStart = useRef(0)
+  const [fullscreen, setFullscreen] = useState(false)
+  const [zoom, setZoom] = useState(1)
+  const [pan, setPan] = useState({ x: 0, y: 0 })
+  const touchStart = useRef({ x: 0, y: 0 })
+  const lastTap = useRef(0)
+  const pinchStart = useRef(0)
 
   const allMedia = [...(photos || [])]
   const ytEmbed = getYouTubeEmbedUrl(videoUrl)
-  // Если видео — файл из Storage (не YouTube), добавляем как медиа
   const isFileVideo = videoUrl && !ytEmbed
   const total = allMedia.length + (ytEmbed ? 1 : 0) + (isFileVideo ? 1 : 0)
 
-  const handleTouchStart = (e) => { touchStart.current = e.touches[0].clientX }
+  const isPhoto = currentIdx < allMedia.length
+
+  // Свайп для переключения фото
+  const handleTouchStart = (e) => {
+    if (e.touches.length === 2) {
+      // Pinch начало
+      const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY)
+      pinchStart.current = d
+      return
+    }
+    touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+  }
+
   const handleTouchEnd = (e) => {
-    const diff = touchStart.current - e.changedTouches[0].clientX
-    if (Math.abs(diff) > 50) {
-      if (diff > 0 && currentIdx < total - 1) setCurrentIdx(c => c + 1)
-      if (diff < 0 && currentIdx > 0) setCurrentIdx(c => c - 1)
+    if (pinchStart.current > 0) { pinchStart.current = 0; return }
+    const diff = touchStart.current.x - (e.changedTouches[0]?.clientX || 0)
+    if (zoom > 1) return // Не листать при зуме
+    if (Math.abs(diff) > 60) {
+      if (diff > 0 && currentIdx < total - 1) { setCurrentIdx(c => c + 1); setZoom(1); setPan({x:0,y:0}) }
+      if (diff < 0 && currentIdx > 0) { setCurrentIdx(c => c - 1); setZoom(1); setPan({x:0,y:0}) }
     }
   }
 
+  const handleTouchMove = (e) => {
+    if (e.touches.length === 2 && pinchStart.current > 0) {
+      // Pinch zoom
+      const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY)
+      const scale = d / pinchStart.current
+      setZoom(z => Math.max(1, Math.min(5, z * scale)))
+      pinchStart.current = d
+      e.preventDefault()
+      return
+    }
+    // Pan при зуме
+    if (zoom > 1 && e.touches.length === 1) {
+      const dx = e.touches[0].clientX - touchStart.current.x
+      const dy = e.touches[0].clientY - touchStart.current.y
+      setPan(p => ({ x: p.x + dx, y: p.y + dy }))
+      touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+    }
+  }
+
+  // Двойной тап = зум
+  const handleDoubleTap = (e) => {
+    e.stopPropagation()
+    const now = Date.now()
+    if (now - lastTap.current < 300) {
+      // Double tap
+      if (zoom > 1) { setZoom(1); setPan({x:0,y:0}) }
+      else setZoom(2.5)
+      lastTap.current = 0
+    } else {
+      lastTap.current = now
+      // Single tap — если не зумлено, открыть/закрыть fullscreen
+      if (zoom <= 1) {
+        setTimeout(() => {
+          if (Date.now() - lastTap.current >= 280 && lastTap.current > 0) {
+            if (isPhoto) setFullscreen(f => !f)
+            lastTap.current = 0
+          }
+        }, 310)
+      }
+    }
+  }
+
+  const goTo = (idx) => { setCurrentIdx(idx); setZoom(1); setPan({x:0,y:0}) }
+
+  // ═══ ПОЛНОЭКРАННЫЙ ПРОСМОТР ═══
+  if (fullscreen && isPhoto) {
+    return (
+      <div className="fixed inset-0 z-[100] bg-black flex flex-col"
+        onClick={(e) => { if (zoom <= 1) { e.stopPropagation(); setFullscreen(false) } }}>
+
+        {/* Шапка */}
+        <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-4 py-3"
+          style={{background:'linear-gradient(180deg, rgba(0,0,0,0.7) 0%, transparent 100%)'}}>
+          <div className="text-white text-[13px] font-bold">{currentIdx + 1} / {allMedia.length}</div>
+          <button onClick={(e) => { e.stopPropagation(); setFullscreen(false); setZoom(1); setPan({x:0,y:0}) }}
+            className="w-10 h-10 rounded-full bg-white/15 text-white text-xl flex items-center justify-center backdrop-blur-sm">✕</button>
+        </div>
+
+        {/* Фото с зумом */}
+        <div className="flex-1 flex items-center justify-center overflow-hidden"
+          onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} onTouchMove={handleTouchMove}
+          onClick={handleDoubleTap}>
+          <img src={allMedia[currentIdx]} alt=""
+            className="max-w-full max-h-full select-none"
+            draggable={false}
+            style={{
+              transform: `scale(${zoom}) translate(${pan.x / zoom}px, ${pan.y / zoom}px)`,
+              transition: zoom === 1 ? 'transform 0.2s ease' : 'none',
+            }} />
+        </div>
+
+        {/* Подсказка зума */}
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 text-[11px] text-white/50 text-center">
+          {zoom > 1 ? `${Math.round(zoom * 100)}%` : 'Двойной тап — увеличить'}
+        </div>
+
+        {/* Стрелки */}
+        {currentIdx > 0 && (
+          <button onClick={(e) => { e.stopPropagation(); goTo(currentIdx - 1) }}
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-black/50 text-white text-2xl flex items-center justify-center backdrop-blur-sm z-20">‹</button>
+        )}
+        {currentIdx < allMedia.length - 1 && (
+          <button onClick={(e) => { e.stopPropagation(); goTo(currentIdx + 1) }}
+            className="absolute right-3 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-black/50 text-white text-2xl flex items-center justify-center backdrop-blur-sm z-20">›</button>
+        )}
+
+        {/* Миниатюры внизу */}
+        {allMedia.length > 1 && (
+          <div className="absolute bottom-10 left-0 right-0 flex gap-2 px-4 justify-center z-20">
+            {allMedia.map((url, i) => (
+              <button key={i} onClick={(e) => { e.stopPropagation(); goTo(i) }}
+                className={`w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 border-2 transition-all ${i === currentIdx ? 'border-gold-400 opacity-100' : 'border-white/20 opacity-50'}`}>
+                <img src={url} alt="" className="w-full h-full object-cover" draggable={false} />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ═══ ОБЫЧНЫЙ ПРОСМОТР (в карточке) ═══
   return (
-    <div className="relative w-full" style={{aspectRatio:'16/10', background:'rgba(0,0,0,0.6)'}}>
-      {/* Основное изображение / видео */}
-      <div className="w-full h-full" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+    <div>
+      {/* Основное фото — большое, квадратное */}
+      <div className="relative w-full bg-black" style={{aspectRatio:'1/1'}}
+        onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+
         {currentIdx < allMedia.length ? (
-          <img src={allMedia[currentIdx]} alt="" className="w-full h-full object-contain bg-black/50" />
+          <img src={allMedia[currentIdx]} alt=""
+            className="w-full h-full object-contain cursor-pointer"
+            onClick={(e) => { e.stopPropagation(); setFullscreen(true) }} />
         ) : ytEmbed && currentIdx === allMedia.length ? (
           <iframe src={ytEmbed} className="w-full h-full" frameBorder="0"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen title="Video" />
         ) : isFileVideo ? (
-          <video src={videoUrl} controls className="w-full h-full object-contain bg-black" />
+          <video src={videoUrl} controls className="w-full h-full object-contain" />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-6xl opacity-50">💎</div>
         )}
+
+        {/* Стрелки */}
+        {total > 1 && currentIdx > 0 && (
+          <button onClick={(e) => { e.stopPropagation(); goTo(currentIdx - 1) }}
+            className="absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/60 text-white text-xl flex items-center justify-center backdrop-blur-sm z-10">‹</button>
+        )}
+        {total > 1 && currentIdx < total - 1 && (
+          <button onClick={(e) => { e.stopPropagation(); goTo(currentIdx + 1) }}
+            className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/60 text-white text-xl flex items-center justify-center backdrop-blur-sm z-10">›</button>
+        )}
+
+        {/* Счётчик */}
+        {total > 1 && (
+          <div className="absolute top-2 right-2 px-2 py-0.5 rounded-lg text-[10px] font-bold text-white bg-black/50 backdrop-blur-sm z-10">
+            {currentIdx + 1} / {total}
+          </div>
+        )}
+
+        {/* Кнопка увеличить */}
+        {isPhoto && (
+          <button onClick={(e) => { e.stopPropagation(); setFullscreen(true) }}
+            className="absolute bottom-2 right-2 px-2.5 py-1 rounded-lg text-[10px] font-bold text-white bg-black/50 backdrop-blur-sm z-10 flex items-center gap-1">
+            🔍 Увеличить
+          </button>
+        )}
       </div>
 
-      {/* Стрелки */}
+      {/* Миниатюры — ПОД фото, горизонтальный скролл */}
       {total > 1 && (
-        <>
-          {currentIdx > 0 && (
-            <button onClick={(e) => { e.stopPropagation(); setCurrentIdx(c => c - 1) }}
-              className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/60 text-white text-lg flex items-center justify-center backdrop-blur-sm z-10">‹</button>
-          )}
-          {currentIdx < total - 1 && (
-            <button onClick={(e) => { e.stopPropagation(); setCurrentIdx(c => c + 1) }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/60 text-white text-lg flex items-center justify-center backdrop-blur-sm z-10">›</button>
-          )}
-        </>
-      )}
-
-      {/* Точки навигации */}
-      {total > 1 && (
-        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
-          {Array.from({ length: total }).map((_, i) => (
-            <button key={i} onClick={(e) => { e.stopPropagation(); setCurrentIdx(i) }}
-              className={`w-2 h-2 rounded-full transition-all ${i === currentIdx ? 'bg-white scale-125' : 'bg-white/40'}`} />
-          ))}
-        </div>
-      )}
-
-      {/* Миниатюры */}
-      {total > 1 && (
-        <div className="absolute bottom-8 left-0 right-0 flex gap-1 px-3 justify-center z-10">
+        <div className="flex gap-1.5 px-4 py-2 overflow-x-auto" style={{background:'rgba(0,0,0,0.3)'}}>
           {allMedia.map((url, i) => (
-            <button key={i} onClick={(e) => { e.stopPropagation(); setCurrentIdx(i) }}
-              className={`w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 border-2 transition-all ${i === currentIdx ? 'border-gold-400 scale-110' : 'border-white/20 opacity-60'}`}>
+            <button key={i} onClick={(e) => { e.stopPropagation(); goTo(i) }}
+              className={`w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 border-2 transition-all ${i === currentIdx ? 'border-gold-400 opacity-100 scale-105' : 'border-white/15 opacity-60'}`}>
               <img src={url} alt="" className="w-full h-full object-cover" />
             </button>
           ))}
           {ytEmbed && (
-            <button onClick={(e) => { e.stopPropagation(); setCurrentIdx(allMedia.length) }}
-              className={`w-10 h-10 rounded-lg flex-shrink-0 border-2 flex items-center justify-center bg-purple-500/20 ${currentIdx === allMedia.length ? 'border-purple-400 scale-110' : 'border-white/20 opacity-60'}`}>
-              <span className="text-lg">🎥</span>
+            <button onClick={(e) => { e.stopPropagation(); goTo(allMedia.length) }}
+              className={`w-14 h-14 rounded-lg flex-shrink-0 border-2 flex items-center justify-center bg-purple-500/15 ${currentIdx === allMedia.length ? 'border-purple-400 opacity-100' : 'border-white/15 opacity-60'}`}>
+              <span className="text-xl">🎥</span>
+            </button>
+          )}
+          {isFileVideo && (
+            <button onClick={(e) => { e.stopPropagation(); goTo(allMedia.length + (ytEmbed ? 1 : 0)) }}
+              className={`w-14 h-14 rounded-lg flex-shrink-0 border-2 flex items-center justify-center bg-blue-500/15 ${currentIdx === total - 1 ? 'border-blue-400 opacity-100' : 'border-white/15 opacity-60'}`}>
+              <span className="text-xl">📹</span>
             </button>
           )}
         </div>
