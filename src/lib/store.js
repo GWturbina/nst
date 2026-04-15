@@ -99,10 +99,13 @@ const useGameStore = create(
     wallet: null, chainId: null, walletType: null,
     registered: false, sponsorId: null,
     bnb: 0, usdt: 0, dct: 0, dctLocked: 0, dctFree: 0,
-    level: 0,
+    // FIX: НЕ сбрасываем level и localNss — чтобы не моргало при переподключении
+    // level: 0 — убрано, сохраняем из persist
+    energy: ENERGY_CONFIG.maxEnergy,
     evapActive: false,
     evapSeconds: ENERGY_CONFIG.evapSeconds,
-    authSig: null, authTs: null, // FIX #7
+    authSig: null, authTs: null,
+    isAdmin: false,
   })),
   setConnecting: (v) => set({ isConnecting: v }),
 
@@ -221,10 +224,12 @@ const useGameStore = create(
         registered: state.registered,
         sponsorId: state.sponsorId,
         // FIX: authSig + authTs СОХРАНЯЕМ — чтобы не спрашивать подпись каждый раз
-        // Подпись живёт 24 часа (проверяется сервером), реально обновляем каждые 12ч
         authSig: state.authSig,
         authTs: state.authTs,
-        level: state.level,  // Сохраняем уровень — не моргает при перезагрузке
+        level: state.level,     // Сохраняем уровень — не моргает при перезагрузке
+        localNss: state.localNss, // FIX: Сохраняем GST — не моргает на 0 при reload
+        taps: state.taps,       // FIX: Сохраняем тапы — не моргает при reload
+        isAdmin: state.isAdmin, // FIX: Сохраняем статус админа — не моргает вкладка
       }),
       version: 3,
       migrate: (persisted, version) => ({
@@ -233,6 +238,9 @@ const useGameStore = create(
         registered: persisted.registered ?? false,
         authSig: persisted.authSig ?? null,
         authTs: persisted.authTs ?? null,
+        localNss: persisted.localNss ?? 0,
+        taps: persisted.taps ?? 0,
+        isAdmin: persisted.isAdmin ?? false,
       }),
     }
   )
