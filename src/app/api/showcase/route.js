@@ -384,18 +384,21 @@ export async function PATCH(request) {
         return NextResponse.json({ ok: false, error: 'Нет данных для обновления' }, { status: 400 })
       }
 
-      updates.updated_at = new Date().toISOString()
       const { error } = await supabase
         .from('dc_showcase')
         .update(updates)
         .eq('id', id)
 
-      if (error) return NextResponse.json({ ok: false, error: 'Ошибка обновления' }, { status: 500 })
+      if (error) {
+        console.error('Showcase edit error:', error.message, error.details)
+        return NextResponse.json({ ok: false, error: 'Ошибка обновления: ' + (error.message || '') }, { status: 500 })
+      }
       return NextResponse.json({ ok: true })
     }
 
     return NextResponse.json({ ok: false, error: 'Неизвестное действие' }, { status: 400 })
-  } catch {
+  } catch (err) {
+    console.error('Showcase PATCH crash:', err)
     return NextResponse.json({ ok: false, error: 'Ошибка сервера' }, { status: 500 })
   }
 }
