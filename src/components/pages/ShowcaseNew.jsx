@@ -75,8 +75,10 @@ export default function ShowcaseNew() {
   const [editForm, setEditForm] = useState({})
 
   // Загрузка данных
+  const [firstLoaded, setFirstLoaded] = useState(false)
   const reload = useCallback(async () => {
-    setLoading(true)
+    // FIX: Спиннер только при первой загрузке — не прячем форму при фоновом обновлении
+    if (!firstLoaded) setLoading(true)
     try {
       let url
       if (tab === 'my' && wallet) {
@@ -102,6 +104,7 @@ export default function ShowcaseNew() {
       setIsAdmin(!!role)
     }
     setLoading(false)
+    setFirstLoaded(true)
   }, [tab, category, wallet])
 
   useEffect(() => { reload() }, [reload])
@@ -228,7 +231,7 @@ export default function ShowcaseNew() {
     ? 'bg-gold-400/15 border-gold-400/30 text-gold-400'
     : 'border-white/8 text-slate-500'
 
-  if (loading) return <div className="flex items-center justify-center py-12"><div className="text-2xl animate-spin">💎</div></div>
+  if (loading && items.length === 0 && !showCreate) return <div className="flex items-center justify-center py-12"><div className="text-2xl animate-spin">💎</div></div>
 
   return (
     <div className="px-3 mt-2 space-y-3">
