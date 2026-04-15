@@ -16,11 +16,6 @@ const supabase = supabaseUrl && supabaseServiceKey
   : null
 
 // FIX #6: Проверка Origin
-  if (process.env.NODE_ENV === 'production' && !allowed) {
-    return false
-  }
-  return true
-}
 
 // ═══ Фиксированные клубные цены (defaults) ═══
 const DEFAULT_PRICES = {
