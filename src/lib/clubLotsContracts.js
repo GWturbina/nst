@@ -49,8 +49,9 @@ const USDT_ABI = [
   'function allowance(address,address) view returns (uint256)',
 ]
 
-const fmt6 = (v) => ethers.formatUnits(v, 6)
-const parse6 = (v) => ethers.parseUnits(String(v), 6)
+// ═══ opBNB USDT = 18 decimals! НЕ 6 как на Ethereum ═══
+const fmtUSDT = (v) => ethers.formatEther(v)          // 18 decimals
+const parseUSDT = (v) => ethers.parseEther(String(v))  // 18 decimals
 
 function getContract() {
   if (!web3.signer) throw new Error('Кошелёк не подключён')
@@ -90,8 +91,8 @@ export async function getLotInfo(lotId) {
   try {
     const info = await c.getLotInfo(lotId)
     return {
-      gemCost: fmt6(info.gemCost),
-      sharePrice: fmt6(info.sharePrice),
+      gemCost: fmtUSDT(info.gemCost),
+      sharePrice: fmtUSDT(info.sharePrice),
       totalShares: Number(info.totalShares),
       soldShares: Number(info.soldShares),
       minGWLevel: Number(info.minGWLevel),
@@ -99,7 +100,7 @@ export async function getLotInfo(lotId) {
       winner: info.winner,
       completedAt: Number(info.completedAt),
       lockPeriod: Number(info.lockPeriod),
-      stoneFund: fmt6(info.stoneFund),
+      stoneFund: fmtUSDT(info.stoneFund),
       unlockAt: Number(info.unlockAt),
     }
   } catch { return null }
@@ -126,10 +127,10 @@ export async function getUserLotInfo(lotId, address) {
     const info = await c.getUserLotInfo(lotId, address)
     return {
       shares: Number(info.shares),
-      paid: fmt6(info.paid),
+      paid: fmtUSDT(info.paid),
       compensated: info.compensated,
       isWinner: info.isWinner,
-      compensationAmount: fmt6(info.compensationAmount),
+      compensationAmount: fmtUSDT(info.compensationAmount),
       canClaim: info.canClaim,
     }
   } catch { return null }
@@ -140,7 +141,7 @@ export async function getMarketingBalance(address) {
   if (!c) return '0'
   try {
     const bal = await c.marketingBalance(address)
-    return fmt6(bal)
+    return fmtUSDT(bal)
   } catch { return '0' }
 }
 
@@ -150,9 +151,9 @@ export async function getFundsInfo() {
   try {
     const f = await c.getFunds()
     return {
-      compensation: fmt6(f.compensation),
-      bonus: fmt6(f.bonus),
-      reserve: fmt6(f.reserve),
+      compensation: fmtUSDT(f.compensation),
+      bonus: fmtUSDT(f.bonus),
+      reserve: fmtUSDT(f.reserve),
     }
   } catch { return null }
 }
@@ -207,7 +208,7 @@ export async function refundCancelled(lotId) {
 export async function createLotOnChain(gemCostUSDT, sharePriceUSDT, minLevel, secretNumber) {
   const c = getContract()
   const commit = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(['uint256'], [secretNumber]))
-  const tx = await c.createLot(parse6(gemCostUSDT), parse6(sharePriceUSDT), minLevel, commit)
+  const tx = await c.createLot(parseUSDT(gemCostUSDT), parseUSDT(sharePriceUSDT), minLevel, commit)
   const receipt = await tx.wait()
   // Извлечь lotId из события LotCreated
   const event = receipt.logs.find(l => {
