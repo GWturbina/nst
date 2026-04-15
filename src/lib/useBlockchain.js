@@ -8,8 +8,6 @@ import { loadTapState } from './tapService'
 
 let _refreshInterval = null
 let _listenersAttached = false
-let _reconnectAttempt = 0
-const MAX_RECONNECT_ATTEMPTS = 3
 
 /** Загрузить все данные пользователя */
 async function refreshDataForAddress(address) {
@@ -26,20 +24,24 @@ async function refreshDataForAddress(address) {
     store.updateBalances(balances)
     if (bnbPrice) store.setBnbPrice(bnbPrice)
 
-    // GlobalWay status — обновляем ТОЛЬКО если RPC вернул данные
-    // Если gwStatus === null (RPC упал) — НЕ трогаем registered
+    // GlobalWay status
     if (gwStatus) {
       store.updateRegistration(gwStatus.isRegistered, gwStatus.odixId || null)
       if (gwStatus.maxPackage > 0) store.setLevel(gwStatus.maxPackage)
     }
 
-    // ═══ Загружаем тапы с сервера ═══
-    // Сервер — единственный источник правды для зарегистрированных
+    // ═══ FIX ISSUE-10: Загружаем тапы с сервера на уровне приложения ═══
+    // Так GST баланс в Header будет актуальным на ЛЮБОЙ вкладке
     if (store.registered) {
       try {
         const tapState = await loadTapState(address)
         if (tapState) {
-          store.syncFromServer(tapState)
+          store.syncServerTaps({
+            energy: tapState.energy,
+            maxEnergy: tapState.maxEnergy,
+            localNss: tapState.totalNss,
+            taps: tapState.totalTaps,
+          })
         }
       } catch {}
     }
@@ -73,9 +75,16 @@ async function refreshDataForAddress(address) {
       }
     } catch {}
 
-    // Owner для admin-проверки
+    // Owner для admin-проверки (GemVaultV2)
     const owner = await C.getOwner('NSSPlatform').catch(() => null)
     if (owner) store.setOwnerWallet(owner)
+
+    // ═══ Проверка dc_admins (для вкладки Admin) ═══
+    try {
+      const adminRes = await fetch(`/api/admin?wallet=${address}`)
+      const adminData = await adminRes.json()
+      if (adminData.ok && adminData.isAdmin) store.setAdminStatus(true)
+    } catch {}
   } catch (err) {
     console.error('refreshData error:', err)
   }
@@ -89,13 +98,16 @@ async function doConnect() {
     store.setWallet(result)
     store.addNotification(`✅ Кошелёк: ${result.address.slice(0, 6)}...${result.address.slice(-4)}`)
 
+    // ═══ СНАЧАЛА проверяем регистрацию (без подписи!) ═══
     const gwStatus = await C.getGWUserStatus(result.address).catch(() => null)
     const isReg = gwStatus?.isRegistered || false
 
     if (isReg) {
+      // Зарегистрирован → обновляем данные + запрашиваем подпись
       store.updateRegistration(true, gwStatus.odixId || null)
       if (gwStatus.maxPackage > 0) store.setLevel(gwStatus.maxPackage)
 
+      // Подпись — только для зарегистрированных (не пугаем новичков)
       const authAge = store.authTs ? Date.now() - store.authTs * 1000 : Infinity
       if (!store.authSig || authAge > 12 * 60 * 60 * 1000) {
         try {
@@ -109,10 +121,12 @@ async function doConnect() {
       await refreshDataForAddress(result.address)
       startRefreshCycle(result.address)
     } else {
+      // НЕ зарегистрирован → показать модал регистрации (без подписи!)
       store.updateRegistration(false, null)
       const savedRef = typeof localStorage !== 'undefined' ? localStorage.getItem('dc_ref') : null
       store.setAutoRegister(savedRef && /^\d+$/.test(savedRef) ? savedRef : null)
 
+      // Загружаем балансы (BNB для оплаты уровня)
       const balances = await C.getBalances(result.address).catch(() => ({ bnb: '0', usdt: '0' }))
       store.updateBalances(balances)
       const bnbPrice = await C.getBNBPrice().catch(() => null)
@@ -183,41 +197,19 @@ export function useBlockchainInit() {
     }
   }, [])
 
-  // ═══ Безопасное восстановление сессии ═══
+  // ═══ FIX BUG-6: Восстановление сессии ═══
   // Если wallet восстановлен из persist, но web3 не подключён —
-  // пробуем переподключить. При ошибке НЕ сбрасываем состояние,
-  // а ждём и пробуем снова (SafePal может загружаться медленно).
+  // автоматически переподключаем. Подпись НЕ запрашиваем если она свежая.
   useEffect(() => {
     if (wallet && !web3.isConnected) {
-      _reconnectAttempt = 0
-
       const autoReconnect = async () => {
-        const store = useGameStore.getState()
-
         try {
           const walletType = web3.detectWallet()
-
-          if (!walletType) {
-            // SafePal ещё не загрузился — пробуем через 1 секунду
-            if (_reconnectAttempt < MAX_RECONNECT_ATTEMPTS) {
-              _reconnectAttempt++
-              setTimeout(autoReconnect, 1000)
-              return
-            }
-            // Все попытки исчерпаны, но НЕ сбрасываем —
-            // подгружаем данные тапов с сервера (GET не требует web3)
-            if (store.registered && wallet) {
-              try {
-                const tapState = await loadTapState(wallet)
-                if (tapState) store.syncFromServer(tapState)
-              } catch {}
-            }
-            return
-          }
+          if (!walletType) return // нет провайдера — ждём ручного подключения
 
           const result = await web3.connect()
+          const store = useGameStore.getState()
           store.setWallet(result)
-          _reconnectAttempt = 0
 
           // Проверяем регистрацию
           const gwStatus = await C.getGWUserStatus(result.address).catch(() => null)
@@ -225,8 +217,10 @@ export function useBlockchainInit() {
             store.updateRegistration(true, gwStatus.odixId || null)
             if (gwStatus.maxPackage > 0) store.setLevel(gwStatus.maxPackage)
 
+            // Подпись: используем сохранённую если она свежее 12 часов
             const authAge = store.authTs ? Date.now() - store.authTs * 1000 : Infinity
             if (!store.authSig || authAge > 12 * 60 * 60 * 1000) {
+              // Подпись устарела или отсутствует — запрашиваем новую
               try {
                 const auth = await web3.signAuthMessage()
                 store.setAuth(auth)
@@ -234,34 +228,15 @@ export function useBlockchainInit() {
                 console.warn('Auth signature declined on auto-reconnect')
               }
             }
+            // Если authSig свежая — ничего не делаем, используем сохранённую
           }
-          // Если gwStatus === null (RPC упал) — НЕ трогаем registered.
-          // Persist хранит registered: true — доверяем ему.
 
           await refreshDataForAddress(result.address)
           startRefreshCycle(result.address)
-
-        } catch (err) {
-          console.warn('Auto-reconnect failed:', err.message || err)
-
-          // ═══ КРИТИЧНЫЙ FIX: НЕ вызываем clearWallet() ═══
-          // Данные из persist остаются. Лучше показать старые данные
-          // чем сбросить всё в ноль.
-
-          // Retry если ещё не исчерпали попытки
-          if (_reconnectAttempt < MAX_RECONNECT_ATTEMPTS) {
-            _reconnectAttempt++
-            setTimeout(autoReconnect, 1500)
-            return
-          }
-
-          // Все попытки исчерпаны — подгружаем хотя бы тапы с сервера
-          if (store.registered && wallet) {
-            try {
-              const tapState = await loadTapState(wallet)
-              if (tapState) store.syncFromServer(tapState)
-            } catch {}
-          }
+        } catch {
+          // FIX: НЕ сбрасываем состояние при ошибке переподключения
+          // SafePal может загружаться медленно — данные из persist остаются
+          console.warn('Auto-reconnect failed, keeping persisted state')
         }
       }
       autoReconnect()
@@ -287,10 +262,12 @@ export function useBlockchain() {
     connect: doConnect,
     disconnect: doDisconnect,
     refreshData: () => refreshDataForAddress(wallet),
+    /** Вызвать после успешной регистрации — подпись + полная загрузка данных */
     afterRegistration: async () => {
       const store = useGameStore.getState()
       const addr = store.wallet
       if (!addr) return
+      // Теперь запрашиваем подпись (пользователь уже знаком с приложением)
       try {
         const auth = await web3.signAuthMessage()
         store.setAuth(auth)
