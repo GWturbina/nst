@@ -233,7 +233,7 @@ export async function POST(request) {
         title: clean(title),
         description: clean(description),
         photos: Array.isArray(photos) ? photos.slice(0, 10).map(p => clean(p)) : [],
-        video_url: clean(videoUrl) || null,
+        video_url: String(videoUrl || '').replace(/[<>"';]/g, '').slice(0, 2000) || null,
         cert_url: clean(certUrl) || null,
         retail_price: Math.max(0, rp),
         club_price: Math.max(0, cp),
@@ -364,7 +364,7 @@ export async function PATCH(request) {
       if (body.photos !== undefined && Array.isArray(body.photos)) {
         updates.photos = body.photos.slice(0, 10).map(p => clean(p))
       }
-      if (body.videoUrl !== undefined) updates.video_url = clean(body.videoUrl) || null
+      if (body.videoUrl !== undefined) updates.video_url = String(body.videoUrl || '').replace(/[<>"';]/g, '').slice(0, 2000) || null
       if (body.certUrl !== undefined) updates.cert_url = clean(body.certUrl) || null
       if (body.retailPrice !== undefined) updates.retail_price = Math.max(0, parseFloat(body.retailPrice) || 0)
       if (body.clubPrice !== undefined) updates.club_price = Math.max(0, parseFloat(body.clubPrice) || 0)
