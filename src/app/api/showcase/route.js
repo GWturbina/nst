@@ -86,11 +86,6 @@ async function getGWLevel(walletAddress) {
 const MIN_GW_LEVEL = parseInt(process.env.SHOWCASE_MIN_LEVEL || '4')
 
 // ═══ Проверка Origin ═══
-  if (process.env.NODE_ENV === 'production' && !allowed) {
-    return false
-  }
-  return true
-}
 
 // Реферальные проценты (из контракта GemVaultV2)
 const REFERRAL_SHARES = [20, 15, 10, 10, 9, 8, 7, 6, 5] // 9 уровней, итого 90%
