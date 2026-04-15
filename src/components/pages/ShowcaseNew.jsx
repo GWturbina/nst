@@ -760,7 +760,7 @@ function ItemDetailModal({ item, wallet, isAdmin, canBuy, txPending, onClose, on
 // ═══════════════════════════════════════════════════
 function SellModal({ item, buyerAddress, setBuyerAddress, deliveryAddress, setDeliveryAddress, txPending, onSell, onClose }) {
   return (
-    <div className="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/85 z-[60] flex items-center justify-center p-4" onClick={onClose}>
       <div className="w-full max-w-sm p-5 rounded-3xl space-y-3"
         style={{background:'#12122a', border:'1px solid rgba(255,215,0,0.2)'}}
         onClick={e => e.stopPropagation()}>
@@ -795,8 +795,8 @@ function SellModal({ item, buyerAddress, setBuyerAddress, deliveryAddress, setDe
 // ═══════════════════════════════════════════════════
 function EditModal({ item, form, setForm, wallet, addNotification, txPending, onSave, onClose }) {
   return (
-    <div className="fixed inset-0 bg-black/85 z-50 flex items-end justify-center" onClick={onClose}>
-      <div className="w-full max-w-sm rounded-t-3xl max-h-[90vh] overflow-y-auto p-5 space-y-3"
+    <div className="fixed inset-0 bg-black/85 z-[60] flex items-end justify-center" onClick={onClose}>
+      <div className="w-full max-w-sm rounded-t-3xl max-h-[95vh] overflow-y-auto p-5 pb-28 space-y-3"
         style={{background:'#12122a', border:'1px solid rgba(255,215,0,0.2)'}}
         onClick={e => e.stopPropagation()}>
         <div className="text-center">
