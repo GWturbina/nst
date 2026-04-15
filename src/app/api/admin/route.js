@@ -25,6 +25,24 @@ const supabase = supabaseUrl && supabaseServiceKey
 
 // ═══ Проверка Origin ═══
 
+// ═══ GET: Проверка админа ═══
+export async function GET(request) {
+  if (!supabase) return NextResponse.json({ ok: false })
+  try {
+    const { searchParams } = new URL(request.url)
+    const wallet = searchParams.get('wallet')
+    if (!wallet) return NextResponse.json({ ok: false })
+    const { data } = await supabase
+      .from('dc_admins')
+      .select('role, active')
+      .eq('wallet', wallet.toLowerCase())
+      .single()
+    return NextResponse.json({ ok: true, isAdmin: !!(data && data.active) })
+  } catch {
+    return NextResponse.json({ ok: false, isAdmin: false })
+  }
+}
+
 // Добавить запись в лог
 async function addOrderLog(orderId, action, actor, details = '') {
   if (!supabase) return
