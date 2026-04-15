@@ -628,8 +628,8 @@ function ItemDetailModal({ item, wallet, isAdmin, canBuy, txPending, onClose, on
   const isHidden = item.status === 'hidden'
 
   return (
-    <div className="fixed inset-0 bg-black/85 z-50 flex items-end justify-center" onClick={onClose}>
-      <div className="w-full max-w-sm rounded-t-3xl overflow-hidden max-h-[92vh] overflow-y-auto pb-safe"
+    <div className="fixed inset-0 bg-black/85 z-[60] flex items-end justify-center" onClick={onClose}>
+      <div className="w-full max-w-sm rounded-t-3xl overflow-hidden max-h-[95vh] overflow-y-auto"
         style={{background:'#12122a', border:'1px solid rgba(255,255,255,0.1)'}}
         onClick={e => e.stopPropagation()}>
 
@@ -648,7 +648,7 @@ function ItemDetailModal({ item, wallet, isAdmin, canBuy, txPending, onClose, on
         {/* Фото / Видео — галерея с навигацией */}
         <PhotoGallery photos={item.photos} videoUrl={item.video_url} />
 
-        <div className="p-4 space-y-3">
+        <div className="p-4 pb-28 space-y-3">
           <div>
             <div className="text-[16px] font-black text-white">{item.title}</div>
             {item.description && <div className="text-[11px] text-slate-400 mt-1 leading-relaxed">{item.description}</div>}
