@@ -34,12 +34,6 @@ const STATUS_TRANSITIONS = {
 }
 
 // ═══ Проверка Origin (защита от чужих сайтов) ═══
-  // FIX #6: если NEXT_PUBLIC_SITE_URL не задан в production — блокируем
-  if (process.env.NODE_ENV === 'production' && !allowed) {
-    return false
-  }
-  return true
-}
 
 // ═══ POST: Создать заказ (с rate-limit) ═══
 export async function POST(request) {
