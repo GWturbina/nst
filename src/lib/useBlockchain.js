@@ -77,13 +77,14 @@ async function refreshDataForAddress(address) {
 
     // Owner для admin-проверки (GemVaultV2)
     const owner = await C.getOwner('NSSPlatform').catch(() => null)
-    if (owner) store.setOwnerWallet(owner)
+    if (owner && store.ownerWallet !== owner) store.setOwnerWallet(owner)
 
     // ═══ Проверка dc_admins (для вкладки Admin) ═══
     try {
       const adminRes = await fetch(`/api/admin?wallet=${address}`)
       const adminData = await adminRes.json()
-      if (adminData.ok && adminData.isAdmin) store.setAdminStatus(true)
+      const shouldBeAdmin = !!(adminData.ok && adminData.isAdmin)
+      if (store.isAdmin !== shouldBeAdmin) store.setAdminStatus(shouldBeAdmin)
     } catch {}
   } catch (err) {
     console.error('refreshData error:', err)
@@ -173,6 +174,9 @@ export function useBlockchainInit() {
       const newAddr = e.detail?.address
       if (newAddr) {
         const store = useGameStore.getState()
+        // FIX: Не обновлять store если адрес тот же — иначе вызывает цепочку
+        // wallet changed → reload callback → setLoading(true) → форма скрывается
+        if (store.wallet && store.wallet.toLowerCase() === newAddr.toLowerCase()) return
         store.setWallet({ address: newAddr, chainId: web3.chainId, walletType: web3.walletType })
         refreshDataForAddress(newAddr)
         startRefreshCycle(newAddr)
@@ -209,7 +213,10 @@ export function useBlockchainInit() {
 
           const result = await web3.connect()
           const store = useGameStore.getState()
-          store.setWallet(result)
+          // FIX: Не вызывать setWallet если адрес не изменился
+          if (!store.wallet || store.wallet.toLowerCase() !== result.address.toLowerCase()) {
+            store.setWallet(result)
+          }
 
           // Проверяем регистрацию
           const gwStatus = await C.getGWUserStatus(result.address).catch(() => null)
