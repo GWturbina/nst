@@ -114,8 +114,10 @@ async function doConnect() {
         try {
           const auth = await web3.signAuthMessage()
           store.setAuth(auth)
+          window.__authDeclined = false // Успешно подписал — сброс флага
         } catch (authErr) {
           console.warn('Auth signature declined')
+          window.__authDeclined = true
         }
       }
 
@@ -148,6 +150,7 @@ function doDisconnect() {
   stopRefreshCycle()
   C.resetContractsCache()
   useGameStore.getState().clearWallet()
+  useGameStore.getState().clearAuth() // Ручной disconnect — стираем подпись
 }
 
 function startRefreshCycle(address) {
@@ -169,13 +172,28 @@ export function useBlockchainInit() {
     if (_listenersAttached) return
     _listenersAttached = true
 
-    const onDisconnected = () => doDisconnect()
+    // FIX: SafePal extension делает session refresh (disconnect→reconnect за 1-2 сек)
+    // Ждём 3 секунды — если за это время придёт accountsChanged, не отключаемся
+    let disconnectTimer = null
+    const onDisconnected = () => {
+      if (disconnectTimer) clearTimeout(disconnectTimer)
+      disconnectTimer = setTimeout(() => {
+        // Если за 3 сек не переподключился — настоящий disconnect
+        if (!web3.isConnected) {
+          stopRefreshCycle()
+          C.resetContractsCache()
+          useGameStore.getState().clearWallet()
+          // НЕ стираем authSig — может быть session refresh
+        }
+      }, 3000)
+    }
     const onAccountChanged = (e) => {
+      // Отменяем таймер disconnect — это был session refresh, не настоящий disconnect
+      if (disconnectTimer) { clearTimeout(disconnectTimer); disconnectTimer = null }
       const newAddr = e.detail?.address
       if (newAddr) {
         const store = useGameStore.getState()
         // FIX: Не обновлять store если адрес тот же — иначе вызывает цепочку
-        // wallet changed → reload callback → setLoading(true) → форма скрывается
         if (store.wallet && store.wallet.toLowerCase() === newAddr.toLowerCase()) return
         store.setWallet({ address: newAddr, chainId: web3.chainId, walletType: web3.walletType })
         refreshDataForAddress(newAddr)
@@ -197,6 +215,7 @@ export function useBlockchainInit() {
       window.removeEventListener('wallet:disconnected', onDisconnected)
       window.removeEventListener('wallet:accountChanged', onAccountChanged)
       window.removeEventListener('wallet:chainChanged', onChainChanged)
+      if (disconnectTimer) clearTimeout(disconnectTimer)
       _listenersAttached = false
     }
   }, [])
@@ -227,12 +246,15 @@ export function useBlockchainInit() {
             // Подпись: используем сохранённую если она свежее 12 часов
             const authAge = store.authTs ? Date.now() - store.authTs * 1000 : Infinity
             if (!store.authSig || authAge > 12 * 60 * 60 * 1000) {
-              // Подпись устарела или отсутствует — запрашиваем новую
-              try {
-                const auth = await web3.signAuthMessage()
-                store.setAuth(auth)
-              } catch {
-                console.warn('Auth signature declined on auto-reconnect')
+              // FIX: Не спрашиваем если уже отклонили в этой сессии
+              if (!window.__authDeclined) {
+                try {
+                  const auth = await web3.signAuthMessage()
+                  store.setAuth(auth)
+                } catch {
+                  console.warn('Auth signature declined on auto-reconnect')
+                  window.__authDeclined = true // Не спрашивать больше до перезагрузки
+                }
               }
             }
             // Если authSig свежая — ничего не делаем, используем сохранённую
