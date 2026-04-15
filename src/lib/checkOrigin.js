@@ -8,6 +8,7 @@
  * - localhost (разработка)
  * - NEXT_PUBLIC_SITE_URL (если задан)
  * - server-side requests (без origin)
+ * - SafePal WebView (origin может быть null/пустой)
  */
 
 export function checkOrigin(request) {
@@ -16,6 +17,7 @@ export function checkOrigin(request) {
 
   const origin = request.headers.get('origin') || ''
   const referer = request.headers.get('referer') || ''
+  const ua = request.headers.get('user-agent') || ''
 
   // Разрешённые домены
   const allowedDomains = ['gws.ink', 'gwad.ink']
@@ -25,20 +27,48 @@ export function checkOrigin(request) {
   if (siteUrl) {
     try {
       const u = new URL(siteUrl)
-      allowedDomains.push(u.hostname)
+      if (!allowedDomains.includes(u.hostname)) {
+        allowedDomains.push(u.hostname)
+      }
     } catch {}
   }
 
-  // Vercel preview deployments
-  if (origin.includes('.vercel.app') || referer.includes('.vercel.app')) return true
-
-  // Server-side requests (Next.js internal) — нет origin
+  // Server-side requests (Next.js internal) — нет origin и нет referer
   if (!origin && !referer) return true
 
-  // Проверяем origin ИЛИ referer
+  // SafePal WebView — origin может быть "null" (строкой) или пустым
+  if (origin === 'null' || origin === '') {
+    for (const domain of allowedDomains) {
+      if (referer.includes(domain)) return true
+    }
+    if (ua.toLowerCase().includes('safepal')) return true
+    if (referer.includes('.vercel.app')) return true
+  }
+
+  // Vercel preview deployments
+  if (origin.endsWith('.vercel.app') || referer.includes('.vercel.app')) return true
+
+  // Localhost (разработка)
+  if (origin.includes('localhost') || origin.includes('127.0.0.1')) return true
+
+  // Строгая проверка origin/referer по доменам
   for (const domain of allowedDomains) {
-    if (origin.includes(domain) || referer.includes(domain)) return true
+    if (matchDomain(origin, domain) || matchDomain(referer, domain)) return true
   }
 
   return false
+}
+
+/**
+ * Строгая проверка домена — точное совпадение хоста
+ * Защита от evil-gws.ink и подобных
+ */
+function matchDomain(urlString, domain) {
+  if (!urlString) return false
+  try {
+    const u = new URL(urlString)
+    return u.hostname === domain || u.hostname.endsWith('.' + domain)
+  } catch {
+    return urlString.includes('://' + domain) || urlString.includes('.' + domain + '/')
+  }
 }
