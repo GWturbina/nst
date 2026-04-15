@@ -766,23 +766,7 @@ function ItemDetailModal({ item, wallet, isAdmin, canBuy, txPending, onClose, on
             </div>
           ) : canBuy ? (
             // ═══ КНОПКА КУПИТЬ для покупателей ═══
-            <div className="space-y-2">
-              <button onClick={() => {
-                const sellerAddr = item.seller_wallet
-                if (navigator.clipboard) {
-                  navigator.clipboard.writeText(sellerAddr).catch(() => {})
-                }
-                addNotification(`💎 Заявка: «${item.title}» за $${item.club_price}`)
-                addNotification(`📋 Продавец: ${sellerAddr} (скопирован)`)
-                addNotification('📩 Свяжитесь с администратором Diamond Club для оформления покупки')
-              }}
-                className="w-full py-3 rounded-xl text-[12px] font-black gold-btn">
-                💎 Хочу купить — ${item.club_price}
-              </button>
-              <div className="p-2 rounded-xl bg-blue-500/8 border border-blue-500/15 text-[9px] text-slate-400 text-center leading-relaxed">
-                📩 Нажмите — адрес продавца скопируется. Свяжитесь для оформления. Адрес доставки шифруется AES-256.
-              </div>
-            </div>
+            <BuyButton item={item} />
           ) : (
             <div className="p-3 rounded-xl bg-orange-500/8 border border-orange-500/15 text-[10px] text-orange-400 text-center">
               ⚠️ Нужно минимум {MIN_GW_LEVEL} уровней GW для покупки
@@ -972,7 +956,59 @@ function EditModal({ item, form, setForm, wallet, addNotification, txPending, on
 }
 
 // ═══════════════════════════════════════════════════
-// CREATE FORM — Форма создания (вынесена для чистоты)
+// BUY BUTTON — с визуальной обратной связью
+// ═══════════════════════════════════════════════════
+function BuyButton({ item }) {
+  const [sent, setSent] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  const handleBuy = () => {
+    const sellerAddr = item.seller_wallet
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(sellerAddr).then(() => setCopied(true)).catch(() => {})
+    }
+    setSent(true)
+  }
+
+  if (sent) {
+    return (
+      <div className="space-y-2">
+        <div className="w-full py-3 rounded-xl text-[12px] font-black text-center bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
+          ✅ Заявка принята!
+        </div>
+        <div className="p-3 rounded-xl bg-white/5 border border-white/10 space-y-2">
+          <div className="text-[11px] text-white font-bold">📋 Данные для связи:</div>
+          <div className="text-[10px] text-slate-300 break-all font-mono bg-black/30 p-2 rounded-lg">
+            {item.seller_wallet}
+          </div>
+          {copied && <div className="text-[9px] text-emerald-400">✓ Адрес скопирован в буфер обмена</div>}
+          <div className="text-[10px] text-slate-400 leading-relaxed">
+            💬 Свяжитесь с продавцом или администратором Diamond Club для оформления покупки.
+            Адрес доставки будет зашифрован AES-256.
+          </div>
+          <div className="text-[11px] text-gold-400 font-bold text-center">
+            💎 {item.title} — ${item.club_price}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      <button onClick={handleBuy}
+        className="w-full py-3 rounded-xl text-[12px] font-black gold-btn active:scale-[0.97] transition-transform">
+        💎 Хочу купить — ${item.club_price}
+      </button>
+      <div className="p-2 rounded-xl bg-blue-500/8 border border-blue-500/15 text-[9px] text-slate-400 text-center leading-relaxed">
+        📩 Нажмите — адрес продавца скопируется. Свяжитесь для оформления.
+      </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════
+// CREATE FORM — Форма создания
 // ═══════════════════════════════════════════════════
 function CreateForm({ form, setForm, tab, wallet, addNotification, txPending, onSubmit, sel }) {
   return (
