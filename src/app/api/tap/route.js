@@ -9,6 +9,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { verifyWallet } from '@/lib/authHelper'
+import { checkOrigin } from '@/lib/checkOrigin'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY
@@ -64,37 +65,6 @@ async function getSponsorWallet(walletAddress) {
   } catch { return null }
 }
 
-function checkOrigin(request) {
-  // В development — пропускаем всё
-  if (process.env.NODE_ENV !== 'production') return true
-
-  const origin = request.headers.get('origin') || ''
-  const referer = request.headers.get('referer') || ''
-
-  // Список разрешённых доменов
-  const allowedDomains = ['gws.ink']
-  // Добавляем NEXT_PUBLIC_SITE_URL если задан
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || ''
-  if (siteUrl) {
-    try {
-      const u = new URL(siteUrl)
-      allowedDomains.push(u.hostname)
-    } catch {}
-  }
-
-  // Vercel preview deployments
-  if (origin.includes('.vercel.app') || referer.includes('.vercel.app')) return true
-
-  // Next.js server-side requests (no origin header) — same origin
-  if (!origin && !referer) return true
-
-  // Проверяем origin ИЛИ referer
-  for (const domain of allowedDomains) {
-    if (origin.includes(domain) || referer.includes(domain)) return true
-  }
-
-  return false
-}
 
 // ═══ Начислить NSS спонсору ═══
 async function creditSponsor(sponsorWallet, amount) {
@@ -221,7 +191,7 @@ export async function GET(request) {
     const { data: player } = await supabase.from('dc_taps').select('*').eq('wallet', walletLower).single()
 
     if (!player) {
-      return NextResponse.json({ ok: true, energy: ENERGY_MAX, maxEnergy: ENERGY_MAX, totalNss: 0, totalTaps: 0, referralNss: 0, level: 0 })
+      return NextResponse.json({ ok: true, energy: ENERGY_MAX, maxEnergy: ENERGY_MAX, totalNss: 0, totalTaps: 0, referralNss: 0 })
     }
 
     const now = Date.now()
@@ -235,7 +205,6 @@ export async function GET(request) {
       ok: true, energy: currentEnergy, maxEnergy: ENERGY_MAX,
       totalNss: decay.remaining, totalTaps: player.total_taps || 0,
       referralNss: player.referral_nss || 0,
-      level: player.level ?? 0,
       decay: decay.decayed > 0 ? { lost: decay.decayed, daysInactive: decay.daysInactive, pct: decay.decayPct } : null,
     })
   } catch { return NextResponse.json({ ok: false, error: 'Server error' }, { status: 500 }) }
