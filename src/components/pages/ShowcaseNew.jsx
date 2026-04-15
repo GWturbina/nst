@@ -37,8 +37,12 @@ function getYouTubeEmbedUrl(url) {
     const u = new URL(url)
     if (u.hostname.includes('youtube.com')) {
       videoId = u.searchParams.get('v')
+      // YouTube Shorts: youtube.com/shorts/VIDEO_ID
+      if (!videoId && u.pathname.startsWith('/shorts/')) {
+        videoId = u.pathname.split('/shorts/')[1]?.split(/[?&#]/)[0]
+      }
     } else if (u.hostname === 'youtu.be') {
-      videoId = u.pathname.slice(1)
+      videoId = u.pathname.slice(1).split(/[?&#]/)[0]
     }
   } catch {}
   if (!videoId) return null
@@ -261,6 +265,12 @@ export default function ShowcaseNew() {
         ))}
       </div>
 
+      {/* ── Блог Diamond Club ── */}
+      <a href="https://cgift.club/blog.html?user=7346221" target="_blank" rel="noreferrer"
+        className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-[11px] font-bold border border-purple-500/25 bg-purple-500/8 text-purple-400 hover:bg-purple-500/15 transition-all">
+        📖 Блог Diamond Club — о возможностях клуба
+      </a>
+
       {/* ── Категории (не показываем на вкладке "Мои") ── */}
       {tab !== 'my' && (
         <div className="flex gap-1.5">
@@ -414,12 +424,22 @@ function PhotoGallery({ photos, videoUrl }) {
   const lastTap = useRef(0)
   const pinchStart = useRef(0)
 
-  const allMedia = [...(photos || [])]
-  const ytEmbed = getYouTubeEmbedUrl(videoUrl)
-  const isFileVideo = videoUrl && !ytEmbed
-  const total = allMedia.length + (ytEmbed ? 1 : 0) + (isFileVideo ? 1 : 0)
+  const allPhotos = [...(photos || [])]
+  // Поддержка нескольких видео (разделены \n в одном поле)
+  const videoUrls = (videoUrl || '').split('\n').filter(Boolean)
+  
+  // Собираем все медиа: фото + видео (YouTube embed или файл)
+  const mediaItems = []
+  allPhotos.forEach(url => mediaItems.push({ type: 'photo', url }))
+  videoUrls.forEach(url => {
+    const embed = getYouTubeEmbedUrl(url)
+    if (embed) mediaItems.push({ type: 'youtube', url: embed, original: url })
+    else mediaItems.push({ type: 'video', url })
+  })
 
-  const isPhoto = currentIdx < allMedia.length
+  const total = mediaItems.length
+  const current = mediaItems[currentIdx] || null
+  const isPhoto = current?.type === 'photo'
 
   // Свайп для переключения фото
   const handleTouchStart = (e) => {
@@ -491,50 +511,36 @@ function PhotoGallery({ photos, videoUrl }) {
     return (
       <div className="fixed inset-0 z-[100] bg-black flex flex-col"
         onClick={(e) => { if (zoom <= 1) { e.stopPropagation(); setFullscreen(false) } }}>
-
-        {/* Шапка */}
         <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-4 py-3"
           style={{background:'linear-gradient(180deg, rgba(0,0,0,0.7) 0%, transparent 100%)'}}>
-          <div className="text-white text-[13px] font-bold">{currentIdx + 1} / {allMedia.length}</div>
+          <div className="text-white text-[13px] font-bold">{currentIdx + 1} / {total}</div>
           <button onClick={(e) => { e.stopPropagation(); setFullscreen(false); setZoom(1); setPan({x:0,y:0}) }}
             className="w-10 h-10 rounded-full bg-white/15 text-white text-xl flex items-center justify-center backdrop-blur-sm">✕</button>
         </div>
-
-        {/* Фото с зумом */}
         <div className="flex-1 flex items-center justify-center overflow-hidden"
           onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} onTouchMove={handleTouchMove}
           onClick={handleDoubleTap}>
-          <img src={allMedia[currentIdx]} alt=""
-            className="max-w-full max-h-full select-none"
-            draggable={false}
-            style={{
-              transform: `scale(${zoom}) translate(${pan.x / zoom}px, ${pan.y / zoom}px)`,
-              transition: zoom === 1 ? 'transform 0.2s ease' : 'none',
-            }} />
+          <img src={current.url} alt="" className="max-w-full max-h-full select-none" draggable={false}
+            style={{ transform: `scale(${zoom}) translate(${pan.x / zoom}px, ${pan.y / zoom}px)`, transition: zoom === 1 ? 'transform 0.2s ease' : 'none' }} />
         </div>
-
-        {/* Подсказка зума */}
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 text-[11px] text-white/50 text-center">
           {zoom > 1 ? `${Math.round(zoom * 100)}%` : 'Двойной тап — увеличить'}
         </div>
-
-        {/* Стрелки */}
         {currentIdx > 0 && (
           <button onClick={(e) => { e.stopPropagation(); goTo(currentIdx - 1) }}
             className="absolute left-3 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-black/50 text-white text-2xl flex items-center justify-center backdrop-blur-sm z-20">‹</button>
         )}
-        {currentIdx < allMedia.length - 1 && (
+        {currentIdx < total - 1 && (
           <button onClick={(e) => { e.stopPropagation(); goTo(currentIdx + 1) }}
             className="absolute right-3 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-black/50 text-white text-2xl flex items-center justify-center backdrop-blur-sm z-20">›</button>
         )}
-
-        {/* Миниатюры внизу */}
-        {allMedia.length > 1 && (
-          <div className="absolute bottom-10 left-0 right-0 flex gap-2 px-4 justify-center z-20">
-            {allMedia.map((url, i) => (
+        {total > 1 && (
+          <div className="absolute bottom-10 left-0 right-0 flex gap-2 px-4 justify-center z-20 overflow-x-auto">
+            {mediaItems.map((m, i) => (
               <button key={i} onClick={(e) => { e.stopPropagation(); goTo(i) }}
                 className={`w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 border-2 transition-all ${i === currentIdx ? 'border-gold-400 opacity-100' : 'border-white/20 opacity-50'}`}>
-                <img src={url} alt="" className="w-full h-full object-cover" draggable={false} />
+                {m.type === 'photo' ? <img src={m.url} alt="" className="w-full h-full object-cover" draggable={false} />
+                  : <div className="w-full h-full flex items-center justify-center bg-purple-500/20 text-lg">🎥</div>}
               </button>
             ))}
           </div>
@@ -546,25 +552,22 @@ function PhotoGallery({ photos, videoUrl }) {
   // ═══ ОБЫЧНЫЙ ПРОСМОТР (в карточке) ═══
   return (
     <div>
-      {/* Основное фото — большое, квадратное */}
       <div className="relative w-full bg-black" style={{aspectRatio:'1/1'}}
         onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
 
-        {currentIdx < allMedia.length ? (
-          <img src={allMedia[currentIdx]} alt=""
-            className="w-full h-full object-contain cursor-pointer"
+        {current?.type === 'photo' ? (
+          <img src={current.url} alt="" className="w-full h-full object-contain cursor-pointer"
             onClick={(e) => { e.stopPropagation(); setFullscreen(true) }} />
-        ) : ytEmbed && currentIdx === allMedia.length ? (
-          <iframe src={ytEmbed} className="w-full h-full" frameBorder="0"
+        ) : current?.type === 'youtube' ? (
+          <iframe src={current.url} className="w-full h-full" frameBorder="0"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen title="Video" />
-        ) : isFileVideo ? (
-          <video src={videoUrl} controls className="w-full h-full object-contain" />
+        ) : current?.type === 'video' ? (
+          <video src={current.url} controls className="w-full h-full object-contain" />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-6xl opacity-50">💎</div>
         )}
 
-        {/* Стрелки */}
         {total > 1 && currentIdx > 0 && (
           <button onClick={(e) => { e.stopPropagation(); goTo(currentIdx - 1) }}
             className="absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/60 text-white text-xl flex items-center justify-center backdrop-blur-sm z-10">‹</button>
@@ -573,15 +576,11 @@ function PhotoGallery({ photos, videoUrl }) {
           <button onClick={(e) => { e.stopPropagation(); goTo(currentIdx + 1) }}
             className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/60 text-white text-xl flex items-center justify-center backdrop-blur-sm z-10">›</button>
         )}
-
-        {/* Счётчик */}
         {total > 1 && (
           <div className="absolute top-2 right-2 px-2 py-0.5 rounded-lg text-[10px] font-bold text-white bg-black/50 backdrop-blur-sm z-10">
             {currentIdx + 1} / {total}
           </div>
         )}
-
-        {/* Кнопка увеличить */}
         {isPhoto && (
           <button onClick={(e) => { e.stopPropagation(); setFullscreen(true) }}
             className="absolute bottom-2 right-2 px-2.5 py-1 rounded-lg text-[10px] font-bold text-white bg-black/50 backdrop-blur-sm z-10 flex items-center gap-1">
@@ -590,27 +589,16 @@ function PhotoGallery({ photos, videoUrl }) {
         )}
       </div>
 
-      {/* Миниатюры — ПОД фото, горизонтальный скролл */}
+      {/* Миниатюры — ПОД фото */}
       {total > 1 && (
         <div className="flex gap-1.5 px-4 py-2 overflow-x-auto" style={{background:'rgba(0,0,0,0.3)'}}>
-          {allMedia.map((url, i) => (
+          {mediaItems.map((m, i) => (
             <button key={i} onClick={(e) => { e.stopPropagation(); goTo(i) }}
               className={`w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 border-2 transition-all ${i === currentIdx ? 'border-gold-400 opacity-100 scale-105' : 'border-white/15 opacity-60'}`}>
-              <img src={url} alt="" className="w-full h-full object-cover" />
+              {m.type === 'photo' ? <img src={m.url} alt="" className="w-full h-full object-cover" />
+                : <div className="w-full h-full flex items-center justify-center bg-purple-500/20 text-lg">🎥</div>}
             </button>
           ))}
-          {ytEmbed && (
-            <button onClick={(e) => { e.stopPropagation(); goTo(allMedia.length) }}
-              className={`w-14 h-14 rounded-lg flex-shrink-0 border-2 flex items-center justify-center bg-purple-500/15 ${currentIdx === allMedia.length ? 'border-purple-400 opacity-100' : 'border-white/15 opacity-60'}`}>
-              <span className="text-xl">🎥</span>
-            </button>
-          )}
-          {isFileVideo && (
-            <button onClick={(e) => { e.stopPropagation(); goTo(allMedia.length + (ytEmbed ? 1 : 0)) }}
-              className={`w-14 h-14 rounded-lg flex-shrink-0 border-2 flex items-center justify-center bg-blue-500/15 ${currentIdx === total - 1 ? 'border-blue-400 opacity-100' : 'border-white/15 opacity-60'}`}>
-              <span className="text-xl">📹</span>
-            </button>
-          )}
         </div>
       )}
     </div>
@@ -838,9 +826,13 @@ function EditModal({ item, form, setForm, wallet, addNotification, txPending, on
           placeholder="Ссылка на сертификат"
           className="w-full p-2.5 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none placeholder-slate-600" />
 
-        <input value={form.videoUrl} onChange={e => setForm(f => ({...f, videoUrl: e.target.value}))}
-          placeholder="Ссылка на видео (YouTube или файл)"
-          className="w-full p-2.5 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none placeholder-slate-600" />
+        <div>
+          <div className="text-[9px] text-slate-500 mb-1">🎥 Видео ({(form.videoUrl || '').split('\n').filter(Boolean).length}/5)</div>
+          <textarea value={form.videoUrl} onChange={e => setForm(f => ({...f, videoUrl: e.target.value}))}
+            placeholder={"YouTube ссылка (одна на строку)\nПример:\nhttps://youtube.com/shorts/abc123\nhttps://youtu.be/xyz456"}
+            rows={3}
+            className="w-full p-2.5 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none resize-none placeholder-slate-600" />
+        </div>
 
         {/* Фото — управление */}
         <div>
@@ -939,9 +931,13 @@ function CreateForm({ form, setForm, tab, wallet, addNotification, txPending, on
         placeholder="Ссылка на сертификат (URL)"
         className="w-full p-2.5 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none placeholder-slate-600" />
 
-      <input value={form.videoUrl} onChange={e => setForm(f => ({...f, videoUrl: e.target.value}))}
-        placeholder="YouTube ссылка или URL видео"
-        className="w-full p-2.5 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none placeholder-slate-600" />
+      <div>
+        <div className="text-[9px] text-slate-500 mb-1">🎥 Видео (одна ссылка на строку, до 5)</div>
+        <textarea value={form.videoUrl} onChange={e => setForm(f => ({...f, videoUrl: e.target.value}))}
+          placeholder={"YouTube ссылка\nhttps://youtube.com/shorts/...\nhttps://youtu.be/..."}
+          rows={2}
+          className="w-full p-2.5 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none resize-none placeholder-slate-600" />
+      </div>
 
       {/* Загрузка фото */}
       <div>
