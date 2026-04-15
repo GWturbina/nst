@@ -147,9 +147,9 @@ const GEMSHOWCASE_ABI = [
 // ═══════════════════════════════════════════════════
 
 const fmt = ethers.formatEther       // 18 decimals (DCT, BNB)
-const fmt6 = (v) => ethers.formatUnits(v, 6)  // USDT 6 decimals
+const fmt6 = (v) => ethers.formatEther(v)  // opBNB USDT = 18 decimals!
 const parse = ethers.parseEther
-const parse6 = (v) => ethers.parseUnits(String(v), 6)
+const parse6 = (v) => ethers.parseEther(String(v)) // opBNB USDT = 18 decimals!
 
 function getDCT(name, abi) {
   if (!web3.signer) throw new Error('Кошелёк не подключён')
@@ -636,28 +636,28 @@ export async function startLotFundraising(lotId) {
 
 export async function addLotCycleProfit(lotId, profitUSDT) {
   const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
-  const tx = await c.addCycleProfit(lotId, ethers.parseUnits(String(profitUSDT), 6))
+  const tx = await c.addCycleProfit(lotId, ethers.parseEther(String(profitUSDT)))
   await tx.wait()
   return tx
 }
 
 export async function fundLotStakingReserve(lotId, amountUSDT) {
   const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
-  const tx = await c.fundStakingReserve(lotId, ethers.parseUnits(String(amountUSDT), 6))
+  const tx = await c.fundStakingReserve(lotId, ethers.parseEther(String(amountUSDT)))
   await tx.wait()
   return tx
 }
 
 export async function requestLotJewelry(lotId, jewelryCost, mode) {
   const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
-  const tx = await c.requestJewelryProduction(lotId, ethers.parseUnits(String(jewelryCost), 6), mode)
+  const tx = await c.requestJewelryProduction(lotId, ethers.parseEther(String(jewelryCost)), mode)
   await tx.wait()
   return tx
 }
 
 export async function fundLotJewelry(lotId, amountUSDT) {
   const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
-  const tx = await c.fundJewelryProduction(lotId, ethers.parseUnits(String(amountUSDT), 6))
+  const tx = await c.fundJewelryProduction(lotId, ethers.parseEther(String(amountUSDT)))
   await tx.wait()
   return tx
 }
@@ -671,7 +671,7 @@ export async function forceLotForSale(lotId) {
 
 export async function confirmLotSale(lotId, saleAmountUSDT) {
   const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
-  const tx = await c.confirmSale(lotId, ethers.parseUnits(String(saleAmountUSDT), 6))
+  const tx = await c.confirmSale(lotId, ethers.parseEther(String(saleAmountUSDT)))
   await tx.wait()
   return tx
 }
@@ -685,7 +685,7 @@ export async function emergencyLotClaimStaking(lotId) {
 
 export async function emergencyRefundPartner(address, amountUSDT, reason) {
   const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
-  const tx = await c.emergencyRefundToPartner(address, ethers.parseUnits(String(amountUSDT), 6), reason)
+  const tx = await c.emergencyRefundToPartner(address, ethers.parseEther(String(amountUSDT)), reason)
   await tx.wait()
   return tx
 }
