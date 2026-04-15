@@ -111,9 +111,9 @@ const SHOWCASE_ABI = [
 // ═══════════════════════════════════════════════════
 
 const fmt = ethers.formatEther
-const fmt6 = (v) => ethers.formatUnits(v, 6)  // USDT 6 decimals
+const fmt6 = (v) => ethers.formatEther(v)  // opBNB USDT = 18 decimals!
 const parse = ethers.parseEther
-const parse6 = (v) => ethers.parseUnits(v, 6) // USDT 6 decimals
+const parse6 = (v) => ethers.parseEther(v) // opBNB USDT = 18 decimals!
 
 function getDC(name, abi) {
   if (!web3.signer) throw new Error('Кошелёк не подключён')
