@@ -9,6 +9,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { verifyWallet } from '@/lib/authHelper'
+import { checkOrigin } from '@/lib/checkOrigin'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY
@@ -33,13 +34,6 @@ const STATUS_TRANSITIONS = {
 }
 
 // ═══ Проверка Origin (защита от чужих сайтов) ═══
-function checkOrigin(request) {
-  const origin = request.headers.get('origin') || request.headers.get('referer') || ''
-  const allowed = process.env.NEXT_PUBLIC_SITE_URL || ''
-  // В dev режиме пропускаем, в prod — проверяем
-  if (process.env.NODE_ENV === 'production' && allowed && !origin.startsWith(allowed)) {
-    return false
-  }
   // FIX #6: если NEXT_PUBLIC_SITE_URL не задан в production — блокируем
   if (process.env.NODE_ENV === 'production' && !allowed) {
     return false
