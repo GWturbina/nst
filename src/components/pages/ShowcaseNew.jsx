@@ -46,7 +46,7 @@ function getYouTubeEmbedUrl(url) {
 }
 
 export default function ShowcaseNew() {
-  const { wallet, addNotification, txPending, setTxPending } = useGameStore()
+  const { wallet, addNotification, txPending, setTxPending, isAdmin: storeIsAdmin } = useGameStore()
 
   const [tab, setTab] = useState('corporate')      // 'corporate' | 'partner' | 'my'
   const [category, setCategory] = useState('all')
@@ -100,14 +100,25 @@ export default function ShowcaseNew() {
     if (wallet) {
       const level = await getUserLevel(wallet).catch(() => 0)
       setUserLevel(level)
-      const role = await getAdminRole(wallet).catch(() => null)
-      setIsAdmin(!!role)
+      // FIX: Используем isAdmin из store (проверен через серверный API, обходит RLS)
+      // Локальную проверку оставляем как fallback
+      if (storeIsAdmin) {
+        setIsAdmin(true)
+      } else {
+        const role = await getAdminRole(wallet).catch(() => null)
+        setIsAdmin(!!role)
+      }
     }
     setLoading(false)
     setFirstLoaded(true)
-  }, [tab, category, wallet])
+  }, [tab, category, wallet, storeIsAdmin])
 
   useEffect(() => { reload() }, [reload])
+
+  // FIX: Мгновенно подхватываем isAdmin из store (серверная проверка через /api/admin)
+  useEffect(() => {
+    if (storeIsAdmin) setIsAdmin(true)
+  }, [storeIsAdmin])
 
   const canSell = isAdmin || userLevel >= MIN_GW_LEVEL
   const canBuy = userLevel >= MIN_GW_LEVEL
