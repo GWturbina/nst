@@ -610,6 +610,7 @@ function PhotoGallery({ photos, videoUrl }) {
 // ═══════════════════════════════════════════════════
 function ItemDetailModal({ item, wallet, isAdmin, canBuy, txPending, onClose, onSell, onToggleVisibility, onDelete, onEdit }) {
   const isMine = wallet && item.seller_wallet === wallet.toLowerCase()
+  const { addNotification } = useGameStore()
   const hasPhotos = item.photos && item.photos.length > 0
   const margin = item.retail_price - item.club_price
   const marketingAmt = margin > 0 ? +(margin * 0.15).toFixed(2) : 0
@@ -725,11 +726,20 @@ function ItemDetailModal({ item, wallet, isAdmin, canBuy, txPending, onClose, on
           ) : canBuy ? (
             // ═══ КНОПКА КУПИТЬ для покупателей ═══
             <div className="space-y-2">
-              <button className="w-full py-3 rounded-xl text-[12px] font-black gold-btn">
+              <button onClick={() => {
+                const sellerAddr = item.seller_wallet
+                if (navigator.clipboard) {
+                  navigator.clipboard.writeText(sellerAddr).catch(() => {})
+                }
+                addNotification(`💎 Заявка: «${item.title}» за $${item.club_price}`)
+                addNotification(`📋 Продавец: ${sellerAddr} (скопирован)`)
+                addNotification('📩 Свяжитесь с администратором Diamond Club для оформления покупки')
+              }}
+                className="w-full py-3 rounded-xl text-[12px] font-black gold-btn">
                 💎 Хочу купить — ${item.club_price}
               </button>
               <div className="p-2 rounded-xl bg-blue-500/8 border border-blue-500/15 text-[9px] text-slate-400 text-center leading-relaxed">
-                📩 Нажмите кнопку — данные продавца будут отправлены. При оформлении адрес доставки шифруется AES-256.
+                📩 Нажмите — адрес продавца скопируется. Свяжитесь для оформления. Адрес доставки шифруется AES-256.
               </div>
             </div>
           ) : (
