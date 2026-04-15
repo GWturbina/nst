@@ -6,6 +6,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { verifyWallet } from '@/lib/authHelper'
+import { checkOrigin } from '@/lib/checkOrigin'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY
@@ -15,12 +16,6 @@ const supabase = supabaseUrl && supabaseServiceKey
   : null
 
 // FIX #6: Проверка Origin
-function checkOrigin(request) {
-  const origin = request.headers.get('origin') || request.headers.get('referer') || ''
-  const allowed = process.env.NEXT_PUBLIC_SITE_URL || ''
-  if (process.env.NODE_ENV === 'production' && allowed && !origin.startsWith(allowed)) {
-    return false
-  }
   if (process.env.NODE_ENV === 'production' && !allowed) {
     return false
   }
