@@ -24,11 +24,6 @@ const supabase = supabaseUrl && supabaseServiceKey
   : null
 
 // ═══ Проверка Origin ═══
-  if (process.env.NODE_ENV === 'production' && !allowed) {
-    return false
-  }
-  return true
-}
 
 // Добавить запись в лог
 async function addOrderLog(orderId, action, actor, details = '') {
