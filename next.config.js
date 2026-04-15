@@ -20,7 +20,8 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "img-src 'self' data: https: blob:",
               "font-src 'self' data: https://fonts.gstatic.com",
-              "connect-src 'self' https://opbnb-mainnet-rpc.bnbchain.org https://*.supabase.co wss://*.supabase.co https://cgift.club",
+              "connect-src 'self' https://opbnb-mainnet-rpc.bnbchain.org https://*.supabase.co wss://*.supabase.co https://cgift.club https://api.binance.com https://api.coingecko.com",
+              "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://youtube.com",
               "frame-ancestors 'self' https://web.telegram.org",
             ].join('; ')
           },
