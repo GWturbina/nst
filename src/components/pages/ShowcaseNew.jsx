@@ -242,11 +242,14 @@ export default function ShowcaseNew() {
   // ═══ Редактирование ═══
   const openEdit = (item) => {
     setEditModal(item)
+    const rawVideo = item.video_url || ''
+    const videoFirst = rawVideo.startsWith('VFIRST\n')
+    const videoUrl = videoFirst ? rawVideo.slice(7) : rawVideo
     setEditForm({
       title: item.title, description: item.description || '',
       retailPrice: item.retail_price || '', clubPrice: item.club_price || '',
       carat: item.carat || '', shape: item.shape || '', clarity: item.clarity || '',
-      certUrl: item.cert_url || '', photos: item.photos || [], videoUrl: item.video_url || '',
+      certUrl: item.cert_url || '', photos: item.photos || [], videoUrl, videoFirst,
     })
     setSelectedItem(null)
   }
@@ -255,9 +258,13 @@ export default function ShowcaseNew() {
     if (!editModal) return
     setTxPending(true)
     try {
+      // Encode videoFirst flag into videoUrl
+      const videoUrl = editForm.videoFirst && editForm.videoUrl?.trim()
+        ? 'VFIRST\n' + editForm.videoUrl
+        : editForm.videoUrl || ''
       const res = await authFetch('/api/showcase', {
         method: 'PATCH',
-        body: { id: editModal.id, wallet, action: 'edit', ...editForm }
+        body: { id: editModal.id, wallet, action: 'edit', ...editForm, videoUrl }
       })
       const data = await res.json()
       if (data.ok) {
@@ -453,16 +460,23 @@ function PhotoGallery({ photos, videoUrl }) {
 
   const allPhotos = [...(photos || [])]
   // Поддержка нескольких видео (разделены \n в одном поле)
-  const videoUrls = (videoUrl || '').split('\n').filter(Boolean)
+  // Префикс VFIRST\n = видео показывать первыми
+  const rawVideo = videoUrl || ''
+  const videoFirst = rawVideo.startsWith('VFIRST\n')
+  const videoStr = videoFirst ? rawVideo.slice(7) : rawVideo
+  const videoUrls = videoStr.split('\n').filter(Boolean)
   
-  // Собираем все медиа: фото + видео (YouTube embed или файл)
-  const mediaItems = []
-  allPhotos.forEach(url => mediaItems.push({ type: 'photo', url }))
+  // Собираем все медиа
+  const photoItems = allPhotos.map(url => ({ type: 'photo', url }))
+  const videoItems = []
   videoUrls.forEach(url => {
     const embed = getYouTubeEmbedUrl(url)
-    if (embed) mediaItems.push({ type: 'youtube', url: embed, original: url })
-    else mediaItems.push({ type: 'video', url })
+    if (embed) videoItems.push({ type: 'youtube', url: embed, original: url })
+    else videoItems.push({ type: 'video', url })
   })
+
+  // Порядок: videoFirst → видео перед фото, иначе фото перед видео
+  const mediaItems = videoFirst ? [...videoItems, ...photoItems] : [...photoItems, ...videoItems]
 
   const total = mediaItems.length
   const current = mediaItems[currentIdx] || null
@@ -819,6 +833,14 @@ function SellModal({ item, buyerAddress, setBuyerAddress, deliveryAddress, setDe
 // EDIT MODAL — редактирование объявления
 // ═══════════════════════════════════════════════════
 function EditModal({ item, form, setForm, wallet, addNotification, txPending, onSave, onClose }) {
+  const [saving, setSaving] = useState(false)
+
+  const doSave = async () => {
+    setSaving(true)
+    await onSave()
+    setSaving(false)
+  }
+
   return (
     <div className="fixed inset-0 bg-black/85 z-[60] flex items-end justify-center" onClick={onClose}>
       <div className="w-full max-w-sm rounded-t-3xl max-h-[95vh] overflow-y-auto p-5 pb-28 space-y-3"
@@ -869,6 +891,17 @@ function EditModal({ item, form, setForm, wallet, addNotification, txPending, on
             placeholder={"YouTube ссылка (одна на строку)\nПример:\nhttps://youtube.com/shorts/abc123\nhttps://youtu.be/xyz456"}
             rows={3}
             className="w-full p-2.5 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none resize-none placeholder-slate-600" />
+          {/* Переключатель: видео первым */}
+          {(form.videoUrl || '').trim() && (
+            <button onClick={() => setForm(f => ({...f, videoFirst: !f.videoFirst}))}
+              className={`mt-1.5 w-full py-2 rounded-xl text-[10px] font-bold border transition-all ${
+                form.videoFirst
+                  ? 'bg-purple-500/15 border-purple-500/30 text-purple-400'
+                  : 'bg-white/5 border-white/10 text-slate-500'
+              }`}>
+              {form.videoFirst ? '🎥 Видео показывается ПЕРВЫМ' : '📷 Фото показываются первыми (нажми чтобы изменить)'}
+            </button>
+          )}
         </div>
 
         {/* Фото — управление с сортировкой */}
@@ -928,9 +961,9 @@ function EditModal({ item, form, setForm, wallet, addNotification, txPending, on
         <div className="flex gap-2 pt-2">
           <button onClick={onClose}
             className="flex-1 py-3 rounded-xl text-[11px] font-bold text-slate-400 border border-white/10">Отмена</button>
-          <button onClick={onSave} disabled={txPending || !form.title}
+          <button onClick={doSave} disabled={saving || !form.title}
             className="flex-1 py-3 rounded-xl text-[12px] font-black gold-btn disabled:opacity-40">
-            {txPending ? '⏳ ...' : '💾 Сохранить'}
+            {saving ? '⏳ Сохраняю...' : '💾 Сохранить'}
           </button>
         </div>
       </div>
