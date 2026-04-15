@@ -18,7 +18,7 @@ import { shortAddress } from '@/lib/web3'
 import { getUserLevel } from '@/lib/contracts'
 import { getAdminRole } from '@/lib/dcOrders'
 import { formatUSD } from '@/lib/gemCatalog'
-import { uploadShowcaseFile, compressImage } from '@/lib/showcaseStorage'
+import { uploadShowcaseFile, compressImage, deleteShowcaseFile } from '@/lib/showcaseStorage'
 import { authFetch } from '@/lib/authClient'
 
 const CATEGORIES = [
@@ -29,7 +29,34 @@ const CATEGORIES = [
 
 const MIN_GW_LEVEL = 4
 
-// ═══ Хелпер: YouTube URL → embed URL ═══
+// ═══ Хелпер: Supabase Storage URL → path для удаления ═══
+function getStoragePath(url) {
+  if (!url) return null
+  // URL: https://xxx.supabase.co/storage/v1/object/public/showcase/0xwallet/123.jpg
+  const marker = '/storage/v1/object/public/showcase/'
+  const idx = url.indexOf(marker)
+  if (idx === -1) return null
+  return url.slice(idx + marker.length)
+}
+
+// ═══ Хелпер: удалить фото из массива + из Storage ═══
+async function removePhotoAtIndex(photos, index, setForm) {
+  const url = photos[index]
+  const path = getStoragePath(url)
+  if (path) {
+    deleteShowcaseFile(path).catch(() => {}) // Удаляем из Storage (fire-and-forget)
+  }
+  setForm(f => ({ ...f, photos: f.photos.filter((_, i) => i !== index) }))
+}
+
+// ═══ Хелпер: переместить фото ═══
+function movePhoto(photos, fromIdx, toIdx) {
+  if (toIdx < 0 || toIdx >= photos.length) return photos
+  const arr = [...photos]
+  const [item] = arr.splice(fromIdx, 1)
+  arr.splice(toIdx, 0, item)
+  return arr
+}
 function getYouTubeEmbedUrl(url) {
   if (!url) return null
   let videoId = null
@@ -844,16 +871,35 @@ function EditModal({ item, form, setForm, wallet, addNotification, txPending, on
             className="w-full p-2.5 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none resize-none placeholder-slate-600" />
         </div>
 
-        {/* Фото — управление */}
+        {/* Фото — управление с сортировкой */}
         <div>
-          <div className="text-[9px] text-slate-500 mb-1">📷 Фото ({form.photos?.length || 0}/10)</div>
+          <div className="text-[9px] text-slate-500 mb-1">📷 Фото ({form.photos?.length || 0}/10) — перетаскивайте стрелками, первое = обложка</div>
           {form.photos?.length > 0 && (
-            <div className="flex gap-1.5 mb-2 overflow-x-auto">
+            <div className="space-y-1.5 mb-2">
               {form.photos.map((url, i) => (
-                <div key={i} className="relative w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 border border-white/10">
-                  <img src={url} alt="" className="w-full h-full object-cover" />
-                  <button onClick={() => setForm(f => ({...f, photos: f.photos.filter((_, idx) => idx !== i)}))}
-                    className="absolute top-0 right-0 w-4 h-4 bg-red-500 text-white text-[8px] flex items-center justify-center rounded-bl">✕</button>
+                <div key={url + i} className={`flex items-center gap-2 p-1.5 rounded-lg ${i === 0 ? 'bg-gold-400/10 border border-gold-400/20' : 'bg-white/5 border border-white/8'}`}>
+                  <img src={url} alt="" className="w-12 h-12 rounded-lg object-cover flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[9px] text-slate-400 truncate">{i === 0 ? '⭐ Обложка' : `Фото ${i + 1}`}</div>
+                  </div>
+                  {/* Стрелки перемещения */}
+                  <div className="flex gap-0.5 flex-shrink-0">
+                    {i > 0 && (
+                      <button onClick={() => setForm(f => ({...f, photos: movePhoto(f.photos, i, i - 1)}))}
+                        className="w-7 h-7 rounded-lg bg-white/10 text-white text-[11px] flex items-center justify-center">◀</button>
+                    )}
+                    {i < form.photos.length - 1 && (
+                      <button onClick={() => setForm(f => ({...f, photos: movePhoto(f.photos, i, i + 1)}))}
+                        className="w-7 h-7 rounded-lg bg-white/10 text-white text-[11px] flex items-center justify-center">▶</button>
+                    )}
+                    {i > 0 && (
+                      <button onClick={() => setForm(f => ({...f, photos: movePhoto(f.photos, i, 0)}))}
+                        className="w-7 h-7 rounded-lg bg-gold-400/15 text-gold-400 text-[9px] font-bold flex items-center justify-center" title="Сделать обложкой">⭐</button>
+                    )}
+                    {/* Удалить (+ чистка Storage) */}
+                    <button onClick={() => removePhotoAtIndex(form.photos, i, setForm)}
+                      className="w-7 h-7 rounded-lg bg-red-500/20 text-red-400 text-[11px] flex items-center justify-center">✕</button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -951,7 +997,7 @@ function CreateForm({ form, setForm, tab, wallet, addNotification, txPending, on
 
       {/* Загрузка фото */}
       <div>
-        <div className="text-[9px] text-slate-500 mb-1">📷 Фото (до 10 шт, макс 10 МБ каждое)</div>
+        <div className="text-[9px] text-slate-500 mb-1">📷 Фото (до 10 шт) — первое фото = обложка</div>
         <label className="w-full py-2.5 rounded-xl text-[10px] font-bold text-center cursor-pointer bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-all block">
           📷 Загрузить фото
           <input type="file" accept="image/*" multiple className="hidden"
@@ -971,12 +1017,21 @@ function CreateForm({ form, setForm, tab, wallet, addNotification, txPending, on
             }} />
         </label>
         {form.photos.length > 0 && (
-          <div className="flex gap-1.5 mt-2 overflow-x-auto">
+          <div className="space-y-1 mt-2">
             {form.photos.map((url, i) => (
-              <div key={i} className="relative w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 border border-white/10">
-                <img src={url} alt="" className="w-full h-full object-cover" />
-                <button onClick={() => setForm(f => ({...f, photos: f.photos.filter((_, idx) => idx !== i)}))}
-                  className="absolute top-0 right-0 w-4 h-4 bg-red-500 text-white text-[8px] flex items-center justify-center rounded-bl">✕</button>
+              <div key={url + i} className={`flex items-center gap-2 p-1 rounded-lg ${i === 0 ? 'bg-gold-400/10 border border-gold-400/20' : 'bg-white/5'}`}>
+                <img src={url} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                <div className="text-[9px] text-slate-400 flex-1">{i === 0 ? '⭐ Обложка' : `Фото ${i + 1}`}</div>
+                <div className="flex gap-0.5 flex-shrink-0">
+                  {i > 0 && <button onClick={() => setForm(f => ({...f, photos: movePhoto(f.photos, i, i - 1)}))}
+                    className="w-6 h-6 rounded bg-white/10 text-white text-[10px] flex items-center justify-center">◀</button>}
+                  {i < form.photos.length - 1 && <button onClick={() => setForm(f => ({...f, photos: movePhoto(f.photos, i, i + 1)}))}
+                    className="w-6 h-6 rounded bg-white/10 text-white text-[10px] flex items-center justify-center">▶</button>}
+                  {i > 0 && <button onClick={() => setForm(f => ({...f, photos: movePhoto(f.photos, i, 0)}))}
+                    className="w-6 h-6 rounded bg-gold-400/15 text-gold-400 text-[8px] font-bold flex items-center justify-center">⭐</button>}
+                  <button onClick={() => removePhotoAtIndex(form.photos, i, setForm)}
+                    className="w-6 h-6 rounded bg-red-500/20 text-red-400 text-[10px] flex items-center justify-center">✕</button>
+                </div>
               </div>
             ))}
           </div>
