@@ -36,12 +36,6 @@ function getCurrentMonth() {
 }
 
 // ═══ Проверка Origin ═══
-  // FIX: если NEXT_PUBLIC_SITE_URL не задан в production — блокируем
-  if (process.env.NODE_ENV === 'production' && !allowed) {
-    return false
-  }
-  return true
-}
 
 // Действия, которые может вызвать только admin (или внутренний сервис)
 const ADMIN_ONLY_ACTIONS = ['invite', 'turnover', 'gem_sale', 'jewelry_sale']
