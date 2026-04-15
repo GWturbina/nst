@@ -32,24 +32,23 @@ const useGameStore = create(
   // ═══════════════════════════════════════════════════
   bnb: 0,
   usdt: 0,
-  dct: 0,
-  dctLocked: 0,
-  dctFree: 0,
-  dctPrice: 0,
+  dct: 0,           // DCT баланс из блокчейна
+  dctLocked: 0,     // Заблокированный DCT
+  dctFree: 0,       // Свободный DCT
+  dctPrice: 0,      // Текущая цена DCT в USDT
 
   // ═══════════════════════════════════════════════════
-  // GAME STATE
-  // Для зарегистрированных: всё приходит С СЕРВЕРА.
-  // Локальные значения — только отображение между ответами.
-  // Для незарегистрированных: локальный doTap (испаряется).
+  // GAME STATE (тапалка — локальная)
   // ═══════════════════════════════════════════════════
   level: 0,
   energy: ENERGY_CONFIG.maxEnergy,
   maxEnergy: ENERGY_CONFIG.maxEnergy,
   taps: 0,
-  localNss: 0,
+  localNss: 0,       // Локальные NSS от тапов (не блокчейн)
 
-  // Evaporation (только незарегистрированные)
+  // ═══════════════════════════════════════════════════
+  // Evaporation (нерегистрированные)
+  // ═══════════════════════════════════════════════════
   evapSeconds: ENERGY_CONFIG.evapSeconds,
   evapActive: false,
 
@@ -68,7 +67,7 @@ const useGameStore = create(
   ownerWallet: null,
   isAdmin: false,
 
-  // Auth (подпись кошелька)
+  // FIX #7: Подпись кошелька (не сохраняется между сессиями)
   authSig: null,
   authTs: null,
 
@@ -96,19 +95,21 @@ const useGameStore = create(
       : false,
   })),
 
-  clearWallet: () => set({
+  clearWallet: () => set((s) => ({
     wallet: null, chainId: null, walletType: null,
     registered: false, sponsorId: null,
     bnb: 0, usdt: 0, dct: 0, dctLocked: 0, dctFree: 0,
     level: 0,
     evapActive: false,
     evapSeconds: ENERGY_CONFIG.evapSeconds,
-    authSig: null, authTs: null,
-  }),
+    authSig: null, authTs: null, // FIX #7
+  })),
   setConnecting: (v) => set({ isConnecting: v }),
+
+  // FIX #7: Установить подпись после подключения кошелька
   setAuth: (authData) => set({ authSig: authData.authSig, authTs: authData.authTs }),
 
-  // ═══ AUTO-REGISTER ═══
+  // ═══ AUTO-REGISTER (показ модала регистрации после подключения) ═══
   showAutoRegister: false,
   pendingRefId: null,
   setAutoRegister: (refId) => set({ showAutoRegister: true, pendingRefId: refId }),
@@ -136,6 +137,9 @@ const useGameStore = create(
     })
   },
 
+  // ═══ dc_admins: установить из API ═══
+  setAdminStatus: (v) => set({ isAdmin: v }),
+
   // ═══════════════════════════════════════════════════
   // TX STATE
   // ═══════════════════════════════════════════════════
@@ -145,47 +149,14 @@ const useGameStore = create(
   clearError: () => set({ lastError: null }),
 
   // ═══════════════════════════════════════════════════
-  // GAME ACTIONS
+  // GAME ACTIONS (тапалка — СБАЛАНСИРОВАННАЯ)
   // ═══════════════════════════════════════════════════
   setTab: (tab) => set({ activeTab: tab }),
   toggleDayMode: () => set(s => ({ dayMode: !s.dayMode })),
 
-  /**
-   * decrementEnergy — уменьшить энергию на 1 для визуального отклика.
-   * Используется ТОЛЬКО для зарегистрированных перед отправкой на сервер.
-   * Реальное значение придёт в ответе сервера.
-   * Возвращает false если энергия = 0 (тапать нельзя).
-   */
-  decrementEnergy: () => {
-    const { energy } = get()
-    if (energy <= 0) return false
-    set({ energy: energy - 1 })
-    return true
-  },
-
-  /**
-   * syncFromServer — обновить ВСЁ из ответа сервера.
-   * Это единственный источник правды для зарегистрированных.
-   * Вызывается из: ответа serverTap(), loadTapState(), 30-сек refresh.
-   */
-  syncFromServer: (data) => {
-    const updates = {}
-    if (data.energy != null) updates.energy = data.energy
-    if (data.maxEnergy != null) updates.maxEnergy = data.maxEnergy
-    if (data.totalNss != null) updates.localNss = data.totalNss
-    if (data.totalTaps != null) updates.taps = data.totalTaps
-    // level НЕ берём из tap API — он приходит ТОЛЬКО из блокчейна (gwStatus.maxPackage)
-    if (Object.keys(updates).length > 0) set(updates)
-  },
-
-  /**
-   * doTap — ТОЛЬКО для незарегистрированных (локальный тап).
-   * Для зарегистрированных НЕ используется.
-   */
   doTap: () => {
     const { energy, level, localNss, taps, registered, wallet, evapActive } = get()
     if (energy <= 0) return null
-    if (registered || wallet) return null  // Зарегистрированные — только через сервер
     const lv = LEVELS[level]
     const earned = lv.nssPerTap
     set({
@@ -193,7 +164,7 @@ const useGameStore = create(
       energy: energy - 1,
       taps: taps + 1,
     })
-    if (!evapActive && taps === 0) set({ evapActive: true })
+    if (!registered && !wallet && !evapActive && taps === 0) set({ evapActive: true })
     return earned
   },
 
@@ -231,18 +202,29 @@ const useGameStore = create(
   addQuest: (quest) => set(s => ({ quests: [...s.quests, quest] })),
   removeQuest: (i) => set(s => ({ quests: s.quests.filter((_, idx) => idx !== i) })),
   setLevel: (lv) => set({ level: lv }),
+
+  // ═══ Серверная синхронизация тапов ═══
+  syncServerTaps: (data) => set({
+    energy: data.energy ?? get().energy,
+    maxEnergy: data.maxEnergy ?? get().maxEnergy,
+    localNss: data.localNss ?? get().localNss,
+    taps: data.taps ?? get().taps,
+  }),
 }),
     {
       name: 'dc-storage-v3',
       partialize: (state) => ({
         lang: state.lang,
         ownerWallet: state.ownerWallet,
+        // Кошелёк и регистрация — нужны для восстановления сессии
         wallet: state.wallet,
         registered: state.registered,
         sponsorId: state.sponsorId,
+        // FIX: authSig + authTs СОХРАНЯЕМ — чтобы не спрашивать подпись каждый раз
+        // Подпись живёт 24 часа (проверяется сервером), реально обновляем каждые 12ч
         authSig: state.authSig,
         authTs: state.authTs,
-        level: state.level,  // Сохраняем уровень — чтобы не моргал при перезагрузке
+        level: state.level,  // Сохраняем уровень — не моргает при перезагрузке
       }),
       version: 3,
       migrate: (persisted, version) => ({
@@ -251,7 +233,6 @@ const useGameStore = create(
         registered: persisted.registered ?? false,
         authSig: persisted.authSig ?? null,
         authTs: persisted.authTs ?? null,
-        level: persisted.level ?? 0,
       }),
     }
   )
