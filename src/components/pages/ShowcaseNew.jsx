@@ -20,6 +20,7 @@ import { getAdminRole } from '@/lib/dcOrders'
 import { formatUSD } from '@/lib/gemCatalog'
 import { uploadShowcaseFile, compressImage, deleteShowcaseFile } from '@/lib/showcaseStorage'
 import { authFetch } from '@/lib/authClient'
+import SellPartnerButton from '@/components/pages/SellPartnerButton'
 
 const CATEGORIES = [
   { id: 'all',     label: 'Все' },
