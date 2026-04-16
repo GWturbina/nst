@@ -1,9 +1,13 @@
 /**
  * API Route: /api/admin
  * FIX #5: Серверный API для админских операций
- * 
+ *
  * Все операции требуют adminWallet + проверку через dc_admins (service_role)
- * 
+ *
+ * ИЗМЕНЕНИЯ (Пакет 3):
+ *   • TTL подписи для всех admin-действий = 5 минут (300 сек)
+ *     — критические операции требуют свежую подпись
+ *
  * PATCH /api/admin — действия:
  *   link_blockchain — привязать gem_id/purchase_id к заказу
  *   link_lot        — привязать lot_id к заказу
@@ -16,14 +20,14 @@ import { NextResponse } from 'next/server'
 import { verifyWallet } from '@/lib/authHelper'
 import { checkOrigin } from '@/lib/checkOrigin'
 
+const ADMIN_TTL_SEC = 300 // 5 минут для админских действий
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY
 
 const supabase = supabaseUrl && supabaseServiceKey
   ? createClient(supabaseUrl, supabaseServiceKey)
   : null
-
-// ═══ Проверка Origin ═══
 
 // ═══ GET: Проверка админа ═══
 export async function GET(request) {
@@ -64,10 +68,10 @@ export async function PATCH(request) {
     const body = await request.json()
     const { action, adminWallet } = body
 
-    // FIX #7: Проверка подписи кошелька
-    const verified = await verifyWallet(body, 'adminWallet')
+    // FIX #7 (Пакет 3): Подпись админа — TTL 5 минут
+    const verified = await verifyWallet(body, 'adminWallet', ADMIN_TTL_SEC)
     if (!verified) {
-      return NextResponse.json({ ok: false, error: 'Неверная подпись кошелька' }, { status: 401 })
+      return NextResponse.json({ ok: false, error: 'Неверная подпись или срок истёк (5 мин). Переподпишите кошелёк.' }, { status: 401 })
     }
 
     // Валидация админа
