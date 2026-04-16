@@ -1,14 +1,20 @@
 /**
  * API Route: /api/lots
- * 
+ *
  * GET    — список лотов (публичный)
- * POST   — создать лот (только админ)
- * PATCH  — обновить лот (резерв, статус, подарок, запись покупки)
+ * POST   — создать лот (только админ, TTL 5 мин)
+ * PATCH  — record_purchase (юзер, TTL 1 час), reserve/gift/set_winner/cancel/link_contract (админ, TTL 5 мин)
+ *
+ * ИЗМЕНЕНИЯ (Пакет 3):
+ *   • Все админские действия требуют TTL подписи 5 минут
+ *   • record_purchase (пользовательская покупка) — дефолт 1 час
  */
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { verifyWallet } from '@/lib/authHelper'
 import { checkOrigin } from '@/lib/checkOrigin'
+
+const ADMIN_TTL_SEC = 300 // 5 минут для админских действий
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY
@@ -48,7 +54,7 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status') || 'all'
     const wallet = searchParams.get('wallet')
-    const detail = searchParams.get('detail') // 'purchases' — подробные данные о покупках
+    const detail = searchParams.get('detail')
     const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 200)
 
     let query = supabase
@@ -62,14 +68,12 @@ export async function GET(request) {
     const { data: lots, error } = await query
     if (error) throw error
 
-    // Если запросили для конкретного кошелька — достать его доли
     let myShares = {}
     let myPurchases = []
 
     if (wallet && /^0x[a-fA-F0-9]{40}$/.test(wallet)) {
       const walletLower = wallet.toLowerCase()
 
-      // Базовые данные — суммарные доли на лот
       const { data: shares } = await supabase
         .from('dc_lot_shares')
         .select('lot_id, shares_count')
@@ -82,7 +86,6 @@ export async function GET(request) {
         }
       }
 
-      // ═══ Подробные данные о каждой покупке (для раздела "Мои покупки") ═══
       if (detail === 'purchases') {
         const { data: purchaseRecords } = await supabase
           .from('dc_lot_shares')
@@ -98,7 +101,6 @@ export async function GET(request) {
           myPurchases = purchaseRecords.map(p => {
             const lot = lotsMap[p.lot_id]
             return {
-              // Данные покупки
               purchaseId: p.id,
               lotId: p.lot_id,
               sharesCount: p.shares_count,
@@ -107,7 +109,6 @@ export async function GET(request) {
               isGift: p.is_gift,
               confirmed: p.confirmed,
               purchaseDate: p.created_at,
-              // Данные лота
               lotTitle: lot?.title || `Лот #${p.lot_id}`,
               lotStatus: lot?.status || 'unknown',
               gemType: lot?.gem_type,
@@ -121,7 +122,6 @@ export async function GET(request) {
               soldShares: lot?.sold_shares || 0,
               winnerWallet: lot?.winner_wallet,
               unlockAt: lot?.unlock_at,
-              // Доля владения
               ownershipPct: lot?.total_shares
                 ? +(p.shares_count / lot.total_shares * 100).toFixed(2)
                 : 0,
@@ -140,15 +140,16 @@ export async function GET(request) {
   }
 }
 
-// ═══ POST: Создать лот (только админ) ═══
+// ═══ POST: Создать лот (только админ, TTL 5 мин) ═══
 export async function POST(request) {
   if (!supabase) return NextResponse.json({ ok: false, error: 'Сервер не настроен' }, { status: 503 })
   if (!checkOrigin(request)) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 })
 
   try {
     const body = await request.json()
-    const verified = await verifyWallet(body, 'adminWallet')
-    if (!verified) return NextResponse.json({ ok: false, error: 'Неверная подпись' }, { status: 401 })
+    // Пакет 3: TTL 5 минут
+    const verified = await verifyWallet(body, 'adminWallet', ADMIN_TTL_SEC)
+    if (!verified) return NextResponse.json({ ok: false, error: 'Неверная подпись или срок истёк (5 мин)' }, { status: 401 })
 
     const { adminWallet, title, description, photoUrl, gemType, shape, clarity, color,
       carats, hasCert, gemCost, sharePrice, minGwLevel, lockDays, adminCommit } = body
@@ -157,7 +158,6 @@ export async function POST(request) {
       return NextResponse.json({ ok: false, error: 'Нет прав' }, { status: 403 })
     }
 
-    // Валидация
     const gc = num(gemCost, 10, 10000000)
     const sp = num(sharePrice)
     if (![25, 50, 100].includes(sp)) {
@@ -165,7 +165,7 @@ export async function POST(request) {
     }
     if (!title) return NextResponse.json({ ok: false, error: 'Укажите название' }, { status: 400 })
 
-    const lotPrice = Math.round(gc * 100 / 80 * 100) / 100 // gemCost * 1.25
+    const lotPrice = Math.round(gc * 100 / 80 * 100) / 100
     const totalShares = Math.floor(lotPrice / sp)
     if (totalShares < 2) return NextResponse.json({ ok: false, error: 'Мало долей (мин. 2)' }, { status: 400 })
 
@@ -211,7 +211,7 @@ export async function PATCH(request) {
     const body = await request.json()
     const { action } = body
 
-    // ═══ RECORD_PURCHASE — записать покупку в Supabase (после блокчейн-транзакции) ═══
+    // ═══ RECORD_PURCHASE — пользователь записывает свою покупку (TTL 1 час) ═══
     if (action === 'record_purchase') {
       const verified = await verifyWallet(body)
       if (!verified) return NextResponse.json({ ok: false, error: 'Неверная подпись' }, { status: 401 })
@@ -219,12 +219,11 @@ export async function PATCH(request) {
       const { wallet, lotId, sharesCount, usdtAmount, txHash } = body
       if (!lotId || !sharesCount) return NextResponse.json({ ok: false, error: 'Нет данных' }, { status: 400 })
 
-      // FIX #4: Валидация txHash (должен быть 66-символьный hex)
       if (!txHash || !/^0x[a-fA-F0-9]{64}$/.test(txHash)) {
         return NextResponse.json({ ok: false, error: 'Неверный txHash' }, { status: 400 })
       }
 
-      // FIX #4: Проверка на дубликат txHash (защита от повторной отправки)
+      // Защита от дубликатов
       const { data: existing } = await supabase
         .from('dc_lot_shares')
         .select('id')
@@ -237,7 +236,6 @@ export async function PATCH(request) {
       const wLower = wallet.toLowerCase()
       const cnt = Math.max(1, Math.min(100, parseInt(sharesCount) || 1))
 
-      // FIX #3: Проверяем лот и считаем доступные доли ДО записи
       const { data: lot } = await supabase.from('dc_lots').select('sold_shares, total_shares, reserved_shares, status').eq('id', lotId).single()
       if (!lot || lot.status !== 'active') {
         return NextResponse.json({ ok: false, error: 'Лот не активен' }, { status: 400 })
@@ -247,7 +245,6 @@ export async function PATCH(request) {
         return NextResponse.json({ ok: false, error: `Доступно только ${available} долей` }, { status: 400 })
       }
 
-      // Записать долю
       const { error: shareErr } = await supabase
         .from('dc_lot_shares')
         .insert({
@@ -259,23 +256,22 @@ export async function PATCH(request) {
         })
       if (shareErr) return NextResponse.json({ ok: false, error: 'Ошибка записи' }, { status: 500 })
 
-      // FIX #3: Атомарный инкремент через SQL (избегает race condition)
       const newSold = lot.sold_shares + cnt
       const newReserved = Math.max(0, (lot.reserved_shares || 0) - cnt)
       const updates = { sold_shares: newSold, reserved_shares: newReserved }
       if (newSold >= lot.total_shares) {
         updates.status = 'filled'
       }
-      await supabase.from('dc_lots').update(updates).eq('id', lotId).eq('sold_shares', lot.sold_shares) // optimistic lock
+      await supabase.from('dc_lots').update(updates).eq('id', lotId).eq('sold_shares', lot.sold_shares)
 
       await addLog(lotId, 'SHARE_BOUGHT', wLower, `${cnt} доля(ей) — $${num(usdtAmount)} tx:${clean(txHash).slice(0,10)}`)
       return NextResponse.json({ ok: true })
     }
 
-    // ═══ RESERVE — зарезервировать доли (админ, стартовый толчок) ═══
+    // ═══ RESERVE — админ резервирует (TTL 5 мин) ═══
     if (action === 'reserve') {
-      const verified = await verifyWallet(body, 'adminWallet')
-      if (!verified) return NextResponse.json({ ok: false, error: 'Неверная подпись' }, { status: 401 })
+      const verified = await verifyWallet(body, 'adminWallet', ADMIN_TTL_SEC)
+      if (!verified) return NextResponse.json({ ok: false, error: 'Неверная подпись или срок истёк (5 мин)' }, { status: 401 })
 
       const { adminWallet, lotId, count } = body
       if (!(await isAdmin(adminWallet))) return NextResponse.json({ ok: false, error: 'Нет прав' }, { status: 403 })
@@ -290,7 +286,6 @@ export async function PATCH(request) {
 
       await supabase.from('dc_lots').update({ reserved_shares: lot.reserved_shares + cnt }).eq('id', lotId)
 
-      // Записать как зарезервированную (без оплаты)
       await supabase.from('dc_lot_shares').insert({
         lot_id: lotId,
         wallet: adminWallet.toLowerCase(),
@@ -303,10 +298,10 @@ export async function PATCH(request) {
       return NextResponse.json({ ok: true })
     }
 
-    // ═══ GIFT — подарить зарезервированную долю (админ) ═══
+    // ═══ GIFT — админ дарит (TTL 5 мин) ═══
     if (action === 'gift') {
-      const verified = await verifyWallet(body, 'adminWallet')
-      if (!verified) return NextResponse.json({ ok: false, error: 'Неверная подпись' }, { status: 401 })
+      const verified = await verifyWallet(body, 'adminWallet', ADMIN_TTL_SEC)
+      if (!verified) return NextResponse.json({ ok: false, error: 'Неверная подпись или срок истёк (5 мин)' }, { status: 401 })
 
       const { adminWallet, lotId, recipientWallet, count } = body
       if (!(await isAdmin(adminWallet))) return NextResponse.json({ ok: false, error: 'Нет прав' }, { status: 403 })
@@ -317,7 +312,6 @@ export async function PATCH(request) {
       const cnt = Math.max(1, Math.min(10, parseInt(count) || 1))
       const rLower = recipientWallet.toLowerCase()
 
-      // Записать подарок
       const { data: lot } = await supabase.from('dc_lots').select('share_price').eq('id', lotId).single()
       await supabase.from('dc_lot_shares').insert({
         lot_id: lotId,
@@ -327,7 +321,6 @@ export async function PATCH(request) {
         is_gift: true,
       })
 
-      // FIX #8: Обновить счётчики: sold +cnt, reserved -cnt (надёжно)
       const { data: lotState } = await supabase.from('dc_lots').select('sold_shares, reserved_shares, total_shares').eq('id', lotId).single()
       if (lotState) {
         const newSold = lotState.sold_shares + cnt
@@ -343,10 +336,10 @@ export async function PATCH(request) {
       return NextResponse.json({ ok: true })
     }
 
-    // ═══ SET_WINNER — записать победителя (после revealWinner на контракте) ═══
+    // ═══ SET_WINNER — админ назначает победителя (TTL 5 мин) ═══
     if (action === 'set_winner') {
-      const verified = await verifyWallet(body, 'adminWallet')
-      if (!verified) return NextResponse.json({ ok: false, error: 'Неверная подпись' }, { status: 401 })
+      const verified = await verifyWallet(body, 'adminWallet', ADMIN_TTL_SEC)
+      if (!verified) return NextResponse.json({ ok: false, error: 'Неверная подпись или срок истёк (5 мин)' }, { status: 401 })
 
       const { adminWallet, lotId, winnerWallet } = body
       if (!(await isAdmin(adminWallet))) return NextResponse.json({ ok: false, error: 'Нет прав' }, { status: 403 })
@@ -367,10 +360,10 @@ export async function PATCH(request) {
       return NextResponse.json({ ok: true })
     }
 
-    // ═══ CANCEL — отменить лот ═══
+    // ═══ CANCEL — админ отменяет (TTL 5 мин) ═══
     if (action === 'cancel') {
-      const verified = await verifyWallet(body, 'adminWallet')
-      if (!verified) return NextResponse.json({ ok: false, error: 'Неверная подпись' }, { status: 401 })
+      const verified = await verifyWallet(body, 'adminWallet', ADMIN_TTL_SEC)
+      if (!verified) return NextResponse.json({ ok: false, error: 'Неверная подпись или срок истёк (5 мин)' }, { status: 401 })
 
       const { adminWallet, lotId } = body
       if (!(await isAdmin(adminWallet))) return NextResponse.json({ ok: false, error: 'Нет прав' }, { status: 403 })
@@ -380,10 +373,10 @@ export async function PATCH(request) {
       return NextResponse.json({ ok: true })
     }
 
-    // ═══ LINK_CONTRACT — привязать блокчейн-лот к Supabase-записи ═══
+    // ═══ LINK_CONTRACT — админ привязывает контракт (TTL 5 мин) ═══
     if (action === 'link_contract') {
-      const verified = await verifyWallet(body, 'adminWallet')
-      if (!verified) return NextResponse.json({ ok: false, error: 'Неверная подпись' }, { status: 401 })
+      const verified = await verifyWallet(body, 'adminWallet', ADMIN_TTL_SEC)
+      if (!verified) return NextResponse.json({ ok: false, error: 'Неверная подпись или срок истёк (5 мин)' }, { status: 401 })
 
       const { adminWallet, lotId, contractLotId, contractTxHash } = body
       if (!(await isAdmin(adminWallet))) return NextResponse.json({ ok: false, error: 'Нет прав' }, { status: 403 })
@@ -392,7 +385,6 @@ export async function PATCH(request) {
         return NextResponse.json({ ok: false, error: 'Не указан ID лота в контракте' }, { status: 400 })
       }
 
-      // Проверка: не привязан ли уже другой лот с таким contract_lot_id
       const { data: existing } = await supabase
         .from('dc_lots')
         .select('id')
