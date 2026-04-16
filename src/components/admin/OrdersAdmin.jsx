@@ -1,7 +1,12 @@
 'use client'
 /**
  * OrdersAdmin — Управление заказами Diamond Club
- * Импортируется в AdminPanel как отдельная секция
+ *
+ * Теперь показывает два типа заказов:
+ *   - Заказы камней (order_type = 'stone', старая логика)
+ *   - Заявки с витрины (order_type = 'showcase_request', новое)
+ *
+ * Отдельная вкладка-переключатель в шапке.
  */
 import { useState, useEffect, useCallback } from 'react'
 import useGameStore from '@/lib/store'
@@ -17,6 +22,7 @@ export default function OrdersAdmin() {
   const [counts, setCounts] = useState({})
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState(null) // null = все
+  const [typeFilter, setTypeFilter] = useState('all') // 'all' | 'stone' | 'showcase_request'
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [orderLog, setOrderLog] = useState([])
   const [noteText, setNoteText] = useState('')
@@ -44,7 +50,7 @@ export default function OrdersAdmin() {
     setTxPending(true)
     const result = await Orders.updateOrderStatus(orderId, newStatus, wallet, note)
     setTxPending(false)
-    if (result.ok) { addNotification(`✅ Заказ #${orderId} → ${Orders.STATUS_LABELS[newStatus]}`); reload(); if (selectedOrder?.id === orderId) loadLog(orderId) }
+    if (result.ok) { addNotification(`✅ Заказ #${orderId} → ${Orders.STATUS_LABELS[newStatus] || newStatus}`); reload(); if (selectedOrder?.id === orderId) loadLog(orderId) }
     else addNotification(`❌ ${result.error}`)
   }
 
@@ -57,6 +63,8 @@ export default function OrdersAdmin() {
 
   const FILTERS = [
     { id: null, label: 'Все', count: Object.values(counts).reduce((s,v)=>s+v, 0) },
+    { id: 'NEW', label: '🆕 Новые', count: counts.NEW || 0 },
+    { id: 'CONTACTED', label: '📞 Связались', count: counts.CONTACTED || 0 },
     { id: 'PAID', label: '💰 Оплачен', count: counts.PAID || 0 },
     { id: 'APPROVED', label: '✅ Утверждён', count: counts.APPROVED || 0 },
     { id: 'PRODUCTION', label: '🏭 Производство', count: counts.PRODUCTION || 0 },
@@ -64,6 +72,16 @@ export default function OrdersAdmin() {
     { id: 'COMPLETED', label: '🎉 Выдан', count: counts.COMPLETED || 0 },
     { id: 'CANCELLED', label: '❌ Отменён', count: counts.CANCELLED || 0 },
   ]
+
+  // Считаем по типу (для таба)
+  const shownOrders = orders.filter(o => {
+    if (typeFilter === 'all') return true
+    const t = o.order_type || 'stone'
+    return t === typeFilter
+  })
+
+  const stoneCount = orders.filter(o => (o.order_type || 'stone') === 'stone').length
+  const showcaseCount = orders.filter(o => o.order_type === 'showcase_request').length
 
   if (loading) return <div className="px-3 mt-2 text-center py-8"><div className="text-2xl animate-spin">💎</div></div>
 
@@ -78,7 +96,23 @@ export default function OrdersAdmin() {
         </span>
       </div>
 
-      {/* Фильтры */}
+      {/* Переключатель типов: камни / заявки с витрины */}
+      <div className="flex gap-1">
+        {[
+          { id: 'all', label: `📋 Все (${orders.length})` },
+          { id: 'stone', label: `💎 Камни (${stoneCount})` },
+          { id: 'showcase_request', label: `🏪 Витрина (${showcaseCount})` },
+        ].map(t => (
+          <button key={t.id} onClick={() => setTypeFilter(t.id)}
+            className={`flex-1 py-1.5 rounded-lg text-[9px] font-bold border transition-all ${
+              typeFilter === t.id ? 'bg-gold-400/15 border-gold-400/30 text-gold-400' : 'border-white/8 text-slate-500'
+            }`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Фильтры по статусу */}
       <div className="flex gap-1 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
         {FILTERS.map(f => (
           <button key={f.id || 'all'} onClick={() => setFilter(f.id)}
@@ -91,34 +125,46 @@ export default function OrdersAdmin() {
       </div>
 
       {/* Список заказов */}
-      {orders.length === 0 ? (
+      {shownOrders.length === 0 ? (
         <div className="p-6 rounded-2xl glass text-center">
           <div className="text-3xl mb-2">📋</div>
           <div className="text-[12px] text-slate-400">Нет заказов</div>
         </div>
       ) : (
         <div className="space-y-1.5">
-          {orders.map(o => (
-            <div key={o.id} className="p-3 rounded-xl glass cursor-pointer active:scale-[0.98] transition-transform"
-              onClick={() => { setSelectedOrder(o); loadLog(o.id) }}>
-              <div className="flex items-center justify-between mb-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-[13px] font-black text-white">#{o.id}</span>
-                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${Orders.STATUS_COLORS[o.status]} bg-white/5`}>
-                    {Orders.STATUS_LABELS[o.status]}
-                  </span>
+          {shownOrders.map(o => {
+            const isShowcase = o.order_type === 'showcase_request'
+            return (
+              <div key={o.id} className={`p-3 rounded-xl glass cursor-pointer active:scale-[0.98] transition-transform ${isShowcase ? 'border border-purple-500/20' : ''}`}
+                onClick={() => { setSelectedOrder(o); loadLog(o.id) }}>
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[13px] font-black text-white">#{o.id}</span>
+                    {isShowcase && <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-400">🏪 Витрина</span>}
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${Orders.STATUS_COLORS[o.status] || 'text-slate-400'} bg-white/5`}>
+                      {Orders.STATUS_LABELS[o.status] || o.status}
+                    </span>
+                  </div>
+                  <div className="text-[12px] font-black text-gold-400">${parseFloat(o.club_price || 0).toFixed(0)}</div>
                 </div>
-                <div className="text-[12px] font-black text-gold-400">${parseFloat(o.club_price).toFixed(0)}</div>
+                <div className="flex items-center justify-between text-[9px] text-slate-500">
+                  <span>
+                    👤 {shortAddress(o.wallet)}
+                    {isShowcase
+                      ? ` • ${o.spec_string || 'заявка с витрины'}`
+                      : ` • ${o.carats}ct ${o.shape || ''} ${o.quality_tier === 'premium' ? '👑' : ''} ${o.has_cert ? '✅серт' : ''}`}
+                  </span>
+                  <span>{new Date(o.created_at).toLocaleDateString()}</span>
+                </div>
+                {o.is_fraction && (
+                  <div className="text-[9px] text-purple-400 mt-0.5">🧩 Доля: {o.fraction_count}/{o.total_fractions}</div>
+                )}
+                {isShowcase && o.buyer_note && (
+                  <div className="text-[9px] text-slate-400 mt-1 italic truncate">💬 {o.buyer_note}</div>
+                )}
               </div>
-              <div className="flex items-center justify-between text-[9px] text-slate-500">
-                <span>👤 {shortAddress(o.wallet)} • {o.carats}ct {o.shape} {o.quality_tier==='premium'?'👑':''} {o.has_cert ? '✅серт' : ''}</span>
-                <span>{new Date(o.created_at).toLocaleDateString()}</span>
-              </div>
-              {o.is_fraction && (
-                <div className="text-[9px] text-purple-400 mt-0.5">🧩 Доля: {o.fraction_count}/{o.total_fractions}</div>
-              )}
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
 
@@ -133,65 +179,98 @@ export default function OrdersAdmin() {
             <div className="flex items-center justify-between px-4 py-3 border-b border-white/8 sticky top-0"
               style={{ background: '#1a1a3e' }}>
               <div>
-                <div className="text-[14px] font-black text-white">Заказ #{selectedOrder.id}</div>
-                <div className={`text-[10px] font-bold ${Orders.STATUS_COLORS[selectedOrder.status]}`}>
-                  {Orders.STATUS_LABELS[selectedOrder.status]}
+                <div className="text-[14px] font-black text-white flex items-center gap-2">
+                  Заказ #{selectedOrder.id}
+                  {selectedOrder.order_type === 'showcase_request' && (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-400">🏪 Витрина</span>
+                  )}
+                </div>
+                <div className={`text-[10px] font-bold ${Orders.STATUS_COLORS[selectedOrder.status] || 'text-slate-400'}`}>
+                  {Orders.STATUS_LABELS[selectedOrder.status] || selectedOrder.status}
                 </div>
               </div>
               <button onClick={() => setSelectedOrder(null)} className="text-slate-500 text-lg">✕</button>
             </div>
 
             <div className="p-4 space-y-3">
-              {/* Партнёр */}
+              {/* Покупатель */}
               <div className="p-2.5 rounded-xl bg-white/5">
-                <div className="text-[10px] text-slate-500 mb-1">Партнёр</div>
-                <div className="text-[11px] font-mono text-white">{selectedOrder.wallet}</div>
+                <div className="text-[10px] text-slate-500 mb-1">{selectedOrder.order_type === 'showcase_request' ? 'Покупатель' : 'Партнёр'}</div>
+                <div className="text-[11px] font-mono text-white break-all">{selectedOrder.wallet}</div>
               </div>
 
-              {/* Параметры камня */}
-              <div className="p-2.5 rounded-xl bg-white/5">
-                <div className="text-[10px] text-slate-500 mb-1">Камень</div>
-                <div className="grid grid-cols-2 gap-1 text-[10px]">
-                  <div>Тип: <span className="text-white font-bold">{selectedOrder.gem_type === 'white' ? 'Белый' : 'Цветной'}</span></div>
-                  <div>Форма: <span className="text-white font-bold">{selectedOrder.shape}</span></div>
-                  <div>Чистота: <span className="text-white font-bold">{selectedOrder.clarity}</span></div>
-                  <div>Караты: <span className="text-white font-bold">{selectedOrder.carats}ct</span></div>
-                  {selectedOrder.color && <div>Цвет: <span className="text-white font-bold">{selectedOrder.color}</span></div>}
-                  {selectedOrder.fancy_color && <div>Цвет: <span className="text-white font-bold">{selectedOrder.fancy_color}</span></div>}
-                  {selectedOrder.intensity && <div>Насыщенность: <span className="text-white font-bold">{selectedOrder.intensity}</span></div>}
-                  <div>Сертификат: <span className="text-white font-bold">{selectedOrder.has_cert ? '✅ Да' : '❌ Нет'}</span></div>
-                  <div>Уровень: <span className={`font-bold ${selectedOrder.quality_tier==='premium'?'text-gold-400':'text-blue-400'}`}>
-                    {selectedOrder.quality_tier==='premium'?'👑 Высшая':'💎 Средняя'}</span></div>
-                  <div>Регион: <span className="text-white font-bold">{selectedOrder.region}</span></div>
-                  <div>Режим: <span className="text-white font-bold">{selectedOrder.buy_mode === 0 ? '📦 Покупка' : '⏳ Стейкинг'}</span></div>
-                </div>
-              </div>
+              {/* Ветка для заявки с витрины */}
+              {selectedOrder.order_type === 'showcase_request' ? (
+                <>
+                  {selectedOrder.showcase_item_id && (
+                    <div className="p-2.5 rounded-xl bg-purple-500/8 border border-purple-500/15">
+                      <div className="text-[10px] text-purple-400 font-bold mb-1">🏪 Товар с витрины</div>
+                      <div className="text-[11px] text-white font-bold">{selectedOrder.spec_string}</div>
+                      <div className="text-[9px] text-slate-400 mt-0.5">
+                        ID товара: <span className="font-mono">#{selectedOrder.showcase_item_id}</span>
+                        {selectedOrder.carats > 0 && ` • ${selectedOrder.carats}ct`}
+                        {selectedOrder.shape && ` • ${selectedOrder.shape}`}
+                      </div>
+                    </div>
+                  )}
+                  {selectedOrder.buyer_note && (
+                    <div className="p-2.5 rounded-xl bg-white/5 border border-white/10">
+                      <div className="text-[10px] text-slate-500 mb-1">💬 Сообщение от покупателя</div>
+                      <div className="text-[11px] text-white">{selectedOrder.buyer_note}</div>
+                    </div>
+                  )}
+                  <div className="p-2.5 rounded-xl bg-gold-400/8 border border-gold-400/20 text-center">
+                    <div className="text-[9px] text-slate-400">Клубная цена</div>
+                    <div className="text-[18px] font-black text-gold-400">${parseFloat(selectedOrder.club_price || 0).toFixed(0)}</div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Параметры камня (стандартный заказ) */}
+                  <div className="p-2.5 rounded-xl bg-white/5">
+                    <div className="text-[10px] text-slate-500 mb-1">Камень</div>
+                    <div className="grid grid-cols-2 gap-1 text-[10px]">
+                      <div>Тип: <span className="text-white font-bold">{selectedOrder.gem_type === 'white' ? 'Белый' : 'Цветной'}</span></div>
+                      <div>Форма: <span className="text-white font-bold">{selectedOrder.shape}</span></div>
+                      <div>Чистота: <span className="text-white font-bold">{selectedOrder.clarity}</span></div>
+                      <div>Караты: <span className="text-white font-bold">{selectedOrder.carats}ct</span></div>
+                      {selectedOrder.color && <div>Цвет: <span className="text-white font-bold">{selectedOrder.color}</span></div>}
+                      {selectedOrder.fancy_color && <div>Цвет: <span className="text-white font-bold">{selectedOrder.fancy_color}</span></div>}
+                      {selectedOrder.intensity && <div>Насыщенность: <span className="text-white font-bold">{selectedOrder.intensity}</span></div>}
+                      <div>Сертификат: <span className="text-white font-bold">{selectedOrder.has_cert ? '✅ Да' : '❌ Нет'}</span></div>
+                      <div>Уровень: <span className={`font-bold ${selectedOrder.quality_tier==='premium'?'text-gold-400':'text-blue-400'}`}>
+                        {selectedOrder.quality_tier==='premium'?'👑 Высшая':'💎 Средняя'}</span></div>
+                      <div>Регион: <span className="text-white font-bold">{selectedOrder.region}</span></div>
+                      <div>Режим: <span className="text-white font-bold">{selectedOrder.buy_mode === 0 ? '📦 Покупка' : '⏳ Стейкинг'}</span></div>
+                    </div>
+                  </div>
 
-              {/* Цена */}
-              <div className="grid grid-cols-3 gap-2">
-                <div className="p-2 rounded-xl bg-white/5 text-center">
-                  <div className="text-[10px] font-bold text-slate-400 line-through">${parseFloat(selectedOrder.retail_price).toFixed(0)}</div>
-                  <div className="text-[8px] text-slate-500">Розница</div>
-                </div>
-                <div className="p-2 rounded-xl bg-gold-400/8 border border-gold-400/15 text-center">
-                  <div className="text-[13px] font-black text-gold-400">${parseFloat(selectedOrder.club_price).toFixed(0)}</div>
-                  <div className="text-[8px] text-gold-400/60">Клубная</div>
-                </div>
-                <div className="p-2 rounded-xl bg-emerald-500/8 text-center">
-                  <div className="text-[10px] font-bold text-emerald-400">−${parseFloat(selectedOrder.savings).toFixed(0)}</div>
-                  <div className="text-[8px] text-slate-500">−{selectedOrder.discount_pct}%</div>
-                </div>
-              </div>
+                  {/* Цена */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="p-2 rounded-xl bg-white/5 text-center">
+                      <div className="text-[10px] font-bold text-slate-400 line-through">${parseFloat(selectedOrder.retail_price).toFixed(0)}</div>
+                      <div className="text-[8px] text-slate-500">Розница</div>
+                    </div>
+                    <div className="p-2 rounded-xl bg-gold-400/8 border border-gold-400/15 text-center">
+                      <div className="text-[13px] font-black text-gold-400">${parseFloat(selectedOrder.club_price).toFixed(0)}</div>
+                      <div className="text-[8px] text-gold-400/60">Клубная</div>
+                    </div>
+                    <div className="p-2 rounded-xl bg-emerald-500/8 text-center">
+                      <div className="text-[10px] font-bold text-emerald-400">−${parseFloat(selectedOrder.savings).toFixed(0)}</div>
+                      <div className="text-[8px] text-slate-500">−{selectedOrder.discount_pct}%</div>
+                    </div>
+                  </div>
 
-              {/* Доли */}
-              {selectedOrder.is_fraction && (
-                <div className="p-2.5 rounded-xl bg-purple-500/8 border border-purple-500/15">
-                  <div className="text-[10px] text-purple-400 font-bold">🧩 Долевая покупка</div>
-                  <div className="text-[10px] text-slate-400">Долей: {selectedOrder.fraction_count} из {selectedOrder.total_fractions}</div>
-                </div>
+                  {selectedOrder.is_fraction && (
+                    <div className="p-2.5 rounded-xl bg-purple-500/8 border border-purple-500/15">
+                      <div className="text-[10px] text-purple-400 font-bold">🧩 Долевая покупка</div>
+                      <div className="text-[10px] text-slate-400">Долей: {selectedOrder.fraction_count} из {selectedOrder.total_fractions}</div>
+                    </div>
+                  )}
+                </>
               )}
 
-              {/* Заметка */}
+              {/* Заметка админа */}
               {selectedOrder.admin_note && (
                 <div className="p-2.5 rounded-xl bg-blue-500/8 border border-blue-500/15">
                   <div className="text-[9px] text-blue-400 font-bold mb-1">💬 Заметка админа</div>
@@ -211,16 +290,16 @@ export default function OrdersAdmin() {
                           ns === 'CANCELLED' ? 'bg-red-500/15 text-red-400 border-red-500/20' :
                           ns === 'APPROVED' ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20' :
                           ns === 'COMPLETED' ? 'bg-gold-400/15 text-gold-400 border-gold-400/20' :
+                          ns === 'CONTACTED' ? 'bg-blue-500/15 text-blue-400 border-blue-500/20' :
                           'bg-blue-500/15 text-blue-400 border-blue-500/20'
                         }`}>
-                        {txPending ? '⏳' : Orders.STATUS_LABELS[ns]}
+                        {txPending ? '⏳' : (Orders.STATUS_LABELS[ns] || ns)}
                       </button>
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* Добавить заметку */}
               {adminRole && (
                 <div>
                   <div className="text-[10px] text-slate-500 font-bold mb-1">Добавить заметку:</div>
@@ -234,7 +313,6 @@ export default function OrdersAdmin() {
                 </div>
               )}
 
-              {/* Лог действий */}
               {orderLog.length > 0 && (
                 <div>
                   <div className="text-[10px] text-slate-500 font-bold mb-1">История:</div>
@@ -257,7 +335,7 @@ export default function OrdersAdmin() {
 }
 
 // ═══════════════════════════════════════════════════
-// STAFF ADMIN — Управление сотрудниками
+// STAFF ADMIN — Управление сотрудниками (без изменений)
 // ═══════════════════════════════════════════════════
 export function StaffAdmin() {
   const { wallet, addNotification } = useGameStore()
