@@ -1,8 +1,7 @@
 'use client'
 /**
  * ShowcaseAdmin.jsx — Управление витриной из админки
- * Все товары: создание корпоративных, редактирование, скрыть/восстановить,
- * продажа, удаление. Видео можно менять прямо из админки.
+ * Все товары, создание корпоративных, модерация, продажи
  */
 import { useState, useEffect, useCallback } from 'react'
 import useGameStore from '@/lib/store'
@@ -27,17 +26,12 @@ export default function ShowcaseAdmin() {
   const [expandedItem, setExpandedItem] = useState(null)
 
   // Форма создания
-  const emptyForm = {
+  const [form, setForm] = useState({
     category: 'diamond', title: '', description: '',
     retailPrice: '', clubPrice: '', carat: '', shape: '',
     clarity: '', color: '', certUrl: '', photos: [], videoUrl: '',
-  }
-  const [form, setForm] = useState(emptyForm)
-  const resetForm = () => setForm(emptyForm)
-
-  // Редактирование
-  const [editId, setEditId] = useState(null)
-  const [editForm, setEditForm] = useState(emptyForm)
+  })
+  const resetForm = () => setForm({ category: 'diamond', title: '', description: '', retailPrice: '', clubPrice: '', carat: '', shape: '', clarity: '', color: '', certUrl: '', photos: [], videoUrl: '' })
 
   // Модалка продажи
   const [sellId, setSellId] = useState(null)
@@ -48,17 +42,18 @@ export default function ShowcaseAdmin() {
   const reload = useCallback(async () => {
     setLoading(true)
     try {
+      const params = new URLSearchParams({ status: filter === 'all' ? 'active' : filter })
+      const res = await fetch(`/api/showcase?${params}`)
+      const data = await res.json()
+      if (data.ok) setItems(data.items || [])
+
+      // Если фильтр "all" — дополнительно подгружаем hidden и sold
       if (filter === 'all') {
-        const [a, h, s] = await Promise.all([
-          fetch('/api/showcase?status=active').then(r => r.json()).catch(() => ({ items: [] })),
+        const [h, s] = await Promise.all([
           fetch('/api/showcase?status=hidden').then(r => r.json()).catch(() => ({ items: [] })),
           fetch('/api/showcase?status=sold').then(r => r.json()).catch(() => ({ items: [] })),
         ])
-        setItems([...(a.items || []), ...(h.items || []), ...(s.items || [])])
-      } else {
-        const res = await fetch(`/api/showcase?status=${filter}`)
-        const data = await res.json()
-        if (data.ok) setItems(data.items || [])
+        setItems(prev => [...prev, ...(h.items || []), ...(s.items || [])])
       }
     } catch {}
     setLoading(false)
@@ -121,61 +116,6 @@ export default function ShowcaseAdmin() {
     setTxPending(false)
   }
 
-  // ═══ Редактирование ═══
-  const openEdit = (item) => {
-    setEditId(item.id)
-    setEditForm({
-      category: item.category || 'diamond',
-      title: item.title || '',
-      description: item.description || '',
-      retailPrice: item.retail_price || '',
-      clubPrice: item.club_price || '',
-      carat: item.carat || '',
-      shape: item.shape || '',
-      clarity: item.clarity || '',
-      color: item.color || '',
-      certUrl: item.cert_url || '',
-      photos: item.photos || [],
-      videoUrl: item.video_url || '',
-    })
-    setExpandedItem(null)
-  }
-
-  const handleSaveEdit = async () => {
-    if (!editId) return
-    setTxPending(true)
-    try {
-      const res = await authFetch('/api/showcase', {
-        method: 'PATCH',
-        body: { id: editId, wallet, action: 'edit', ...editForm }
-      })
-      const data = await res.json()
-      if (data.ok) {
-        addNotification('✅ Изменения сохранены')
-        setEditId(null); reload()
-      } else addNotification(`❌ ${data.error}`)
-    } catch { addNotification('❌ Ошибка сети') }
-    setTxPending(false)
-  }
-
-  // ═══ Удаление ═══
-  const handleDelete = async (item) => {
-    if (!confirm(`Удалить «${item.title}» навсегда?\nЭто действие нельзя отменить.`)) return
-    setTxPending(true)
-    try {
-      const res = await authFetch('/api/showcase', {
-        method: 'DELETE',
-        body: { id: item.id, wallet }
-      })
-      const data = await res.json()
-      if (data.ok) {
-        addNotification('✅ Объявление удалено')
-        setExpandedItem(null); reload()
-      } else addNotification(`❌ ${data.error}`)
-    } catch { addNotification('❌ Ошибка сети') }
-    setTxPending(false)
-  }
-
   const sel = (active) => active
     ? 'bg-gold-400/15 border-gold-400/30 text-gold-400'
     : 'border-white/8 text-slate-500'
@@ -190,7 +130,7 @@ export default function ShowcaseAdmin() {
   return (
     <div className="space-y-3">
 
-      {/* Фильтр */}
+      {/* Фильтр по статусу */}
       <div className="flex gap-1">
         {[
           { id: 'active', label: '✅ Активные' },
@@ -214,23 +154,123 @@ export default function ShowcaseAdmin() {
       </div>
 
       {/* Кнопка создания */}
-      <button onClick={() => { setShowCreate(!showCreate); if (editId) setEditId(null) }}
+      <button onClick={() => setShowCreate(!showCreate)}
         className="w-full py-3 rounded-2xl text-[12px] font-black gold-btn">
         {showCreate ? '✕ Закрыть' : '+ Добавить на витрину'}
       </button>
 
       {/* ═══ ФОРМА СОЗДАНИЯ ═══ */}
       {showCreate && (
-        <FormBlock
-          title="🏪 Новый корпоративный товар"
-          form={form}
-          setForm={setForm}
-          wallet={wallet}
-          addNotification={addNotification}
-          txPending={txPending}
-          submitLabel="🏪 Опубликовать"
-          onSubmit={handleCreate}
-        />
+        <div className="p-4 rounded-2xl glass space-y-2" style={{ border: '1px solid rgba(212,168,67,0.2)' }}>
+          <div className="text-[13px] font-black text-gold-400 mb-1">🏪 Новый корпоративный товар</div>
+
+          <div className="flex gap-1.5">
+            <button onClick={() => setForm(f => ({...f, category:'diamond'}))}
+              className={`flex-1 py-2 rounded-xl text-[10px] font-bold border ${sel(form.category==='diamond')}`}>
+              💎 Бриллиант
+            </button>
+            <button onClick={() => setForm(f => ({...f, category:'jewelry'}))}
+              className={`flex-1 py-2 rounded-xl text-[10px] font-bold border ${sel(form.category==='jewelry')}`}>
+              💍 Ювелирка
+            </button>
+          </div>
+
+          <input value={form.title} onChange={e => setForm(f => ({...f, title: e.target.value}))}
+            placeholder="Название"
+            className="w-full p-2.5 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
+
+          <textarea value={form.description} onChange={e => setForm(f => ({...f, description: e.target.value}))}
+            placeholder="Описание" rows={2}
+            className="w-full p-2.5 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none resize-none" />
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[9px] text-slate-500">Розничная ($)</label>
+              <input type="number" value={form.retailPrice} onChange={e => setForm(f => ({...f, retailPrice: e.target.value}))}
+                placeholder="1400" className="w-full p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
+            </div>
+            <div>
+              <label className="text-[9px] text-slate-500">Клубная ($) ≤50%</label>
+              <input type="number" value={form.clubPrice} onChange={e => setForm(f => ({...f, clubPrice: e.target.value}))}
+                placeholder="700" className="w-full p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            <input value={form.carat} onChange={e => setForm(f => ({...f, carat: e.target.value}))}
+              placeholder="Караты" type="number" className="p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
+            <input value={form.shape} onChange={e => setForm(f => ({...f, shape: e.target.value}))}
+              placeholder="Форма" className="p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
+            <input value={form.clarity} onChange={e => setForm(f => ({...f, clarity: e.target.value}))}
+              placeholder="Чистота" className="p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
+          </div>
+
+          <input value={form.certUrl} onChange={e => setForm(f => ({...f, certUrl: e.target.value}))}
+            placeholder="Ссылка на сертификат"
+            className="w-full p-2.5 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
+
+          {/* Фото */}
+          <div>
+            <div className="flex gap-2">
+              <label className="flex-1 py-2 rounded-xl text-[10px] font-bold text-center cursor-pointer bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                📷 Фото
+                <input type="file" accept="image/*" multiple className="hidden"
+                  onChange={async (e) => {
+                    const files = Array.from(e.target.files || [])
+                    if (form.photos.length + files.length > 10) { addNotification('❌ Макс 10 фото'); return }
+                    for (const file of files) {
+                      const compressed = await compressImage(file)
+                      const result = await uploadShowcaseFile(compressed, wallet)
+                      if (result.ok) setForm(f => ({...f, photos: [...f.photos, result.url]}))
+                      else addNotification(`❌ ${result.error}`)
+                    }
+                    e.target.value = ''
+                  }} />
+              </label>
+              <label className="py-2 px-4 rounded-xl text-[10px] font-bold text-center cursor-pointer bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                🎥 Видео
+                <input type="file" accept="video/mp4,video/webm" className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    const result = await uploadShowcaseFile(file, wallet)
+                    if (result.ok) setForm(f => ({...f, videoUrl: result.url}))
+                    else addNotification(`❌ ${result.error}`)
+                    e.target.value = ''
+                  }} />
+              </label>
+            </div>
+            {form.photos.length > 0 && (
+              <div className="flex gap-1.5 mt-2 overflow-x-auto">
+                {form.photos.map((url, i) => (
+                  <div key={i} className="relative w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 border border-white/10">
+                    <img src={url} alt="" className="w-full h-full object-cover" />
+                    <button onClick={() => setForm(f => ({...f, photos: f.photos.filter((_, idx) => idx !== i)}))}
+                      className="absolute top-0 right-0 w-4 h-4 bg-red-500 text-white text-[7px] flex items-center justify-center rounded-bl">✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {form.videoUrl && (
+              <div className="mt-1 flex items-center gap-2 p-1.5 rounded-lg bg-purple-500/8 border border-purple-500/15">
+                <span className="text-[9px] text-purple-400">🎥 Видео</span>
+                <button onClick={() => setForm(f => ({...f, videoUrl: ''}))} className="text-[8px] text-red-400">✕</button>
+              </div>
+            )}
+          </div>
+
+          {/* Маржа */}
+          {form.clubPrice && form.retailPrice && parseFloat(form.retailPrice) > parseFloat(form.clubPrice) && (
+            <div className="p-2 rounded-xl bg-blue-500/8 text-[9px] text-slate-400">
+              Маржа: <span className="text-emerald-400 font-bold">{formatUSD(parseFloat(form.retailPrice) - parseFloat(form.clubPrice))}</span> → 15% маркетинг → 9 уровней
+            </div>
+          )}
+
+          <button onClick={handleCreate} disabled={txPending || !form.title || !form.clubPrice}
+            className="w-full py-3 rounded-2xl text-[12px] font-black gold-btn disabled:opacity-40">
+            {txPending ? '⏳...' : '🏪 Опубликовать'}
+          </button>
+        </div>
       )}
 
       {/* ═══ СПИСОК ТОВАРОВ ═══ */}
@@ -244,10 +284,9 @@ export default function ShowcaseAdmin() {
           {items.map(item => {
             const st = STATUS_MAP[item.status] || STATUS_MAP.active
             const isExpanded = expandedItem === item.id
-            const isEditing = editId === item.id
             return (
               <div key={item.id} className="rounded-2xl glass overflow-hidden">
-                <button onClick={() => { if (!isEditing) setExpandedItem(isExpanded ? null : item.id) }}
+                <button onClick={() => setExpandedItem(isExpanded ? null : item.id)}
                   className="w-full p-3 text-left">
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-2">
@@ -266,25 +305,7 @@ export default function ShowcaseAdmin() {
                   </div>
                 </button>
 
-                {/* ─── EDIT MODE ─── */}
-                {isEditing && (
-                  <div className="px-3 pb-3 border-t border-white/5 pt-3">
-                    <FormBlock
-                      title="✏️ Редактирование"
-                      form={editForm}
-                      setForm={setEditForm}
-                      wallet={wallet}
-                      addNotification={addNotification}
-                      txPending={txPending}
-                      submitLabel="💾 Сохранить"
-                      onSubmit={handleSaveEdit}
-                      onCancel={() => setEditId(null)}
-                    />
-                  </div>
-                )}
-
-                {/* ─── VIEW MODE ─── */}
-                {isExpanded && !isEditing && (
+                {isExpanded && (
                   <div className="px-3 pb-3 border-t border-white/5 pt-2 space-y-2">
                     {/* Фото */}
                     {item.photos && item.photos.length > 0 && (
@@ -297,15 +318,16 @@ export default function ShowcaseAdmin() {
                       </div>
                     )}
 
+                    {/* Описание */}
                     {item.description && (
                       <div className="text-[10px] text-slate-400">{item.description}</div>
                     )}
 
+                    {/* Детали */}
                     <div className="grid grid-cols-2 gap-1 text-[9px]">
                       {item.shape && <div className="p-1 rounded bg-white/5"><span className="text-slate-500">Форма: </span><span className="text-white">{item.shape}</span></div>}
                       {item.clarity && <div className="p-1 rounded bg-white/5"><span className="text-slate-500">Чистота: </span><span className="text-white">{item.clarity}</span></div>}
                       {item.color && <div className="p-1 rounded bg-white/5"><span className="text-slate-500">Цвет: </span><span className="text-white">{item.color}</span></div>}
-                      {item.video_url && <div className="p-1 rounded bg-white/5"><span className="text-purple-400">🎥 Есть видео</span></div>}
                       {item.cert_url && <div className="p-1 rounded bg-white/5"><a href={item.cert_url} target="_blank" rel="noreferrer" className="text-blue-400">📜 Сертификат</a></div>}
                     </div>
 
@@ -316,14 +338,8 @@ export default function ShowcaseAdmin() {
                       </div>
                     )}
 
-                    {/* ═══ Кнопки управления ═══ */}
+                    {/* Кнопки */}
                     <div className="flex flex-wrap gap-1">
-                      {item.status !== 'sold' && (
-                        <button onClick={() => openEdit(item)} disabled={txPending}
-                          className="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-blue-500/15 border border-blue-500/25 text-blue-400 disabled:opacity-50">
-                          ✏️ Редактировать
-                        </button>
-                      )}
                       {item.status === 'active' && (
                         <>
                           <button onClick={() => handleStatus(item.id, 'hidden')} disabled={txPending}
@@ -339,13 +355,7 @@ export default function ShowcaseAdmin() {
                       {item.status === 'hidden' && (
                         <button onClick={() => handleStatus(item.id, 'active')} disabled={txPending}
                           className="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 disabled:opacity-50">
-                          ✅ Восстановить
-                        </button>
-                      )}
-                      {item.status !== 'sold' && (
-                        <button onClick={() => handleDelete(item)} disabled={txPending}
-                          className="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-red-500/15 border border-red-500/25 text-red-400 disabled:opacity-50">
-                          🗑 Удалить
+                          ✅ Активировать
                         </button>
                       )}
                     </div>
@@ -377,149 +387,6 @@ export default function ShowcaseAdmin() {
           })}
         </div>
       )}
-    </div>
-  )
-}
-
-// ═══════════════════════════════════════════════════
-// FormBlock — единая форма для создания и редактирования
-// (включая загрузку/замену фото и видео)
-// ═══════════════════════════════════════════════════
-function FormBlock({ title, form, setForm, wallet, addNotification, txPending, submitLabel, onSubmit, onCancel }) {
-  const sel = (active) => active
-    ? 'bg-gold-400/15 border-gold-400/30 text-gold-400'
-    : 'border-white/8 text-slate-500'
-
-  return (
-    <div className="p-4 rounded-2xl glass space-y-2" style={{ border: '1px solid rgba(212,168,67,0.2)' }}>
-      <div className="text-[13px] font-black text-gold-400 mb-1">{title}</div>
-
-      <div className="flex gap-1.5">
-        <button onClick={() => setForm(f => ({ ...f, category: 'diamond' }))}
-          className={`flex-1 py-2 rounded-xl text-[10px] font-bold border ${sel(form.category === 'diamond')}`}>
-          💎 Бриллиант
-        </button>
-        <button onClick={() => setForm(f => ({ ...f, category: 'jewelry' }))}
-          className={`flex-1 py-2 rounded-xl text-[10px] font-bold border ${sel(form.category === 'jewelry')}`}>
-          💍 Ювелирка
-        </button>
-      </div>
-
-      <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-        placeholder="Название"
-        className="w-full p-2.5 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
-
-      <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-        placeholder="Описание" rows={2}
-        className="w-full p-2.5 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none resize-none" />
-
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <label className="text-[9px] text-slate-500">Розничная ($)</label>
-          <input type="number" value={form.retailPrice} onChange={e => setForm(f => ({ ...f, retailPrice: e.target.value }))}
-            placeholder="1400" className="w-full p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
-        </div>
-        <div>
-          <label className="text-[9px] text-slate-500">Клубная ($) ≤50%</label>
-          <input type="number" value={form.clubPrice} onChange={e => setForm(f => ({ ...f, clubPrice: e.target.value }))}
-            placeholder="700" className="w-full p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-2">
-        <input value={form.carat} onChange={e => setForm(f => ({ ...f, carat: e.target.value }))}
-          placeholder="Караты" type="number" className="p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
-        <input value={form.shape} onChange={e => setForm(f => ({ ...f, shape: e.target.value }))}
-          placeholder="Форма" className="p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
-        <input value={form.clarity} onChange={e => setForm(f => ({ ...f, clarity: e.target.value }))}
-          placeholder="Чистота" className="p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
-      </div>
-
-      <input value={form.color || ''} onChange={e => setForm(f => ({ ...f, color: e.target.value }))}
-        placeholder="Цвет (D/E/F/G...)"
-        className="w-full p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
-
-      <input value={form.certUrl} onChange={e => setForm(f => ({ ...f, certUrl: e.target.value }))}
-        placeholder="Ссылка на сертификат"
-        className="w-full p-2.5 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
-
-      {/* Фото + Видео */}
-      <div>
-        <div className="flex gap-2">
-          <label className="flex-1 py-2 rounded-xl text-[10px] font-bold text-center cursor-pointer bg-blue-500/10 text-blue-400 border border-blue-500/20">
-            📷 Фото
-            <input type="file" accept="image/*" multiple className="hidden"
-              onChange={async (e) => {
-                const files = Array.from(e.target.files || [])
-                if ((form.photos?.length || 0) + files.length > 10) { addNotification('❌ Макс 10 фото'); return }
-                for (const file of files) {
-                  const compressed = await compressImage(file)
-                  const result = await uploadShowcaseFile(compressed, wallet)
-                  if (result.ok) setForm(f => ({ ...f, photos: [...(f.photos || []), result.url] }))
-                  else addNotification(`❌ ${result.error}`)
-                }
-                e.target.value = ''
-              }} />
-          </label>
-          <label className="py-2 px-4 rounded-xl text-[10px] font-bold text-center cursor-pointer bg-purple-500/10 text-purple-400 border border-purple-500/20">
-            🎥 {form.videoUrl ? 'Заменить видео' : 'Видео'}
-            <input type="file" accept="video/mp4,video/webm" className="hidden"
-              onChange={async (e) => {
-                const file = e.target.files?.[0]
-                if (!file) return
-                const result = await uploadShowcaseFile(file, wallet)
-                if (result.ok) setForm(f => ({ ...f, videoUrl: result.url }))
-                else addNotification(`❌ ${result.error}`)
-                e.target.value = ''
-              }} />
-          </label>
-        </div>
-
-        {/* Превью фото */}
-        {form.photos && form.photos.length > 0 && (
-          <div className="flex gap-1.5 mt-2 overflow-x-auto">
-            {form.photos.map((url, i) => (
-              <div key={i} className="relative w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 border border-white/10">
-                <img src={url} alt="" className="w-full h-full object-cover" />
-                <button onClick={() => setForm(f => ({ ...f, photos: f.photos.filter((_, idx) => idx !== i) }))}
-                  className="absolute top-0 right-0 w-4 h-4 bg-red-500 text-white text-[7px] flex items-center justify-center rounded-bl">✕</button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Превью видео: можно удалить и заменить */}
-        {form.videoUrl && (
-          <div className="mt-1 flex items-center gap-2 p-1.5 rounded-lg bg-purple-500/8 border border-purple-500/15">
-            <span className="text-[9px] text-purple-400 flex-1 truncate">🎥 {form.videoUrl.includes('supabase') ? 'Загружено' : form.videoUrl}</span>
-            <button onClick={() => setForm(f => ({ ...f, videoUrl: '' }))} className="text-[8px] text-red-400 px-1">✕ удалить</button>
-          </div>
-        )}
-        {/* Ссылка на видео YouTube (альтернатива загрузке файла) */}
-        <input value={form.videoUrl || ''} onChange={e => setForm(f => ({ ...f, videoUrl: e.target.value }))}
-          placeholder="или YouTube-ссылка"
-          className="mt-1 w-full p-2 rounded-xl bg-white/5 border border-white/10 text-[10px] text-slate-300 outline-none" />
-      </div>
-
-      {/* Маржа */}
-      {form.clubPrice && form.retailPrice && parseFloat(form.retailPrice) > parseFloat(form.clubPrice) && (
-        <div className="p-2 rounded-xl bg-blue-500/8 text-[9px] text-slate-400">
-          Маржа: <span className="text-emerald-400 font-bold">{formatUSD(parseFloat(form.retailPrice) - parseFloat(form.clubPrice))}</span>
-        </div>
-      )}
-
-      <div className="flex gap-2">
-        <button onClick={onSubmit} disabled={txPending || !form.title || !form.clubPrice}
-          className="flex-1 py-3 rounded-2xl text-[12px] font-black gold-btn disabled:opacity-40">
-          {txPending ? '⏳...' : submitLabel}
-        </button>
-        {onCancel && (
-          <button onClick={onCancel} disabled={txPending}
-            className="px-4 py-3 rounded-2xl text-[11px] text-slate-400 border border-white/10">
-            Отмена
-          </button>
-        )}
-      </div>
     </div>
   )
 }
