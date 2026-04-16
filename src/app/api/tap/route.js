@@ -1,10 +1,14 @@
 /**
  * API Route: /api/tap
  * Серверная верификация тапов — защита от накрутки
- * 
+ *
  * РЕФЕРАЛЬНАЯ СИСТЕМА NSS:
  *   - 50 NSS разовый бонус спонсору при первом тапе приглашённого
  *   - 10% от каждого тапа приглашённого → спонсору
+ *
+ * ИЗМЕНЕНИЯ (Пакет 3):
+ *   • Atomic update через optimistic lock — защита от race condition
+ *     (при параллельных запросах повторный тап будет отброшен, а не засчитан дважды)
  */
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
@@ -22,16 +26,13 @@ const REGEN_MS = 120000
 const MIN_TAP_INTERVAL_MS = 150
 const NSS_PER_TAP = [0.01, 0.03, 0.05, 0.08, 0.12, 0.16, 0.20, 0.24, 0.28, 0.32, 0.35, 0.38, 0.40]
 
-// Реферальные бонусы
 const INVITE_BONUS_NSS = 50
 const REFERRAL_TAP_PCT = 10
 
-// Сгорание NSS: 180 дней неактивности → 1% в день
-const DECAY_START_DAYS = 180   // начало сгорания
-const DECAY_PCT_PER_DAY = 1   // % потерь в день после старта
+const DECAY_START_DAYS = 180
+const DECAY_PCT_PER_DAY = 1
 const MS_PER_DAY = 86400000
 
-// ═══ Расчёт сгорания NSS ═══
 function calcDecay(totalNss, lastTapAt) {
   if (!lastTapAt || totalNss <= 0) return { decayed: 0, remaining: totalNss, daysInactive: 0 }
   const now = Date.now()
@@ -44,7 +45,6 @@ function calcDecay(totalNss, lastTapAt) {
   return { decayed, remaining: Math.max(0, remaining), daysInactive, decayPct }
 }
 
-// ═══ Блокчейн: получить спонсора ═══
 const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || 'https://opbnb-mainnet-rpc.bnbchain.org'
 const NSS_PLATFORM_ADDR = '0xFb1ddFa8A7EAB0081EAe24ec3d24B0ED4Dd84f2B'
 const BRIDGE_ABI = ['function getUserStatus(address user) external view returns (tuple(bool isRegistered, uint256 odixId, uint8 maxPackage, uint8 rank, bool quarterlyActive, address sponsor, bool[12] activeLevels))']
@@ -66,7 +66,6 @@ async function getSponsorWallet(walletAddress) {
 }
 
 
-// ═══ Начислить NSS спонсору ═══
 async function creditSponsor(sponsorWallet, amount) {
   if (!sponsorWallet || amount <= 0) return
   let { data: sponsor } = await supabase
@@ -103,7 +102,7 @@ export async function POST(request) {
     let { data: player } = await supabase.from('dc_taps').select('*').eq('wallet', walletLower).single()
 
     if (!player) {
-      // ═══ Новый игрок — ищем спонсора в блокчейне ═══
+      // Новый игрок — ищем спонсора в блокчейне
       const sponsorWallet = await getSponsorWallet(walletLower)
       const { data: newPlayer, error: insertErr } = await supabase.from('dc_taps').insert({
         wallet: walletLower, energy: ENERGY_MAX, total_nss: 0, referral_nss: 0,
@@ -113,14 +112,13 @@ export async function POST(request) {
       if (insertErr) return NextResponse.json({ ok: false, error: 'DB error' }, { status: 500 })
       player = newPlayer
 
-      // Разовый бонус 50 NSS спонсору
       if (sponsorWallet) {
         await creditSponsor(sponsorWallet, INVITE_BONUS_NSS)
         await supabase.from('dc_taps').update({ invite_bonus_paid: true }).eq('wallet', walletLower)
       }
     }
 
-    // Кеш спонсора (для старых записей без sponsor_wallet)
+    // Кеш спонсора для старых записей
     if (!player.sponsor_wallet && !player.invite_bonus_paid) {
       const sponsorWallet = await getSponsorWallet(walletLower)
       if (sponsorWallet) {
@@ -132,7 +130,7 @@ export async function POST(request) {
       }
     }
 
-    // ═══ Сгорание NSS (6 месяцев неактивности) ═══
+    // Сгорание NSS
     const decay = calcDecay(player.total_nss, player.last_tap_at)
     if (decay.decayed > 0) {
       player.total_nss = decay.remaining
@@ -153,18 +151,30 @@ export async function POST(request) {
       return NextResponse.json({ ok: false, error: 'No energy', energy: 0, totalNss: player.total_nss })
     }
 
-    // ═══ Начисляем тап ═══
+    // Начисляем тап
     const newEnergy = currentEnergy - 1
     const earned = nssPerTap
     const newTotal = +(player.total_nss + earned).toFixed(4)
     const newTaps = (player.total_taps || 0) + 1
 
-    await supabase.from('dc_taps').update({
-      energy: newEnergy, total_nss: newTotal, total_taps: newTaps,
-      last_tap_at: now, last_regen_at: regenAmount > 0 ? now : player.last_regen_at, level: lv,
-    }).eq('wallet', walletLower)
+    // ═══ Пакет 3: Atomic update через optimistic lock ═══
+    // Обновляем ТОЛЬКО если last_tap_at в БД совпадает с тем что мы читали.
+    // Если два параллельных запроса — второй не пройдёт (count=0) и вернёт 429.
+    const { data: updated, error: updErr, count } = await supabase
+      .from('dc_taps')
+      .update({
+        energy: newEnergy, total_nss: newTotal, total_taps: newTaps,
+        last_tap_at: now, last_regen_at: regenAmount > 0 ? now : player.last_regen_at, level: lv,
+      })
+      .eq('wallet', walletLower)
+      .eq('last_tap_at', player.last_tap_at || 0)  // optimistic lock
+      .select()
 
-    // ═══ 10% от тапа → спонсору (асинхронно) ═══
+    if (updErr || !updated || updated.length === 0) {
+      return NextResponse.json({ ok: false, error: 'Concurrent tap rejected', energy: player.energy, totalNss: player.total_nss }, { status: 429 })
+    }
+
+    // 10% от тапа → спонсору (асинхронно)
     let referralBonus = 0
     if (player.sponsor_wallet) {
       referralBonus = +(earned * REFERRAL_TAP_PCT / 100).toFixed(4)
@@ -198,7 +208,6 @@ export async function GET(request) {
     const regenAmount = Math.floor((now - (player.last_regen_at || now)) / REGEN_MS)
     const currentEnergy = Math.min(ENERGY_MAX, (player.energy || 0) + regenAmount)
 
-    // Сгорание NSS
     const decay = calcDecay(player.total_nss, player.last_tap_at)
 
     return NextResponse.json({
