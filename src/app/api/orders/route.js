@@ -2,7 +2,11 @@
  * API Route: /api/orders
  * FIX C3: Серверная проверка админских действий
  * FIX M4: Rate-limit на создание заказов
- * 
+ *
+ * ИЗМЕНЕНИЯ (Пакет 3):
+ *   • PATCH (админ меняет статус) — TTL подписи 5 минут
+ *   • POST (пользователь создаёт заказ) — дефолт 1 час
+ *
  * POST /api/orders — создать заказ (rate-limit: 1 заказ в 30 сек)
  * PATCH /api/orders — обновить статус (только для админов, проверка через Supabase)
  */
@@ -10,6 +14,8 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { verifyWallet } from '@/lib/authHelper'
 import { checkOrigin } from '@/lib/checkOrigin'
+
+const ADMIN_TTL_SEC = 300 // 5 минут для админских действий
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY
@@ -33,8 +39,6 @@ const STATUS_TRANSITIONS = {
   CANCELLED:  [],
 }
 
-// ═══ Проверка Origin (защита от чужих сайтов) ═══
-
 // ═══ POST: Создать заказ (с rate-limit) ═══
 export async function POST(request) {
   if (!supabase) return NextResponse.json({ ok: false, error: 'Сервер не настроен' }, { status: 503 })
@@ -43,7 +47,7 @@ export async function POST(request) {
     const body = await request.json()
     const { wallet, params } = body
 
-    // FIX #7: Проверка подписи кошелька
+    // FIX #7: Подпись пользователя — дефолт 1 час
     const verified = await verifyWallet(body)
     if (!verified) {
       return NextResponse.json({ ok: false, error: 'Неверная подпись кошелька' }, { status: 401 })
@@ -56,7 +60,7 @@ export async function POST(request) {
 
     const wLower = wallet.toLowerCase()
 
-    // FIX M4: Rate-limit через Supabase (работает на Vercel Serverless)
+    // FIX M4: Rate-limit через Supabase
     const cutoff = new Date(Date.now() - RATE_LIMIT_SEC * 1000).toISOString()
     const { data: recentOrders } = await supabase
       .from('dc_orders')
@@ -112,8 +116,6 @@ export async function POST(request) {
       return NextResponse.json({ ok: false, error: 'Ошибка создания заказа' }, { status: 500 })
     }
 
-    // Rate-limit обеспечивается через Supabase (проверка created_at выше)
-
     // Лог
     await supabase.from('dc_order_log').insert({
       order_id: data.id,
@@ -137,10 +139,10 @@ export async function PATCH(request) {
     const body = await request.json()
     const { orderId, newStatus, adminWallet, note } = body
 
-    // FIX #7: Проверка подписи кошелька админа
-    const verified = await verifyWallet(body, 'adminWallet')
+    // FIX #7 (Пакет 3): Подпись админа — TTL 5 минут
+    const verified = await verifyWallet(body, 'adminWallet', ADMIN_TTL_SEC)
     if (!verified) {
-      return NextResponse.json({ ok: false, error: 'Неверная подпись кошелька' }, { status: 401 })
+      return NextResponse.json({ ok: false, error: 'Неверная подпись или срок истёк (5 мин). Переподпишите кошелёк.' }, { status: 401 })
     }
 
     // Валидация
