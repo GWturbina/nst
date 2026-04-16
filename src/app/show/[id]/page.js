@@ -35,6 +35,24 @@ const MESSENGERS = [
     placeholder: 'name@example.com' },
 ]
 
+function getYouTubeEmbedUrl(url) {
+  if (!url) return null
+  let videoId = null
+  try {
+    const u = new URL(url)
+    if (u.hostname.includes('youtube.com')) {
+      videoId = u.searchParams.get('v')
+      if (!videoId && u.pathname.startsWith('/shorts/')) {
+        videoId = u.pathname.split('/shorts/')[1]?.split(/[?&#]/)[0]
+      }
+    } else if (u.hostname === 'youtu.be') {
+      videoId = u.pathname.slice(1).split(/[?&#]/)[0]
+    }
+  } catch {}
+  if (!videoId) return null
+  return `https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1`
+}
+
 function normalizeGwId(raw) {
   if (!raw) return null
   const clean = String(raw).replace(/[^\w]/g, '').slice(0, 20).toUpperCase()
@@ -316,17 +334,32 @@ export default function ShowPage() {
           </a>
         )}
 
-        {/* Видео */}
-        {item.video_url && (
-          <a href={item.video_url} target="_blank" rel="noopener noreferrer" style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            padding: '12px 16px', borderRadius: 12, marginBottom: 16,
-            background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.25)',
-            color: '#a855f7', fontSize: 13, fontWeight: 600, textDecoration: 'none'
-          }}>
-            🎬 Смотреть видео
-          </a>
-        )}
+        {/* Видео — YouTube встраивается, остальное как ссылка */}
+        {item.video_url && (() => {
+          const embedUrl = getYouTubeEmbedUrl(item.video_url)
+          if (embedUrl) {
+            return (
+              <div style={{
+                position: 'relative', paddingBottom: '56.25%', height: 0,
+                borderRadius: 16, overflow: 'hidden', marginBottom: 16,
+                border: '1px solid rgba(168,85,247,0.25)'
+              }}>
+                <iframe src={embedUrl} allowFullScreen
+                  style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none' }} />
+              </div>
+            )
+          }
+          return (
+            <a href={item.video_url} target="_blank" rel="noopener noreferrer" style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              padding: '12px 16px', borderRadius: 12, marginBottom: 16,
+              background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.25)',
+              color: '#a855f7', fontSize: 13, fontWeight: 600, textDecoration: 'none'
+            }}>
+              🎬 Смотреть видео
+            </a>
+          )
+        })()}
 
         {/* Форма или «Спасибо» */}
         {submitted ? (
