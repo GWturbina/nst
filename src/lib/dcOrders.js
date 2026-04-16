@@ -336,18 +336,23 @@ export async function getOrderLog(orderId) {
 
 /** Красивое название статуса */
 export const STATUS_LABELS = {
-  NEW:        '📋 Новый',
+  // Общие
+  CANCELLED:  '❌ Отменён',
+  COMPLETED:  '🎉 Выдан',
+  // Заказы камней
   PAID:       '💰 Оплачен',
   APPROVED:   '✅ Утверждён',
   PRODUCTION: '🏭 Производство',
   READY:      '📦 Готов',
-  COMPLETED:  '🎉 Выдан',
-  CANCELLED:  '❌ Отменён',
+  // Заявки с витрины
+  NEW:        '🆕 Новая',
+  CONTACTED:  '📞 Связались',
 }
 
 /** Цвета статусов */
 export const STATUS_COLORS = {
-  NEW:        'text-slate-400',
+  NEW:        'text-purple-400',
+  CONTACTED:  'text-blue-400',
   PAID:       'text-gold-400',
   APPROVED:   'text-emerald-400',
   PRODUCTION: 'text-blue-400',
@@ -358,10 +363,15 @@ export const STATUS_COLORS = {
 
 /** Доступные переходы статусов */
 export const STATUS_TRANSITIONS = {
+  // Заказы камней
   PAID:       ['APPROVED', 'CANCELLED'],
   APPROVED:   ['PRODUCTION', 'CANCELLED'],
   PRODUCTION: ['READY', 'CANCELLED'],
   READY:      ['COMPLETED'],
+  // Заявки с витрины
+  NEW:        ['CONTACTED', 'CANCELLED'],
+  CONTACTED:  ['COMPLETED', 'CANCELLED'],
+  // Терминальные
   COMPLETED:  [],
   CANCELLED:  [],
 }
