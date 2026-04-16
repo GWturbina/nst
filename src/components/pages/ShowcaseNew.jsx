@@ -407,6 +407,7 @@ export default function ShowcaseNew() {
           wallet={wallet}
           isAdmin={isAdmin}
           canBuy={canBuy}
+          canSell={canSell}
           txPending={txPending}
           onClose={() => setSelectedItem(null)}
           onSell={(item) => { setSelectedItem(null); setSellModal(item); setBuyerAddress(''); setDeliveryAddress('') }}
@@ -650,7 +651,7 @@ function PhotoGallery({ photos, videoUrl }) {
 // ═══════════════════════════════════════════════════
 // DETAIL MODAL — карточка товара
 // ═══════════════════════════════════════════════════
-function ItemDetailModal({ item, wallet, isAdmin, canBuy, txPending, onClose, onSell, onToggleVisibility, onDelete, onEdit }) {
+function ItemDetailModal({ item, wallet, isAdmin, canBuy, canSell, txPending, onClose, onSell, onToggleVisibility, onDelete, onEdit }) {
   const isMine = wallet && item.seller_wallet === wallet.toLowerCase()
   const { addNotification } = useGameStore()
   const hasPhotos = item.photos && item.photos.length > 0
@@ -774,7 +775,7 @@ function ItemDetailModal({ item, wallet, isAdmin, canBuy, txPending, onClose, on
             </div>
           )}
 
-          {/* 📢 Кнопка "Продавать" — для всех партнёров с 4+ уровнем */}
+          {/* 📢 Кнопка "Продавать" */}
           {canSell && <SellPartnerButton item={item} />}
         </div>
       </div>
