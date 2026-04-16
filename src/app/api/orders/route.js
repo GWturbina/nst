@@ -1,14 +1,10 @@
 /**
  * API Route: /api/orders
- *
- * POST   — создать заказ
- *          - обычный заказ камня (order_type = 'stone', как было)
- *          - ЗАЯВКА С ВИТРИНЫ (order_type = 'showcase_request') — новый тип,
- *            пишется при нажатии "Хочу купить" в витрине.
- *
- * PATCH  — обновить статус (админ, проверка подписи + роли в Supabase)
- *
- * Rate-limit: 1 заказ в 30 сек на кошелёк (для обоих типов).
+ * FIX C3: Серверная проверка админских действий
+ * FIX M4: Rate-limit на создание заказов
+ * 
+ * POST /api/orders — создать заказ (rate-limit: 1 заказ в 30 сек)
+ * PATCH /api/orders — обновить статус (только для админов, проверка через Supabase)
  */
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
@@ -26,7 +22,7 @@ const supabase = supabaseUrl && supabaseServiceKey
   ? createClient(supabaseUrl, supabaseServiceKey)
   : null
 
-const RATE_LIMIT_SEC = 30
+const RATE_LIMIT_SEC = 30 // 30 секунд между заказами
 
 const STATUS_TRANSITIONS = {
   PAID:       ['APPROVED', 'CANCELLED'],
@@ -35,34 +31,32 @@ const STATUS_TRANSITIONS = {
   READY:      ['COMPLETED'],
   COMPLETED:  [],
   CANCELLED:  [],
-  // Статусы для заявок с витрины
-  NEW:        ['CONTACTED', 'CANCELLED'],
-  CONTACTED:  ['COMPLETED', 'CANCELLED'],
 }
 
-const clean = (str) => String(str || '').replace(/[<>"';]/g, '').slice(0, 200)
-const num = (v, min = 0, max = 999999) => Math.max(min, Math.min(max, parseFloat(v) || 0))
+// ═══ Проверка Origin (защита от чужих сайтов) ═══
 
-// ═══ POST: Создать заказ ═══
+// ═══ POST: Создать заказ (с rate-limit) ═══
 export async function POST(request) {
   if (!supabase) return NextResponse.json({ ok: false, error: 'Сервер не настроен' }, { status: 503 })
   if (!checkOrigin(request)) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 })
   try {
     const body = await request.json()
-    const { wallet, orderType, params } = body
+    const { wallet, params } = body
 
+    // FIX #7: Проверка подписи кошелька
     const verified = await verifyWallet(body)
     if (!verified) {
       return NextResponse.json({ ok: false, error: 'Неверная подпись кошелька' }, { status: 401 })
     }
 
+    // Валидация кошелька
     if (!wallet || !/^0x[a-fA-F0-9]{40}$/.test(wallet)) {
       return NextResponse.json({ ok: false, error: 'Неверный кошелёк' }, { status: 400 })
     }
 
     const wLower = wallet.toLowerCase()
 
-    // Rate-limit
+    // FIX M4: Rate-limit через Supabase (работает на Vercel Serverless)
     const cutoff = new Date(Date.now() - RATE_LIMIT_SEC * 1000).toISOString()
     const { data: recentOrders } = await supabase
       .from('dc_orders')
@@ -72,79 +66,15 @@ export async function POST(request) {
       .limit(1)
     if (recentOrders && recentOrders.length > 0) {
       return NextResponse.json(
-        { ok: false, error: `Подождите ${RATE_LIMIT_SEC} сек перед следующей заявкой` },
+        { ok: false, error: `Подождите ${RATE_LIMIT_SEC} сек перед следующим заказом` },
         { status: 429 }
       )
     }
 
-    // ──────────────────────────────────────────────
-    // ВЕТКА 1: ЗАЯВКА С ВИТРИНЫ (showcase_request)
-    // ──────────────────────────────────────────────
-    if (orderType === 'showcase_request') {
-      if (!params || !params.showcaseItemId) {
-        return NextResponse.json({ ok: false, error: 'Не указан товар с витрины' }, { status: 400 })
-      }
-      const showcaseItemId = parseInt(params.showcaseItemId)
-      if (!showcaseItemId || showcaseItemId < 1) {
-        return NextResponse.json({ ok: false, error: 'Неверный ID товара' }, { status: 400 })
-      }
+    // Санитизация
+    const clean = (str) => String(str || '').replace(/[<>"';]/g, '').slice(0, 200)
+    const num = (v, min = 0, max = 999999) => Math.max(min, Math.min(max, parseFloat(v) || 0))
 
-      // Проверяем что товар существует и активен
-      const { data: item } = await supabase
-        .from('dc_showcase')
-        .select('id, title, seller_wallet, club_price, status, category, shape, clarity, color, carat')
-        .eq('id', showcaseItemId)
-        .single()
-
-      if (!item) {
-        return NextResponse.json({ ok: false, error: 'Товар не найден' }, { status: 404 })
-      }
-      if (item.status !== 'active') {
-        return NextResponse.json({ ok: false, error: 'Товар недоступен' }, { status: 400 })
-      }
-      if (item.seller_wallet === wLower) {
-        return NextResponse.json({ ok: false, error: 'Нельзя заказать свой же товар' }, { status: 400 })
-      }
-
-      const { data, error } = await supabase
-        .from('dc_orders')
-        .insert({
-          wallet: wLower,
-          order_type: 'showcase_request',
-          showcase_item_id: showcaseItemId,
-          buyer_note: clean(params.note) || null,
-          // Дублируем ключевые поля товара для быстрого отображения в админке
-          spec_string: clean(item.title),
-          gem_type: clean(item.category === 'jewelry' ? 'jewelry' : 'diamond'),
-          shape: clean(item.shape),
-          clarity: clean(item.clarity),
-          color: clean(item.color),
-          carats: item.carat || 0,
-          club_price: num(item.club_price),
-          retail_price: num(item.club_price), // для заявки розничной не знаем
-          status: 'NEW',
-        })
-        .select()
-        .single()
-
-      if (error) {
-        console.error('Showcase request insert error:', error)
-        return NextResponse.json({ ok: false, error: 'Ошибка создания заявки' }, { status: 500 })
-      }
-
-      await supabase.from('dc_order_log').insert({
-        order_id: data.id,
-        action: 'CREATED',
-        actor: wLower,
-        details: `Заявка с витрины: ${clean(item.title)} — $${num(item.club_price)}`,
-      })
-
-      return NextResponse.json({ ok: true, order: data, sellerWallet: item.seller_wallet })
-    }
-
-    // ──────────────────────────────────────────────
-    // ВЕТКА 2: ОБЫЧНЫЙ ЗАКАЗ КАМНЯ (stone)
-    // ──────────────────────────────────────────────
     if (!params || !params.gemType || !params.clubPrice) {
       return NextResponse.json({ ok: false, error: 'Неполные данные' }, { status: 400 })
     }
@@ -153,7 +83,6 @@ export async function POST(request) {
       .from('dc_orders')
       .insert({
         wallet: wLower,
-        order_type: 'stone',
         gem_type: clean(params.gemType),
         shape: clean(params.shape),
         clarity: clean(params.clarity),
@@ -183,6 +112,9 @@ export async function POST(request) {
       return NextResponse.json({ ok: false, error: 'Ошибка создания заказа' }, { status: 500 })
     }
 
+    // Rate-limit обеспечивается через Supabase (проверка created_at выше)
+
+    // Лог
     await supabase.from('dc_order_log').insert({
       order_id: data.id,
       action: 'CREATED',
@@ -193,12 +125,11 @@ export async function POST(request) {
     return NextResponse.json({ ok: true, order: data })
 
   } catch (err) {
-    console.error('Orders POST error:', err)
     return NextResponse.json({ ok: false, error: 'Ошибка сервера' }, { status: 500 })
   }
 }
 
-// ═══ PATCH: Обновить статус (админ) ═══
+// ═══ PATCH: Обновить статус (FIX C3: серверная проверка админа) ═══
 export async function PATCH(request) {
   if (!supabase) return NextResponse.json({ ok: false, error: 'Сервер не настроен' }, { status: 503 })
   if (!checkOrigin(request)) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 })
@@ -206,11 +137,13 @@ export async function PATCH(request) {
     const body = await request.json()
     const { orderId, newStatus, adminWallet, note } = body
 
+    // FIX #7: Проверка подписи кошелька админа
     const verified = await verifyWallet(body, 'adminWallet')
     if (!verified) {
       return NextResponse.json({ ok: false, error: 'Неверная подпись кошелька' }, { status: 401 })
     }
 
+    // Валидация
     if (!adminWallet || !/^0x[a-fA-F0-9]{40}$/.test(adminWallet)) {
       return NextResponse.json({ ok: false, error: 'Неверный кошелёк' }, { status: 400 })
     }
@@ -220,6 +153,7 @@ export async function PATCH(request) {
 
     const aLower = adminWallet.toLowerCase()
 
+    // FIX C3: Проверяем роль СЕРВЕРНО через Supabase (service_role ключ)
     const { data: admin } = await supabase
       .from('dc_admins')
       .select('role, active, max_amount')
@@ -233,6 +167,7 @@ export async function PATCH(request) {
       return NextResponse.json({ ok: false, error: 'Оператор не может менять статус' }, { status: 403 })
     }
 
+    // Получаем заказ
     const { data: order } = await supabase
       .from('dc_orders')
       .select('*')
@@ -243,6 +178,7 @@ export async function PATCH(request) {
       return NextResponse.json({ ok: false, error: 'Заказ не найден' }, { status: 404 })
     }
 
+    // FIX C5: Проверка перехода статуса
     const allowed = STATUS_TRANSITIONS[order.status] || []
     if (!allowed.includes(newStatus)) {
       return NextResponse.json(
@@ -251,6 +187,7 @@ export async function PATCH(request) {
       )
     }
 
+    // Проверка лимита для manager
     if (admin.role === 'manager' && admin.max_amount > 0 && order.club_price > admin.max_amount) {
       return NextResponse.json(
         { ok: false, error: `Сумма $${order.club_price} > лимит $${admin.max_amount}` },
@@ -258,6 +195,7 @@ export async function PATCH(request) {
       )
     }
 
+    // Обновляем
     const updates = { status: newStatus }
     const now = new Date().toISOString()
     if (newStatus === 'APPROVED') { updates.approved_by = aLower; updates.approved_at = now }
@@ -276,6 +214,7 @@ export async function PATCH(request) {
       return NextResponse.json({ ok: false, error: 'Ошибка обновления' }, { status: 500 })
     }
 
+    // Лог
     await supabase.from('dc_order_log').insert({
       order_id: orderId,
       action: newStatus,
