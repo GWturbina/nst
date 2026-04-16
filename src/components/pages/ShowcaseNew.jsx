@@ -773,6 +773,9 @@ function ItemDetailModal({ item, wallet, isAdmin, canBuy, txPending, onClose, on
               ⚠️ Нужно минимум {MIN_GW_LEVEL} уровней GW для покупки
             </div>
           )}
+
+          {/* 📢 Кнопка "Продавать" — для всех партнёров с 4+ уровнем */}
+          {canSell && <SellPartnerButton item={item} />}
         </div>
       </div>
     </div>
