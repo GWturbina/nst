@@ -4,7 +4,7 @@ import useGameStore from '@/lib/store'
 import { LEVELS, LEVEL_BACKGROUNDS, ENERGY_CONFIG } from '@/lib/gameData'
 import { useBlockchain } from '@/lib/useBlockchain'
 import { useTelegram } from '@/lib/useTelegram'
-import { serverTap, localTapAllowed, loadTapState, isTapPending } from '@/lib/tapService'
+import { serverTap, localTapAllowed, loadTapState } from '@/lib/tapService'
 import * as C from '@/lib/contracts'
 import web3 from '@/lib/web3'
 import HelpButton from '@/components/ui/HelpButton'
@@ -33,8 +33,8 @@ export default function MineTab() {
   const [buyingLevel, setBuyingLevel] = useState(false)
 
   // Динамические тексты уровней из Supabase
-  const levelTextsRef = useRef({})
-  const thoughtIndexRef = useRef({})
+  const levelTextsRef = useRef({}) // { level: [text1, text2, ...] }
+  const thoughtIndexRef = useRef({}) // { level: currentIndex }
 
   useEffect(() => {
     fetch('/api/level-content').then(r => r.json()).then(data => {
@@ -53,6 +53,7 @@ export default function MineTab() {
   const [refFromLink, setRefFromLink] = useState(false)
   const [showSafePal, setShowSafePal] = useState(false)
 
+  // Умное подключение — показать SafePal prompt если нет кошелька
   const smartConnect = async () => {
     const walletType = web3.detectWallet()
     if (!walletType) {
@@ -86,32 +87,15 @@ export default function MineTab() {
     return () => clearInterval(interval)
   }, [evapActive, registered, tickEvap, t])
 
-  // Энергия: локальная регенерация ТОЛЬКО для незарегистрированных.
-  // Для зарегистрированных энергия приходит с сервера (регенерация в БД).
+  // ═══════════════════════════════════════════════════
+  // ЭНЕРГИЯ — МЕДЛЕННОЕ ВОССТАНОВЛЕНИЕ
+  // 1 единица каждые 120 секунд (2 минуты)
+  // Полная зарядка 200 → ~6.7 часов
+  // ═══════════════════════════════════════════════════
   useEffect(() => {
-    if (registered && wallet) return
     const interval = setInterval(() => useGameStore.getState().regenEnergy(), ENERGY_CONFIG.regenIntervalMs)
     return () => clearInterval(interval)
-  }, [registered, wallet])
-
-  // Периодическая подгрузка серверного состояния для зарегистрированных
-  // (чтобы энергия регенерировалась без ручного тапа).
-  useEffect(() => {
-    if (!registered || !wallet) return
-    const interval = setInterval(() => {
-      // Не дёргаем сервер если идёт активный тап
-      if (isTapPending()) return
-      loadTapState(wallet).then(state => {
-        if (state) {
-          useGameStore.getState().syncServerTaps({
-            energy: state.energy, maxEnergy: state.maxEnergy,
-            localNss: state.totalNss, taps: state.totalTaps,
-          })
-        }
-      }).catch(() => {})
-    }, 30000) // каждые 30 сек — дешевле чем раньше, т.к. GET /api/tap идёт в Supabase, не в RPC
-    return () => clearInterval(interval)
-  }, [registered, wallet])
+  }, [])
 
   const showThought = useCallback((text, color, icon, shape = 'thought-pill') => {
     const id = Date.now() + Math.random()
@@ -119,6 +103,9 @@ export default function MineTab() {
     setTimeout(() => setThoughts(prev => prev.filter(t => t.id !== id)), 4500)
   }, [])
 
+  // ═══════════════════════════════════════════════════
+  // FIX C1+C4+C7: Серверные тапы + throttle + без двойного срабатывания
+  // ═══════════════════════════════════════════════════
   const isTapping = useRef(false)
 
   // Загрузить серверное состояние при подключении кошелька
@@ -132,6 +119,7 @@ export default function MineTab() {
             localNss: state.totalNss,
             taps: state.totalTaps,
           })
+          // Предупреждение о сгорании
           if (state.decay && state.decay.lost > 0) {
             addNotification(`⚠️ Сгорело ${state.decay.lost.toFixed(0)} GST (${state.decay.daysInactive} дней неактивности)`)
           }
@@ -140,17 +128,8 @@ export default function MineTab() {
     }
   }, [wallet, registered, addNotification])
 
-  // ═══════════════════════════════════════════════════
-  // ГЛАВНАЯ ЛОГИКА ТАПА — СЕРВЕРНАЯ МОДЕЛЬ
-  //
-  // Для registered: UI обновляется ТОЛЬКО после ответа сервера.
-  //   doTap() в store уменьшает только энергию локально (для отзывчивости),
-  //   а localNss и taps придут с сервера через syncServerTaps().
-  //   Если сервер отказал — откатываем энергию.
-  //
-  // Для !registered: локальный doTap() — всё как было.
-  // ═══════════════════════════════════════════════════
   const handleTap = useCallback((e) => {
+    // Предотвращаем двойное срабатывание и всплытие
     e.preventDefault()
     e.stopPropagation()
     if (isTapping.current) return
@@ -158,69 +137,37 @@ export default function MineTab() {
     setTimeout(() => { isTapping.current = false }, 120)
 
     if (wallet && registered) {
-      // СЕРВЕРНЫЙ ТАП
-      if (useGameStore.getState().energy <= 0) return
-
-      // Оптимистично — только энергия (для ощущения отзывчивости)
-      const tapResult = doTap()
-      if (tapResult === null) { isTapping.current = false; return }
+      // ═══ СЕРВЕРНЫЙ ТАП (для зарегистрированных) ═══
+      // Оптимистичное обновление UI + серверная верификация
+      const earned = doTap()
+      if (!earned) { isTapping.current = false; return }
 
       if (isInTelegram) haptic('light')
       showTapEffect(e)
 
-      // Отправляем на сервер. Сервер — единственный источник правды по localNss/taps.
+      // Отправляем на сервер асинхронно
       serverTap(wallet, level).then(result => {
-        if (!result) {
-          // Сервер отклонил (throttle / pending) — откатываем энергию
-          // через повторную загрузку состояния
-          loadTapState(wallet).then(state => {
-            if (state) {
-              useGameStore.getState().syncServerTaps({
-                energy: state.energy, maxEnergy: state.maxEnergy,
-                localNss: state.totalNss, taps: state.totalTaps,
-              })
-            }
-          }).catch(() => {})
-          return
-        }
-        if (result.authExpired) {
-          addNotification('⚠️ Подпись кошелька истекла. Переподключите кошелёк.')
-          return
-        }
-        if (result.ok) {
-          // Синхронизация с сервером — полная правда
+        if (result && result.ok) {
           useGameStore.getState().syncServerTaps({
-            energy: result.energy, maxEnergy: result.maxEnergy,
-            localNss: result.totalNss, taps: result.totalTaps,
+            energy: result.energy,
+            maxEnergy: result.maxEnergy,
+            localNss: result.totalNss,
+            taps: result.totalTaps,
           })
           if (result.decayApplied > 0) {
             addNotification(`⚠️ Сгорело ${result.decayApplied.toFixed(0)} GST за неактивность. Тапайте регулярно!`)
           }
-        } else if (result.error === 'No energy') {
-          // Сервер говорит что энергии нет — синхронизируем
-          useGameStore.getState().syncServerTaps({
-            energy: result.energy || 0,
-            localNss: result.totalNss,
-          })
         }
-      }).catch(() => {
-        // Сеть упала — перезагрузим состояние чтобы UI не расходился
-        loadTapState(wallet).then(state => {
-          if (state) useGameStore.getState().syncServerTaps({
-            energy: state.energy, maxEnergy: state.maxEnergy,
-            localNss: state.totalNss, taps: state.totalTaps,
-          })
-        }).catch(() => {})
       })
     } else {
-      // ЛОКАЛЬНЫЙ ТАП (незарегистрированные)
+      // ═══ ЛОКАЛЬНЫЙ ТАП (незарегистрированные — с throttle) ═══
       if (!localTapAllowed()) { isTapping.current = false; return }
       const earned = doTap()
       if (!earned) { isTapping.current = false; return }
       if (isInTelegram) haptic('light')
       showTapEffect(e)
     }
-  }, [doTap, wallet, registered, level, isInTelegram, haptic, addNotification])
+  }, [doTap, wallet, registered, level, isInTelegram, haptic])
 
   // Визуальный эффект тапа (отделён от логики)
   const showTapEffect = useCallback((e) => {
@@ -254,6 +201,7 @@ export default function MineTab() {
     }
   }, [showThought])
 
+  // Регистрация
   const openRegModal = () => {
     if (!wallet) return
     const savedRef = typeof window !== 'undefined' ? localStorage.getItem('dc_ref') || '' : ''
@@ -280,7 +228,7 @@ export default function MineTab() {
       await C.register(sid)
       addNotification('✅ ' + t('registrationSuccess'))
       setShowRegModal(false)
-      await C.waitForRegistration(wallet)
+      const confirmed = await C.waitForRegistration(wallet)
       const gwStatus = await C.getGWUserStatus(wallet).catch(() => null)
       if (gwStatus) {
         useGameStore.getState().updateRegistration(gwStatus.isRegistered, gwStatus.odixId || sid)
@@ -341,6 +289,7 @@ export default function MineTab() {
   const lvBg = LEVEL_BACKGROUNDS[level] || LEVEL_BACKGROUNDS[0]
   const bgSrc = `/icons/backgrounds/levels/${lvBg.file}`
 
+  // Время до полной зарядки
   const missingEnergy = maxEnergy - energy
   const rechargeMinutes = Math.ceil(missingEnergy * ENERGY_CONFIG.regenIntervalMs / 60000)
 
@@ -362,6 +311,7 @@ export default function MineTab() {
         <HelpButton section="mine" />
       </div>
 
+      {/* Энергия — показываем время до полной зарядки */}
       <div className="px-3 mt-2">
         <div className="flex justify-between text-[10px] mb-1">
           <span className="text-slate-400">⚡ {t('energy')}{missingEnergy > 0 ? ` • ${rechargeMinutes} мин` : ''}</span>
@@ -386,6 +336,7 @@ export default function MineTab() {
           </button>
         )}
 
+        {/* SafePal Prompt — когда кошелёк не найден */}
         {showSafePal && !wallet && (
           <SafePalPrompt compact onClose={() => setShowSafePal(false)} />
         )}
@@ -397,6 +348,7 @@ export default function MineTab() {
           </button>
         )}
 
+        {/* Модал регистрации */}
         {showRegModal && (
           <div className="fixed inset-0 z-50 flex items-end justify-center pb-6 px-3" style={{ background: 'rgba(0,0,0,0.7)' }}
             onClick={() => setShowRegModal(false)}>
@@ -446,6 +398,7 @@ export default function MineTab() {
           </div>
         )}
 
+        {/* Кнопка покупки уровня */}
         {wallet && nextLv && (
           <button onClick={handleBuyNextLevel} disabled={buyingLevel || txPending}
             className="w-full p-3 rounded-2xl font-bold text-sm transition-all active:scale-[0.98] border-2 flex items-center justify-center gap-2"
