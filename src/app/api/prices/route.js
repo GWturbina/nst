@@ -1,12 +1,17 @@
 /**
  * API Route: /api/prices
  * GET  — получить все цены (публичное)
- * POST — обновить цены (только админ, проверка через dc_admins)
+ * POST — обновить цены (только админ, TTL подписи 5 минут)
+ *
+ * ИЗМЕНЕНИЯ (Пакет 3):
+ *   • POST — TTL подписи админа 5 минут
  */
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { verifyWallet } from '@/lib/authHelper'
 import { checkOrigin } from '@/lib/checkOrigin'
+
+const ADMIN_TTL_SEC = 300 // 5 минут для админских действий
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY
@@ -15,11 +20,8 @@ const supabase = supabaseUrl && supabaseServiceKey
   ? createClient(supabaseUrl, supabaseServiceKey)
   : null
 
-// FIX #6: Проверка Origin
-
 // ═══ Фиксированные клубные цены (defaults) ═══
 const DEFAULT_PRICES = {
-  // Средняя чистота — без сертификата / с сертификатом
   club_standard: {
     '0.30': { noCert: 300,  cert: 600 },
     '0.50': { noCert: 500,  cert: 1100 },
@@ -29,7 +31,6 @@ const DEFAULT_PRICES = {
     '2.50': { noCert: 4500, cert: 8500 },
     '3.00': { noCert: 8500, cert: 15000 },
   },
-  // Высшая проба — без сертификата / с сертификатом
   club_premium: {
     '0.30': { noCert: 325,  cert: 650 },
     '0.50': { noCert: 550,  cert: 1200 },
@@ -44,7 +45,6 @@ const DEFAULT_PRICES = {
 // GET: вернуть цены
 export async function GET() {
   if (!supabase) {
-    // Без Supabase — вернуть defaults
     return NextResponse.json({ ok: true, prices: DEFAULT_PRICES, source: 'defaults' })
   }
 
@@ -68,7 +68,7 @@ export async function GET() {
   }
 }
 
-// POST: обновить цены (только админ)
+// POST: обновить цены (только админ, TTL 5 мин)
 export async function POST(request) {
   if (!supabase) return NextResponse.json({ ok: false, error: 'Сервер не настроен' }, { status: 503 })
   if (!checkOrigin(request)) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 })
@@ -77,10 +77,10 @@ export async function POST(request) {
     const body = await request.json()
     const { key, data, adminWallet } = body
 
-    // FIX #7: Проверка подписи кошелька админа
-    const verified = await verifyWallet(body, 'adminWallet')
+    // Пакет 3: TTL 5 минут для админа
+    const verified = await verifyWallet(body, 'adminWallet', ADMIN_TTL_SEC)
     if (!verified) {
-      return NextResponse.json({ ok: false, error: 'Неверная подпись кошелька' }, { status: 401 })
+      return NextResponse.json({ ok: false, error: 'Неверная подпись или срок истёк (5 мин). Переподпишите кошелёк.' }, { status: 401 })
     }
 
     if (!adminWallet || !/^0x[a-fA-F0-9]{40}$/.test(adminWallet)) {
