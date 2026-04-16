@@ -115,15 +115,13 @@ class Web3Module {
   }
 
   // ───────────────────────────────────────────────────
-  // ПОДПИСЬ ДЛЯ АУТЕНТИФИКАЦИИ
-  // Уникальный префикс "DC-NST-AUTH" защищает от cross-project replay.
-  // Должен точно совпадать с AUTH_TAG в src/lib/authHelper.js
+  // FIX #7: ПОДПИСЬ ДЛЯ АУТЕНТИФИКАЦИИ
   // ───────────────────────────────────────────────────
 
   async signAuthMessage() {
     if (!this.signer) throw new Error('Кошелёк не подключён');
     const ts = Math.floor(Date.now() / 1000);
-    const message = `DC-NST-AUTH-${ts}`;
+    const message = `DC-AUTH-${ts}`;
     const signature = await this.signer.signMessage(message);
     return { authSig: signature, authTs: ts };
   }
