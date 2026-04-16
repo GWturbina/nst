@@ -956,73 +956,34 @@ function EditModal({ item, form, setForm, wallet, addNotification, txPending, on
 }
 
 // ═══════════════════════════════════════════════════
-// BUY BUTTON — создаёт заявку в dc_orders + копирует адрес продавца
+// BUY BUTTON — с визуальной обратной связью
 // ═══════════════════════════════════════════════════
 function BuyButton({ item }) {
-  const { wallet, addNotification } = useGameStore()
   const [sent, setSent] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [sending, setSending] = useState(false)
-  const [orderId, setOrderId] = useState(null)
-  const [note, setNote] = useState('')
-  const [showNote, setShowNote] = useState(false)
 
-  const handleBuy = async () => {
-    if (!wallet) {
-      addNotification('❌ Подключите кошелёк для оформления заявки')
-      return
+  const handleBuy = () => {
+    const sellerAddr = item.seller_wallet
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(sellerAddr).then(() => setCopied(true)).catch(() => {})
     }
-    if (item.seller_wallet?.toLowerCase() === wallet.toLowerCase()) {
-      addNotification('❌ Нельзя заказать свой же товар')
-      return
-    }
-    setSending(true)
-    try {
-      // 1) Пишем заявку в dc_orders через серверный API
-      const res = await authFetch('/api/orders', {
-        method: 'POST',
-        body: {
-          wallet,
-          orderType: 'showcase_request',
-          params: {
-            showcaseItemId: item.id,
-            note: note.trim(),
-          },
-        },
-      })
-      const data = await res.json()
-      if (!res.ok || !data.ok) {
-        addNotification(`❌ ${data.error || 'Ошибка создания заявки'}`)
-        setSending(false)
-        return
-      }
-      setOrderId(data.order?.id || null)
-      // 2) Копируем адрес продавца в буфер (для связи)
-      if (navigator.clipboard) {
-        navigator.clipboard.writeText(item.seller_wallet).then(() => setCopied(true)).catch(() => {})
-      }
-      setSent(true)
-      addNotification(`✅ Заявка #${data.order?.id || '?'} создана`)
-    } catch (err) {
-      addNotification('❌ Ошибка сети при создании заявки')
-    }
-    setSending(false)
+    setSent(true)
   }
 
   if (sent) {
     return (
       <div className="space-y-2">
         <div className="w-full py-3 rounded-xl text-[12px] font-black text-center bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
-          ✅ Заявка {orderId ? `#${orderId}` : ''} принята!
+          ✅ Заявка принята!
         </div>
         <div className="p-3 rounded-xl bg-white/5 border border-white/10 space-y-2">
-          <div className="text-[11px] text-white font-bold">📋 Адрес продавца:</div>
+          <div className="text-[11px] text-white font-bold">📋 Данные для связи:</div>
           <div className="text-[10px] text-slate-300 break-all font-mono bg-black/30 p-2 rounded-lg">
             {item.seller_wallet}
           </div>
           {copied && <div className="text-[9px] text-emerald-400">✓ Адрес скопирован в буфер обмена</div>}
           <div className="text-[10px] text-slate-400 leading-relaxed">
-            💬 Ваша заявка сохранена. Администратор Diamond Club свяжется с вами для оформления.
+            💬 Свяжитесь с продавцом или администратором Diamond Club для оформления покупки.
             Адрес доставки будет зашифрован AES-256.
           </div>
           <div className="text-[11px] text-gold-400 font-bold text-center">
@@ -1035,26 +996,12 @@ function BuyButton({ item }) {
 
   return (
     <div className="space-y-2">
-      {showNote && (
-        <textarea
-          value={note}
-          onChange={e => setNote(e.target.value.slice(0, 200))}
-          placeholder="Сообщение продавцу (необязательно, до 200 символов)"
-          rows={2}
-          className="w-full p-2.5 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none resize-none" />
-      )}
-      {!showNote && (
-        <button onClick={() => setShowNote(true)}
-          className="w-full py-1.5 rounded-lg text-[10px] text-slate-400 border border-white/10 hover:bg-white/5">
-          💬 Добавить сообщение (необязательно)
-        </button>
-      )}
-      <button onClick={handleBuy} disabled={sending || !wallet}
-        className="w-full py-3 rounded-xl text-[12px] font-black gold-btn active:scale-[0.97] transition-transform disabled:opacity-50">
-        {sending ? '⏳ Отправляю заявку...' : `💎 Хочу купить — $${item.club_price}`}
+      <button onClick={handleBuy}
+        className="w-full py-3 rounded-xl text-[12px] font-black gold-btn active:scale-[0.97] transition-transform">
+        💎 Хочу купить — ${item.club_price}
       </button>
       <div className="p-2 rounded-xl bg-blue-500/8 border border-blue-500/15 text-[9px] text-slate-400 text-center leading-relaxed">
-        📩 Заявка сохранится в вашем профиле. Админ Diamond Club свяжется для оформления.
+        📩 Нажмите — адрес продавца скопируется. Свяжитесь для оформления.
       </div>
     </div>
   )
