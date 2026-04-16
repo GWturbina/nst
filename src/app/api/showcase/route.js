@@ -1,6 +1,6 @@
 /**
  * API Route: /api/showcase
- * 
+ *
  * GET    — список товаров витрины (фильтры: type, category, status)
  * POST   — создать объявление (корпоративная = только админ, общая = партнёр с мин. 4 уровнями GW)
  * PATCH  — обновить (статус, цена, продажа)
@@ -9,12 +9,10 @@
  * FIX #2: Серверная проверка GW уровня через RPC (не доверяем фронтенду)
  * FIX #3: AES-256-GCM шифрование адреса доставки вместо Base64
  *
- * МАРКЕТИНГ ПРИ ПРОДАЖЕ (15% от маржи):
- *   5% — продавцу
- *   2% — авторские
- *   3% — техподдержка
- *   5% — токеномика (2.5% GWT + 2.5% CGT)
- *   90% маржи — на 9 уровней партнёрской программы (20/15/10/10/9/8/7/6/5)
+ * ИЗМЕНЕНИЯ (Пакет 3):
+ *   • Валидация URL для photos/video_url/cert_url — только http/https протоколы
+ *   • Убран небезопасный Base64-fallback при отсутствии ENCRYPTION_KEY
+ *     (теперь бросает ошибку — продажа невозможна пока ключ не настроен)
  */
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
@@ -33,10 +31,9 @@ const supabase = supabaseUrl && supabaseServiceKey
 const ENCRYPTION_KEY = process.env.DELIVERY_ENCRYPTION_KEY || '' // 64 hex chars = 32 bytes
 
 function encryptAddress(plaintext) {
+  // Пакет 3: убран небезопасный Base64-fallback
   if (!ENCRYPTION_KEY || ENCRYPTION_KEY.length < 64) {
-    // Fallback — но логируем предупреждение
-    console.warn('DELIVERY_ENCRYPTION_KEY не задан или короткий! Адрес НЕ зашифрован.')
-    return Buffer.from(plaintext).toString('base64')
+    throw new Error('DELIVERY_ENCRYPTION_KEY не настроен. Задайте переменную окружения в Vercel (64 hex символа).')
   }
   const key = Buffer.from(ENCRYPTION_KEY, 'hex')
   const iv = crypto.randomBytes(12) // 96 бит для GCM
@@ -44,15 +41,28 @@ function encryptAddress(plaintext) {
   let encrypted = cipher.update(plaintext, 'utf8', 'hex')
   encrypted += cipher.final('hex')
   const tag = cipher.getAuthTag().toString('hex')
-  // Формат: iv:tag:ciphertext
-  return `${iv.toString('hex')}:${tag}:${encrypted}`
+  // Формат: v1:iv:tag:ciphertext (v1 — версия для будущей ротации ключа)
+  return `v1:${iv.toString('hex')}:${tag}:${encrypted}`
+}
+
+// ═══ Пакет 3: Безопасная валидация URL ═══
+function sanitizeUrl(url) {
+  if (!url) return null
+  const s = String(url).trim().slice(0, 2000)
+  if (!s) return null
+  try {
+    const u = new URL(s)
+    if (!['http:', 'https:'].includes(u.protocol)) return null
+    return u.toString()
+  } catch {
+    return null
+  }
 }
 
 // ═══ FIX #2: Проверка GW уровня через RPC ═══
 const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || 'https://opbnb-mainnet-rpc.bnbchain.org'
 const NSS_PLATFORM_ADDR = '0xFb1ddFa8A7EAB0081EAe24ec3d24B0ED4Dd84f2B'
 
-// Минимальный ABI для проверки уровня
 const BRIDGE_ABI_FRAGMENT = [
   'function getUserStatus(address user) external view returns (tuple(bool isRegistered, uint256 odixId, uint8 maxPackage, uint8 rank, bool quarterlyActive, address sponsor, bool[12] activeLevels))',
 ]
@@ -62,16 +72,15 @@ const NSS_ABI_FRAGMENT = [
 
 async function getGWLevel(walletAddress) {
   try {
-    // Динамический импорт ethers (для серверного контекста)
     const { ethers } = await import('ethers')
     const provider = new ethers.JsonRpcProvider(RPC_URL)
-    
+
     const nss = new ethers.Contract(NSS_PLATFORM_ADDR, NSS_ABI_FRAGMENT, provider)
     const bridgeAddr = await nss.bridge()
-    
+
     const bridge = new ethers.Contract(bridgeAddr, BRIDGE_ABI_FRAGMENT, provider)
     const status = await bridge.getUserStatus(walletAddress)
-    
+
     return {
       isRegistered: status.isRegistered,
       maxPackage: Number(status.maxPackage),
@@ -82,26 +91,21 @@ async function getGWLevel(walletAddress) {
   }
 }
 
-// Минимальный уровень для продажи/покупки (регулируется)
 const MIN_GW_LEVEL = parseInt(process.env.SHOWCASE_MIN_LEVEL || '4')
-
-// ═══ Проверка Origin ═══
 
 // Реферальные проценты (из контракта GemVaultV2)
 const REFERRAL_SHARES = [20, 15, 10, 10, 9, 8, 7, 6, 5] // 9 уровней, итого 90%
 
-// Маркетинг при продаже — 15% от маржи
 const MARKETING = {
-  sellerPct: 5,          // 5% продавцу
-  authorPct: 2,          // 2% авторские
-  techPct: 3,            // 3% техподдержка
-  tokenGwtPct: 2.5,      // 2.5% GWT
-  tokenCgtPct: 2.5,      // 2.5% CGT
-  referralPct: 85,       // 85% от маркетинга → 9 уровней (90% от оставшихся 90%)
-  totalMarketingPct: 15, // 15% от маржи
+  sellerPct: 5,
+  authorPct: 2,
+  techPct: 3,
+  tokenGwtPct: 2.5,
+  tokenCgtPct: 2.5,
+  referralPct: 85,
+  totalMarketingPct: 15,
 }
 
-// Расчёт маркетинга при продаже
 function calculateMarketing(purchasePrice, salePrice) {
   const margin = salePrice - purchasePrice
   if (margin <= 0) return null
@@ -114,9 +118,8 @@ function calculateMarketing(purchasePrice, salePrice) {
   const cgtShare = margin * MARKETING.tokenCgtPct / 100
   const referralPool = margin * MARKETING.referralPct / 100
 
-  // 9 уровней реферальной программы
   const referralShares = REFERRAL_SHARES.map(pct => +(referralPool * pct / 100).toFixed(2))
-  const partnerMargin = margin - marketingPool  // 85% маржи → партнёру
+  const partnerMargin = margin - marketingPool
 
   return {
     margin: +margin.toFixed(2),
@@ -138,11 +141,11 @@ export async function GET(request) {
 
   try {
     const { searchParams } = new URL(request.url)
-    const type = searchParams.get('type')       // 'corporate' | 'partner'
-    const category = searchParams.get('category') // 'diamond' | 'jewelry'
+    const type = searchParams.get('type')
+    const category = searchParams.get('category')
     const status = searchParams.get('status') || 'active'
     const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100)
-    const ownerWallet = searchParams.get('owner') // Для просмотра своих скрытых
+    const ownerWallet = searchParams.get('owner')
 
     let query = supabase
       .from('dc_showcase')
@@ -150,11 +153,8 @@ export async function GET(request) {
       .order('created_at', { ascending: false })
       .limit(limit)
 
-    // Если запрошены свои объявления (включая скрытые) — фильтр по wallet
     if (ownerWallet && /^0x[a-fA-F0-9]{40}$/.test(ownerWallet)) {
       query = query.eq('seller_wallet', ownerWallet.toLowerCase())
-      // Не фильтруем по статусу — показываем все (active, hidden)
-      // Но исключаем sold (его видно в истории)
     } else {
       query = query.eq('status', status)
     }
@@ -181,7 +181,7 @@ export async function POST(request) {
     const { wallet, type, category, title, description, photos, videoUrl, certUrl,
       retailPrice, clubPrice, customPrice, carat, shape, clarity, color, gemId } = body
 
-    // FIX #7: Проверка подписи кошелька
+    // Подпись пользователя — дефолт 1 час
     const verified = await verifyWallet(body)
     if (!verified) {
       return NextResponse.json({ ok: false, error: 'Неверная подпись кошелька' }, { status: 401 })
@@ -197,7 +197,6 @@ export async function POST(request) {
 
     // Проверка прав
     if (type === 'corporate') {
-      // Только админ может создать корпоративное объявление
       const { data: admin } = await supabase
         .from('dc_admins')
         .select('role, active')
@@ -207,7 +206,7 @@ export async function POST(request) {
         return NextResponse.json({ ok: false, error: 'Только администратор может создавать корпоративные объявления' }, { status: 403 })
       }
     } else {
-      // FIX #2: Партнёрские — серверная проверка GW уровня через RPC
+      // Партнёрские — серверная проверка GW уровня
       const gwStatus = await getGWLevel(wLower)
       if (!gwStatus || !gwStatus.isRegistered) {
         return NextResponse.json({ ok: false, error: 'Пользователь не зарегистрирован в GlobalWay' }, { status: 403 })
@@ -224,6 +223,13 @@ export async function POST(request) {
       return NextResponse.json({ ok: false, error: 'Клубная цена не может быть выше 50% от розничной' }, { status: 400 })
     }
 
+    // Пакет 3: валидация URL-ов
+    const safePhotos = Array.isArray(photos)
+      ? photos.slice(0, 10).map(sanitizeUrl).filter(Boolean)
+      : []
+    const safeVideo = sanitizeUrl(videoUrl)
+    const safeCert = sanitizeUrl(certUrl)
+
     const { data, error } = await supabase
       .from('dc_showcase')
       .insert({
@@ -232,9 +238,9 @@ export async function POST(request) {
         seller_wallet: wLower,
         title: clean(title),
         description: clean(description),
-        photos: Array.isArray(photos) ? photos.slice(0, 10).map(p => clean(p)) : [],
-        video_url: String(videoUrl || '').replace(/[<>"';]/g, '').slice(0, 2000) || null,
-        cert_url: clean(certUrl) || null,
+        photos: safePhotos,
+        video_url: safeVideo,
+        cert_url: safeCert,
         retail_price: Math.max(0, rp),
         club_price: Math.max(0, cp),
         custom_price: parseFloat(customPrice) || null,
@@ -258,7 +264,7 @@ export async function POST(request) {
   }
 }
 
-// PATCH: обновить (продажа, статус, цена)
+// PATCH: обновить (продажа, статус, цена, редактирование)
 export async function PATCH(request) {
   if (!supabase) return NextResponse.json({ ok: false, error: 'Сервер не настроен' }, { status: 503 })
   if (!checkOrigin(request)) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 })
@@ -267,7 +273,7 @@ export async function PATCH(request) {
     const body = await request.json()
     const { id, wallet, action, buyerWallet, deliveryAddress, newPrice, newStatus } = body
 
-    // FIX #7: Проверка подписи кошелька
+    // Подпись пользователя — дефолт 1 час
     const verified = await verifyWallet(body)
     if (!verified) {
       return NextResponse.json({ ok: false, error: 'Неверная подпись кошелька' }, { status: 401 })
@@ -279,7 +285,6 @@ export async function PATCH(request) {
 
     const wLower = wallet.toLowerCase()
 
-    // Получить объявление
     const { data: item } = await supabase
       .from('dc_showcase')
       .select('*')
@@ -313,9 +318,13 @@ export async function PATCH(request) {
         sold_at: new Date().toISOString(),
       }
 
-      // FIX #3: AES-256-GCM шифрование адреса доставки
+      // Пакет 3: encryptAddress бросает ошибку при отсутствии ключа
       if (deliveryAddress) {
-        updates.delivery_address_encrypted = encryptAddress(deliveryAddress)
+        try {
+          updates.delivery_address_encrypted = encryptAddress(deliveryAddress)
+        } catch (e) {
+          return NextResponse.json({ ok: false, error: e.message }, { status: 500 })
+        }
       }
 
       const { error } = await supabase
@@ -328,9 +337,8 @@ export async function PATCH(request) {
       return NextResponse.json({ ok: true, marketing, action: 'sold' })
     }
 
-    // Действие: обновить статус (включая восстановление: hidden → active)
+    // Действие: обновить статус
     if (newStatus && ['active', 'hidden', 'sold'].includes(newStatus)) {
-      // Восстановление из hidden → active разрешено владельцу и админу
       if (newStatus === 'active' && item.status !== 'hidden') {
         return NextResponse.json({ ok: false, error: 'Восстановить можно только скрытое объявление' }, { status: 400 })
       }
@@ -354,7 +362,7 @@ export async function PATCH(request) {
       return NextResponse.json({ ok: true })
     }
 
-    // Действие: РЕДАКТИРОВАНИЕ (title, description, photos, prices, видео)
+    // Действие: РЕДАКТИРОВАНИЕ
     if (action === 'edit') {
       const clean = (s) => String(s || '').replace(/[<>"';]/g, '').slice(0, 500)
       const updates = {}
@@ -362,10 +370,11 @@ export async function PATCH(request) {
       if (body.title !== undefined) updates.title = clean(body.title)
       if (body.description !== undefined) updates.description = clean(body.description)
       if (body.photos !== undefined && Array.isArray(body.photos)) {
-        updates.photos = body.photos.slice(0, 10).map(p => clean(p))
+        // Пакет 3: валидация URL
+        updates.photos = body.photos.slice(0, 10).map(sanitizeUrl).filter(Boolean)
       }
-      if (body.videoUrl !== undefined) updates.video_url = String(body.videoUrl || '').replace(/[<>"';]/g, '').slice(0, 2000) || null
-      if (body.certUrl !== undefined) updates.cert_url = clean(body.certUrl) || null
+      if (body.videoUrl !== undefined) updates.video_url = sanitizeUrl(body.videoUrl)
+      if (body.certUrl !== undefined) updates.cert_url = sanitizeUrl(body.certUrl)
       if (body.retailPrice !== undefined) updates.retail_price = Math.max(0, parseFloat(body.retailPrice) || 0)
       if (body.clubPrice !== undefined) updates.club_price = Math.max(0, parseFloat(body.clubPrice) || 0)
       if (body.carat !== undefined) updates.carat = parseFloat(body.carat) || null
@@ -373,7 +382,6 @@ export async function PATCH(request) {
       if (body.clarity !== undefined) updates.clarity = clean(body.clarity) || null
       if (body.color !== undefined) updates.color = clean(body.color) || null
 
-      // Проверка: клубная не выше 50% от розничной (если оба указаны)
       const rp = updates.retail_price ?? item.retail_price
       const cp = updates.club_price ?? item.club_price
       if (cp > 0 && rp > 0 && cp > rp * 0.5) {
@@ -418,7 +426,6 @@ export async function DELETE(request) {
 
     const wLower = wallet.toLowerCase()
 
-    // Получить объявление
     const { data: item } = await supabase
       .from('dc_showcase')
       .select('seller_wallet, status')
@@ -427,12 +434,10 @@ export async function DELETE(request) {
 
     if (!item) return NextResponse.json({ ok: false, error: 'Не найдено' }, { status: 404 })
 
-    // Нельзя удалить проданное
     if (item.status === 'sold') {
       return NextResponse.json({ ok: false, error: 'Нельзя удалить проданное объявление' }, { status: 400 })
     }
 
-    // Проверка прав
     const isOwner = item.seller_wallet === wLower
     const { data: admin } = await supabase
       .from('dc_admins')
