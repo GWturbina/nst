@@ -8,7 +8,7 @@
  * Через месяц можно убрать старый формат (удалить fallback ниже).
  */
 
-const DEFAULT_MAX_AGE_SEC = 3600 // 1 час по умолчанию
+const DEFAULT_MAX_AGE_SEC = 86400 // 24 часа (как было)
 const AUTH_DOMAIN = 'gws.ink'
 
 /**
