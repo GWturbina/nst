@@ -1,27 +1,36 @@
 /**
  * API Route: /api/tournaments
- * 
+ *
  * GET — лидерборд за текущий/указанный месяц
  * POST — обновить статистику (вызывается при тапах, покупках, продажах)
- * 
- * FIX #1: Защита от накрутки:
- *   - 'tap' — валидация через dc_taps (сверка total_nss)
- *   - 'invite','turnover','gem_sale','jewelry_sale' — только admin/service
- * 
+ *
+ * ИЗМЕНЕНИЯ (17 апр 2026):
+ *   • action='tap' — amount с клиента больше не используется. Сервер сам
+ *     считает дельту: (текущий total_nss из dc_taps) − (last_total_nss
+ *     из dc_tournaments, записанный при прошлом tap-запросе). Это
+ *     защита от накрутки: сколько бы раз клиент ни дёрнул /tournaments,
+ *     taps_dct прирастёт только если реально появились новые тапы.
+ *     Требуется миграция: добавить колонку last_total_nss в dc_tournaments.
+ *
+ *   • Админские действия (invite, turnover, gem_sale, jewelry_sale) —
+ *     TTL подписи 5 минут (раньше передача TTL была забыта, по факту
+ *     админская подпись действовала сутки).
+ *
  * Категории:
  *   invites     — кто больше пригласил
  *   turnover    — товарооборот (своя + команда)
  *   taps_dct    — кто натапал больше NSS
  *   max_gem     — самая большая продажа камня
  *   max_jewelry — самая большая продажа изделия
- * 
+ *
  * Обнуление: 1-го числа каждого месяца (автоматически по month key)
- * Призы: 1-3 место — DCT / доли бриллиантов (назначает Админ)
  */
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { verifyWallet } from '@/lib/authHelper'
 import { checkOrigin } from '@/lib/checkOrigin'
+
+const ADMIN_TTL_SEC = 300 // 5 минут для админских действий
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY
@@ -34,8 +43,6 @@ function getCurrentMonth() {
   const now = new Date()
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
-
-// ═══ Проверка Origin ═══
 
 // Действия, которые может вызвать только admin (или внутренний сервис)
 const ADMIN_ONLY_ACTIONS = ['invite', 'turnover', 'gem_sale', 'jewelry_sale']
@@ -93,19 +100,24 @@ export async function POST(request) {
       return NextResponse.json({ ok: false, error: 'Неверный кошелёк' }, { status: 400 })
     }
 
-    // FIX #7: Проверка подписи — для admin-действий проверяем adminWallet, для tap — wallet
-    const authField = ADMIN_ONLY_ACTIONS.includes(action) ? 'adminWallet' : 'wallet'
-    const verified = await verifyWallet(body, authField)
+    // Для admin-действий подписывает adminWallet (TTL 5 мин), для tap — wallet (дефолт 24ч)
+    const isAdminAction = ADMIN_ONLY_ACTIONS.includes(action)
+    const authField = isAdminAction ? 'adminWallet' : 'wallet'
+    const verified = await verifyWallet(body, authField, isAdminAction ? ADMIN_TTL_SEC : undefined)
     if (!verified) {
-      return NextResponse.json({ ok: false, error: 'Неверная подпись кошелька' }, { status: 401 })
+      return NextResponse.json({
+        ok: false,
+        error: isAdminAction
+          ? 'Неверная подпись или срок истёк (5 мин). Переподпишите кошелёк.'
+          : 'Неверная подпись кошелька'
+      }, { status: 401 })
     }
 
     const wLower = wallet.toLowerCase()
     const month = getCurrentMonth()
 
-    // ═══ FIX #1: Проверка прав на действие ═══
-    if (ADMIN_ONLY_ACTIONS.includes(action)) {
-      // Эти действия — только для админа
+    // ═══ Проверка прав на действие ═══
+    if (isAdminAction) {
       if (!adminWallet || !/^0x[a-fA-F0-9]{40}$/.test(adminWallet)) {
         return NextResponse.json({ ok: false, error: 'Требуется adminWallet' }, { status: 403 })
       }
@@ -119,23 +131,65 @@ export async function POST(request) {
         return NextResponse.json({ ok: false, error: 'Нет прав администратора' }, { status: 403 })
       }
     } else if (action === 'tap') {
-      // Тапы — валидируем через dc_taps (сверка что пользователь реально тапает)
+      // ─── Новая логика (17 апр 2026): дельта вместо клиентского amount ───
+      // Читаем фактический total_nss из серверной тапалки.
       const { data: tapRecord } = await supabase
         .from('dc_taps')
-        .select('total_nss, total_taps')
+        .select('total_nss')
         .eq('wallet', wLower)
         .single()
       if (!tapRecord) {
         return NextResponse.json({ ok: false, error: 'Нет записи тапов' }, { status: 400 })
       }
-      // amount не может быть больше total_nss из серверной тапалки
-      const val = parseFloat(amount) || 0
-      if (val > parseFloat(tapRecord.total_nss) + 1) {
-        return NextResponse.json({ ok: false, error: 'Невалидная сумма тапов' }, { status: 400 })
+      const currentTotal = parseFloat(tapRecord.total_nss || 0)
+
+      // Читаем запись турнира за текущий месяц
+      const { data: record } = await supabase
+        .from('dc_tournaments')
+        .select('taps_dct, last_total_nss')
+        .eq('wallet', wLower)
+        .eq('month', month)
+        .single()
+
+      if (!record) {
+        // Первый вход в турнир в этом месяце — ставим snapshot, дельту не засчитываем
+        // (иначе вся накопленная за прошлые месяцы сумма "всплыла" бы в текущем)
+        const { error } = await supabase
+          .from('dc_tournaments')
+          .insert({
+            wallet: wLower,
+            month,
+            taps_dct: 0,
+            last_total_nss: currentTotal,
+          })
+        if (error) throw error
+        return NextResponse.json({ ok: true, earned: 0, snapshot: currentTotal })
       }
+
+      const lastSnapshot = parseFloat(record.last_total_nss || 0)
+      const delta = Math.max(0, currentTotal - lastSnapshot)
+
+      // Даже если delta=0 — обновляем last_total_nss на случай если total_nss уменьшился
+      // (сгорание NSS после 180 дней неактивности). Просто не увеличиваем taps_dct.
+      const newTapsDct = +(parseFloat(record.taps_dct || 0) + delta).toFixed(4)
+
+      const { error } = await supabase
+        .from('dc_tournaments')
+        .update({
+          taps_dct: newTapsDct,
+          last_total_nss: currentTotal,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('wallet', wLower)
+        .eq('month', month)
+
+      if (error) throw error
+      return NextResponse.json({ ok: true, earned: delta, total: newTapsDct })
     } else {
       return NextResponse.json({ ok: false, error: 'Неизвестное действие' }, { status: 400 })
     }
+
+    // ─── Ниже — только admin actions (invite, turnover, gem_sale, jewelry_sale) ───
 
     // Получить или создать запись
     let { data: record } = await supabase
@@ -165,9 +219,6 @@ export async function POST(request) {
         break
       case 'turnover':
         updates.turnover = +(parseFloat(record.turnover || 0) + val).toFixed(2)
-        break
-      case 'tap':
-        updates.taps_dct = +(parseFloat(record.taps_dct || 0) + val).toFixed(4)
         break
       case 'gem_sale':
         if (val > parseFloat(record.max_gem_sale || 0)) updates.max_gem_sale = val
