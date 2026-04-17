@@ -2,6 +2,10 @@
  * API Route: /api/showcase
  *
  * ИЗМЕНЕНИЯ (17 апр 2026):
+ *   • Action 'sell' теперь проверяет что item.status === 'active' перед
+ *     оформлением продажи — нельзя продать уже проданное или скрытое.
+ *   • Валидация формата buyerWallet (regex /^0x[a-fA-F0-9]{40}$/).
+ *
  *   • ИСПРАВЛЕНО: sanitizeVideoUrl теперь поддерживает:
  *     - префикс "VFIRST\n" (флаг "видео показывается первым")
  *     - несколько ссылок YouTube через перенос строки (до 5)
@@ -319,6 +323,19 @@ export async function PATCH(request) {
     // Действие: ПРОДАЖА
     if (action === 'sell') {
       if (!buyerWallet) return NextResponse.json({ ok: false, error: 'Укажите покупателя' }, { status: 400 })
+
+      // Валидация формата кошелька покупателя
+      if (!/^0x[a-fA-F0-9]{40}$/.test(buyerWallet)) {
+        return NextResponse.json({ ok: false, error: 'Неверный формат кошелька покупателя' }, { status: 400 })
+      }
+
+      // Нельзя продать то, что уже продано, скрыто или в другом состоянии
+      if (item.status !== 'active') {
+        return NextResponse.json({
+          ok: false,
+          error: `Нельзя оформить продажу: товар в статусе "${item.status}"`
+        }, { status: 400 })
+      }
 
       const marketing = calculateMarketing(item.club_price, item.retail_price)
 
