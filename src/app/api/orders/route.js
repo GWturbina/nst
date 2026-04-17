@@ -1,14 +1,16 @@
 /**
  * API Route: /api/orders
- * FIX C3: Серверная проверка админских действий
- * FIX M4: Rate-limit на создание заказов
- *
- * ИЗМЕНЕНИЯ (Пакет 3):
- *   • PATCH (админ меняет статус) — TTL подписи 5 минут
- *   • POST (пользователь создаёт заказ) — дефолт 1 час
  *
  * POST /api/orders — создать заказ (rate-limit: 1 заказ в 30 сек)
  * PATCH /api/orders — обновить статус (только для админов, проверка через Supabase)
+ *
+ * ИЗМЕНЕНИЯ (17 апр 2026):
+ *   • Санитизация поля note перед записью в admin_note / cancel_reason / лог.
+ *     Раньше note записывался как есть — потенциальный XSS, если где-то
+ *     в админке строка отрисовывалась без экранирования.
+ *
+ * FIX C3: Серверная проверка админских действий
+ * FIX M4: Rate-limit на создание заказов
  */
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
@@ -39,6 +41,10 @@ const STATUS_TRANSITIONS = {
   CANCELLED:  [],
 }
 
+// Общая функция санитизации строки (уберёт < > " ' ; и ограничит длину)
+const clean = (str, max = 500) => String(str || '').replace(/[<>"';]/g, '').slice(0, max)
+const num = (v, min = 0, max = 999999) => Math.max(min, Math.min(max, parseFloat(v) || 0))
+
 // ═══ POST: Создать заказ (с rate-limit) ═══
 export async function POST(request) {
   if (!supabase) return NextResponse.json({ ok: false, error: 'Сервер не настроен' }, { status: 503 })
@@ -47,7 +53,7 @@ export async function POST(request) {
     const body = await request.json()
     const { wallet, params } = body
 
-    // FIX #7: Подпись пользователя — дефолт 1 час
+    // FIX #7: Подпись пользователя — дефолт 24ч
     const verified = await verifyWallet(body)
     if (!verified) {
       return NextResponse.json({ ok: false, error: 'Неверная подпись кошелька' }, { status: 401 })
@@ -75,28 +81,26 @@ export async function POST(request) {
       )
     }
 
-    // Санитизация
-    const clean = (str) => String(str || '').replace(/[<>"';]/g, '').slice(0, 200)
-    const num = (v, min = 0, max = 999999) => Math.max(min, Math.min(max, parseFloat(v) || 0))
-
     if (!params || !params.gemType || !params.clubPrice) {
       return NextResponse.json({ ok: false, error: 'Неполные данные' }, { status: 400 })
     }
+
+    const paramsClean = (s) => clean(s, 200)
 
     const { data, error } = await supabase
       .from('dc_orders')
       .insert({
         wallet: wLower,
-        gem_type: clean(params.gemType),
-        shape: clean(params.shape),
-        clarity: clean(params.clarity),
-        color: clean(params.color) || null,
-        fancy_color: clean(params.fancyColor) || null,
-        intensity: clean(params.intensity) || null,
+        gem_type: paramsClean(params.gemType),
+        shape: paramsClean(params.shape),
+        clarity: paramsClean(params.clarity),
+        color: paramsClean(params.color) || null,
+        fancy_color: paramsClean(params.fancyColor) || null,
+        intensity: paramsClean(params.intensity) || null,
         carats: num(params.carats, 0.1, 100),
         has_cert: !!params.hasCert,
-        region: clean(params.region),
-        buy_mode: clean(params.buyMode),
+        region: paramsClean(params.region),
+        buy_mode: paramsClean(params.buyMode),
         is_fraction: !!params.isFraction,
         fraction_count: Math.max(0, parseInt(params.fractionCount) || 0),
         total_fractions: Math.max(0, parseInt(params.totalFractions) || 0),
@@ -104,7 +108,7 @@ export async function POST(request) {
         club_price: num(params.clubPrice),
         savings: num(params.savings),
         discount_pct: num(params.discountPct, 0, 100),
-        spec_string: clean(params.specString),
+        spec_string: paramsClean(params.specString),
         quality_tier: params.qualityTier === 'premium' ? 'premium' : 'standard',
         status: 'PAID',
         paid_at: new Date().toISOString(),
@@ -121,7 +125,7 @@ export async function POST(request) {
       order_id: data.id,
       action: 'CREATED',
       actor: wLower,
-      details: `Заказ: ${clean(params.specString)} — $${num(params.clubPrice)}`,
+      details: `Заказ: ${paramsClean(params.specString)} — $${num(params.clubPrice)}`,
     })
 
     return NextResponse.json({ ok: true, order: data })
@@ -139,7 +143,7 @@ export async function PATCH(request) {
     const body = await request.json()
     const { orderId, newStatus, adminWallet, note } = body
 
-    // FIX #7 (Пакет 3): Подпись админа — TTL 5 минут
+    // Подпись админа — TTL 5 минут
     const verified = await verifyWallet(body, 'adminWallet', ADMIN_TTL_SEC)
     if (!verified) {
       return NextResponse.json({ ok: false, error: 'Неверная подпись или срок истёк (5 мин). Переподпишите кошелёк.' }, { status: 401 })
@@ -155,7 +159,7 @@ export async function PATCH(request) {
 
     const aLower = adminWallet.toLowerCase()
 
-    // FIX C3: Проверяем роль СЕРВЕРНО через Supabase (service_role ключ)
+    // Проверяем роль серверно
     const { data: admin } = await supabase
       .from('dc_admins')
       .select('role, active, max_amount')
@@ -180,7 +184,7 @@ export async function PATCH(request) {
       return NextResponse.json({ ok: false, error: 'Заказ не найден' }, { status: 404 })
     }
 
-    // FIX C5: Проверка перехода статуса
+    // Проверка перехода статуса
     const allowed = STATUS_TRANSITIONS[order.status] || []
     if (!allowed.includes(newStatus)) {
       return NextResponse.json(
@@ -197,15 +201,17 @@ export async function PATCH(request) {
       )
     }
 
-    // Обновляем
+    // ─── Санитизируем note перед записью в базу ───
+    const cleanNote = note ? clean(note, 500) : ''
+
     const updates = { status: newStatus }
     const now = new Date().toISOString()
     if (newStatus === 'APPROVED') { updates.approved_by = aLower; updates.approved_at = now }
     if (newStatus === 'PRODUCTION') { updates.production_at = now }
     if (newStatus === 'READY') { updates.ready_at = now }
     if (newStatus === 'COMPLETED') { updates.completed_by = aLower; updates.completed_at = now }
-    if (newStatus === 'CANCELLED') { updates.cancelled_at = now; updates.cancel_reason = note || '' }
-    if (note) updates.admin_note = note
+    if (newStatus === 'CANCELLED') { updates.cancelled_at = now; updates.cancel_reason = cleanNote }
+    if (cleanNote) updates.admin_note = cleanNote
 
     const { error } = await supabase
       .from('dc_orders')
@@ -221,7 +227,7 @@ export async function PATCH(request) {
       order_id: orderId,
       action: newStatus,
       actor: aLower,
-      details: note || `Статус → ${newStatus}`,
+      details: cleanNote || `Статус → ${newStatus}`,
     })
 
     return NextResponse.json({ ok: true })
