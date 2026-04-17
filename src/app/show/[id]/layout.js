@@ -1,8 +1,13 @@
 /**
  * /show/[id]/layout.js — Server component с generateMetadata
  *
- * Отвечает за красивое превью в Telegram/WhatsApp когда партнёр
+ * Отвечает за красивое превью в Telegram/WhatsApp/Viber когда партнёр
  * шлёт ссылку в мессенджере: подтягивает фото, название, цену товара.
+ *
+ * ИЗМЕНЕНИЯ (17 апр 2026):
+ *   • Приоритет для og:image: preview_photo_url (если загружен админом/партнёром)
+ *     → photos[0] → fallback logo. Превью-картинка специально маленькая
+ *     (1200×630, ~150KB) чтобы WhatsApp мобильный надёжно её подхватывал.
  */
 import { createClient } from '@supabase/supabase-js'
 
@@ -32,10 +37,10 @@ export async function generateMetadata({ params, searchParams }) {
   }
 
   try {
-    // Получаем товар
+    // Получаем товар (теперь с preview_photo_url)
     const { data: item } = await supabase
       .from('dc_showcase')
-      .select('id, title, description, photos, club_price, retail_price, carat, shape')
+      .select('id, title, description, photos, preview_photo_url, club_price, retail_price, carat, shape')
       .eq('id', id)
       .eq('status', 'active')
       .single()
@@ -71,7 +76,13 @@ export async function generateMetadata({ params, searchParams }) {
       }
     }
 
-    const photo = (item.photos && item.photos[0]) || `${SITE_URL}/icons/logo.png`
+    // ─── Приоритет картинки для превью ───
+    // 1) preview_photo_url (спец. маленькая 1200×630) — лучше всего для мессенджеров
+    // 2) photos[0] (оригинал) — если превью не загружено
+    // 3) логотип сайта — если товар без фото вообще
+    const photo = item.preview_photo_url
+      || (item.photos && item.photos[0])
+      || `${SITE_URL}/icons/logo.png`
 
     const title = `${item.title} — Diamond Club`
 
