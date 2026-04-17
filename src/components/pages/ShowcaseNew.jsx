@@ -18,7 +18,7 @@ import { shortAddress } from '@/lib/web3'
 import { getUserLevel } from '@/lib/contracts'
 import { getAdminRole } from '@/lib/dcOrders'
 import { formatUSD } from '@/lib/gemCatalog'
-import { uploadShowcaseFile, compressImage, deleteShowcaseFile } from '@/lib/showcaseStorage'
+import { uploadShowcaseFile, compressImage, compressPreview, deleteShowcaseFile } from '@/lib/showcaseStorage'
 import { authFetch } from '@/lib/authClient'
 import SellPartnerButton from '@/components/pages/SellPartnerButton'
 
@@ -95,6 +95,7 @@ export default function ShowcaseNew() {
     category: 'diamond', title: '', description: '',
     retailPrice: '', clubPrice: '', carat: '', shape: '',
     clarity: '', color: '', certUrl: '', photos: [], videoUrl: '',
+    videoFirst: false, previewPhotoUrl: '',
   })
 
   // Модалка продажи
@@ -160,10 +161,14 @@ export default function ShowcaseNew() {
     if (!form.title || !form.clubPrice) return addNotification('❌ Заполните название и цену')
     setTxPending(true)
     try {
+      // Кодируем флаг VFIRST в videoUrl
+      const videoUrl = form.videoFirst && form.videoUrl?.trim()
+        ? 'VFIRST\n' + form.videoUrl
+        : form.videoUrl || ''
       const res = await authFetch('/api/showcase', {
         method: 'POST',
         body: {
-          wallet, type: tab === 'my' ? 'partner' : tab, ...form,
+          wallet, type: tab === 'my' ? 'partner' : tab, ...form, videoUrl,
           retailPrice: parseFloat(form.retailPrice) || parseFloat(form.clubPrice) * 2,
         }
       })
@@ -171,7 +176,7 @@ export default function ShowcaseNew() {
       if (data.ok) {
         addNotification(`✅ «${form.title}» опубликовано!`)
         setShowCreate(false)
-        setForm({ category: 'diamond', title: '', description: '', retailPrice: '', clubPrice: '', carat: '', shape: '', clarity: '', color: '', certUrl: '', photos: [], videoUrl: '' })
+        setForm({ category: 'diamond', title: '', description: '', retailPrice: '', clubPrice: '', carat: '', shape: '', clarity: '', color: '', certUrl: '', photos: [], videoUrl: '', videoFirst: false, previewPhotoUrl: '' })
         reload()
       } else addNotification(`❌ ${data.error}`)
     } catch { addNotification('❌ Ошибка сети') }
@@ -251,6 +256,7 @@ export default function ShowcaseNew() {
       retailPrice: item.retail_price || '', clubPrice: item.club_price || '',
       carat: item.carat || '', shape: item.shape || '', clarity: item.clarity || '',
       certUrl: item.cert_url || '', photos: item.photos || [], videoUrl, videoFirst,
+      previewPhotoUrl: item.preview_photo_url || '',
     })
     setSelectedItem(null)
   }
@@ -947,6 +953,49 @@ function EditModal({ item, form, setForm, wallet, addNotification, txPending, on
           </label>
         </div>
 
+        {/* ═══ Превью для мессенджеров ═══ */}
+        <div className="p-2.5 rounded-xl bg-gold-400/5 border border-gold-400/20 space-y-1.5">
+          <div className="text-[10px] font-bold text-gold-400">🔗 Превью для WhatsApp / Telegram</div>
+          <div className="text-[9px] text-slate-500 leading-tight">
+            Маленькая картинка для превью при отправке ссылки в мессенджеры.
+            Загрузите обычное фото — оно сожмётся до 1200×630 (~150 КБ).
+            Без превью WhatsApp на мобильном может не показать картинку.
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="flex-1 py-2 rounded-xl text-[10px] font-bold text-center cursor-pointer bg-gold-400/10 text-gold-400 border border-gold-400/25">
+              {form.previewPhotoUrl ? '🔄 Заменить превью' : '🖼 Загрузить превью'}
+              <input type="file" accept="image/*" className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0]
+                  if (!file) return
+                  const compressed = await compressPreview(file)
+                  const result = await uploadShowcaseFile(compressed, wallet)
+                  if (result.ok) {
+                    setForm(f => ({ ...f, previewPhotoUrl: result.url }))
+                    addNotification('✅ Превью загружено')
+                  } else {
+                    addNotification(`❌ ${result.error}`)
+                  }
+                  e.target.value = ''
+                }} />
+            </label>
+            {form.previewPhotoUrl && (
+              <button onClick={() => setForm(f => ({ ...f, previewPhotoUrl: '' }))}
+                className="px-3 py-2 rounded-xl text-[10px] text-red-400 border border-red-500/25 bg-red-500/5">
+                ✕
+              </button>
+            )}
+          </div>
+          {form.previewPhotoUrl && (
+            <div className="flex items-center gap-2 mt-1">
+              <div className="w-16 h-9 rounded-md overflow-hidden border border-gold-400/25 flex-shrink-0">
+                <img src={form.previewPhotoUrl} alt="" className="w-full h-full object-cover" />
+              </div>
+              <div className="text-[9px] text-slate-400 truncate">Превью готово</div>
+            </div>
+          )}
+        </div>
+
         <div className="flex gap-2 pt-2">
           <button onClick={onClose}
             className="flex-1 py-3 rounded-xl text-[11px] font-bold text-slate-400 border border-white/10">Отмена</button>
@@ -1108,6 +1157,49 @@ function CreateForm({ form, setForm, tab, wallet, addNotification, txPending, on
                 </div>
               </div>
             ))}
+          </div>
+        )}
+      </div>
+
+      {/* ═══ Превью для мессенджеров ═══ */}
+      <div className="p-2.5 rounded-xl bg-gold-400/5 border border-gold-400/20 space-y-1.5">
+        <div className="text-[10px] font-bold text-gold-400">🔗 Превью для WhatsApp / Telegram</div>
+        <div className="text-[9px] text-slate-500 leading-tight">
+          Маленькая картинка для превью при отправке ссылки в мессенджеры.
+          Загрузите обычное фото — оно сожмётся до 1200×630 (~150 КБ).
+          Без превью WhatsApp на мобильном может не показать картинку.
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="flex-1 py-2 rounded-xl text-[10px] font-bold text-center cursor-pointer bg-gold-400/10 text-gold-400 border border-gold-400/25">
+            {form.previewPhotoUrl ? '🔄 Заменить превью' : '🖼 Загрузить превью'}
+            <input type="file" accept="image/*" className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0]
+                if (!file) return
+                const compressed = await compressPreview(file)
+                const result = await uploadShowcaseFile(compressed, wallet)
+                if (result.ok) {
+                  setForm(f => ({ ...f, previewPhotoUrl: result.url }))
+                  addNotification('✅ Превью загружено')
+                } else {
+                  addNotification(`❌ ${result.error}`)
+                }
+                e.target.value = ''
+              }} />
+          </label>
+          {form.previewPhotoUrl && (
+            <button onClick={() => setForm(f => ({ ...f, previewPhotoUrl: '' }))}
+              className="px-3 py-2 rounded-xl text-[10px] text-red-400 border border-red-500/25 bg-red-500/5">
+              ✕
+            </button>
+          )}
+        </div>
+        {form.previewPhotoUrl && (
+          <div className="flex items-center gap-2 mt-1">
+            <div className="w-16 h-9 rounded-md overflow-hidden border border-gold-400/25 flex-shrink-0">
+              <img src={form.previewPhotoUrl} alt="" className="w-full h-full object-cover" />
+            </div>
+            <div className="text-[9px] text-slate-400 truncate">Превью готово</div>
           </div>
         )}
       </div>
