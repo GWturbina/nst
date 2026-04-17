@@ -5,6 +5,12 @@
  * POST   — создать лот (только админ, TTL 5 мин)
  * PATCH  — record_purchase (юзер, TTL 1 час), reserve/gift/set_winner/cancel/link_contract (админ, TTL 5 мин)
  *
+ * ИЗМЕНЕНИЯ (17 апр 2026):
+ *   • record_purchase теперь проверяет транзакцию on-chain через verifyClubLotsPurchase
+ *     (раньше принимал любой валидный по формату txHash на слово)
+ *   • record_purchase использует атомарную SQL-функцию record_lot_purchase
+ *     вместо двух раздельных INSERT + UPDATE (защита от race condition)
+ *
  * ИЗМЕНЕНИЯ (Пакет 3):
  *   • Все админские действия требуют TTL подписи 5 минут
  *   • record_purchase (пользовательская покупка) — дефолт 1 час
@@ -13,6 +19,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { verifyWallet } from '@/lib/authHelper'
 import { checkOrigin } from '@/lib/checkOrigin'
+import { verifyClubLotsPurchase } from '@/lib/verifyPurchase'
 
 const ADMIN_TTL_SEC = 300 // 5 минут для админских действий
 
@@ -212,60 +219,101 @@ export async function PATCH(request) {
     const { action } = body
 
     // ═══ RECORD_PURCHASE — пользователь записывает свою покупку (TTL 1 час) ═══
+    // Обновлено 17 апр 2026:
+    //   1) проверка транзакции on-chain через verifyClubLotsPurchase
+    //   2) атомарная запись через SQL-функцию record_lot_purchase
     if (action === 'record_purchase') {
       const verified = await verifyWallet(body)
       if (!verified) return NextResponse.json({ ok: false, error: 'Неверная подпись' }, { status: 401 })
 
       const { wallet, lotId, sharesCount, usdtAmount, txHash } = body
-      if (!lotId || !sharesCount) return NextResponse.json({ ok: false, error: 'Нет данных' }, { status: 400 })
 
+      // Базовая валидация
+      if (!lotId || !sharesCount) {
+        return NextResponse.json({ ok: false, error: 'Нет данных' }, { status: 400 })
+      }
+      if (!wallet || !/^0x[a-fA-F0-9]{40}$/.test(wallet)) {
+        return NextResponse.json({ ok: false, error: 'Неверный кошелёк' }, { status: 400 })
+      }
       if (!txHash || !/^0x[a-fA-F0-9]{64}$/.test(txHash)) {
         return NextResponse.json({ ok: false, error: 'Неверный txHash' }, { status: 400 })
-      }
-
-      // Защита от дубликатов
-      const { data: existing } = await supabase
-        .from('dc_lot_shares')
-        .select('id')
-        .eq('tx_hash', clean(txHash))
-        .limit(1)
-      if (existing && existing.length > 0) {
-        return NextResponse.json({ ok: false, error: 'Транзакция уже записана' }, { status: 409 })
       }
 
       const wLower = wallet.toLowerCase()
       const cnt = Math.max(1, Math.min(100, parseInt(sharesCount) || 1))
 
-      const { data: lot } = await supabase.from('dc_lots').select('sold_shares, total_shares, reserved_shares, status').eq('id', lotId).single()
-      if (!lot || lot.status !== 'active') {
+      // Получаем contract_lot_id — нужен для проверки события в блокчейне
+      const { data: lot } = await supabase
+        .from('dc_lots')
+        .select('contract_lot_id, status')
+        .eq('id', lotId)
+        .single()
+
+      if (!lot) {
+        return NextResponse.json({ ok: false, error: 'Лот не найден' }, { status: 404 })
+      }
+      if (lot.status !== 'active') {
         return NextResponse.json({ ok: false, error: 'Лот не активен' }, { status: 400 })
       }
-      const available = lot.total_shares - lot.sold_shares
-      if (cnt > available) {
-        return NextResponse.json({ ok: false, error: `Доступно только ${available} долей` }, { status: 400 })
+      if (lot.contract_lot_id === null || lot.contract_lot_id === undefined) {
+        return NextResponse.json({
+          ok: false,
+          error: 'Лот ещё не привязан к контракту — покупка невозможна'
+        }, { status: 400 })
       }
 
-      const { error: shareErr } = await supabase
-        .from('dc_lot_shares')
-        .insert({
-          lot_id: lotId,
-          wallet: wLower,
-          shares_count: cnt,
-          usdt_amount: num(usdtAmount),
-          tx_hash: clean(txHash) || null,
-        })
-      if (shareErr) return NextResponse.json({ ok: false, error: 'Ошибка записи' }, { status: 500 })
+      // ─── Проверка транзакции в блокчейне ───
+      const check = await verifyClubLotsPurchase({
+        txHash,
+        buyerWallet: wLower,
+        contractLotId: lot.contract_lot_id,
+        expectedCount: cnt,
+      })
 
-      const newSold = lot.sold_shares + cnt
-      const newReserved = Math.max(0, (lot.reserved_shares || 0) - cnt)
-      const updates = { sold_shares: newSold, reserved_shares: newReserved }
-      if (newSold >= lot.total_shares) {
-        updates.status = 'filled'
+      if (!check.ok) {
+        return NextResponse.json({
+          ok: false,
+          error: check.error || 'Проверка транзакции не прошла'
+        }, { status: 400 })
       }
-      await supabase.from('dc_lots').update(updates).eq('id', lotId).eq('sold_shares', lot.sold_shares)
 
-      await addLog(lotId, 'SHARE_BOUGHT', wLower, `${cnt} доля(ей) — $${num(usdtAmount)} tx:${clean(txHash).slice(0,10)}`)
-      return NextResponse.json({ ok: true })
+      // ─── Атомарная запись через SQL-функцию ───
+      // Защита от дубля tx_hash и от race condition — внутри функции.
+      const { data: rpcResult, error: rpcErr } = await supabase.rpc('record_lot_purchase', {
+        p_lot_id:       parseInt(lotId),
+        p_wallet:       wLower,
+        p_shares_count: cnt,
+        p_usdt_amount:  num(usdtAmount),
+        p_tx_hash:      clean(txHash),
+      })
+
+      if (rpcErr) {
+        console.error('record_lot_purchase RPC error:', rpcErr)
+        return NextResponse.json({
+          ok: false,
+          error: 'Ошибка записи (функция БД не доступна — запустите миграцию)'
+        }, { status: 500 })
+      }
+
+      if (!rpcResult || rpcResult.ok === false) {
+        return NextResponse.json({
+          ok: false,
+          error: rpcResult?.error || 'Ошибка записи'
+        }, { status: 400 })
+      }
+
+      await addLog(
+        parseInt(lotId),
+        'SHARE_BOUGHT',
+        wLower,
+        `${cnt} доля(ей) — $${num(usdtAmount)} tx:${clean(txHash).slice(0,10)} (verified on-chain)`
+      )
+
+      return NextResponse.json({
+        ok: true,
+        shareId: rpcResult.share_id,
+        newStatus: rpcResult.new_status,
+      })
     }
 
     // ═══ RESERVE — админ резервирует (TTL 5 мин) ═══
