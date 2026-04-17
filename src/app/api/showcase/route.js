@@ -3,16 +3,20 @@
  *
  * GET    — список товаров витрины (фильтры: type, category, status)
  * POST   — создать объявление (корпоративная = только админ, общая = партнёр с мин. 4 уровнями GW)
- * PATCH  — обновить (статус, цена, продажа)
+ * PATCH  — обновить (статус, цена, продажа, редактирование)
  * DELETE — удалить (только свои или админ)
  *
  * FIX #2: Серверная проверка GW уровня через RPC (не доверяем фронтенду)
- * FIX #3: AES-256-GCM шифрование адреса доставки вместо Base64
+ * FIX #3: AES-256-GCM шифрование адреса доставки
+ *
+ * ИЗМЕНЕНИЯ (17 апр 2026):
+ *   • Поддержка preview_photo_url — отдельная маленькая картинка 1200×630
+ *     (~150KB) специально для OG-превью в WhatsApp/Telegram. Основные photos[]
+ *     используются в витрине как раньше.
  *
  * ИЗМЕНЕНИЯ (Пакет 3):
  *   • Валидация URL для photos/video_url/cert_url — только http/https протоколы
  *   • Убран небезопасный Base64-fallback при отсутствии ENCRYPTION_KEY
- *     (теперь бросает ошибку — продажа невозможна пока ключ не настроен)
  */
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
@@ -28,24 +32,22 @@ const supabase = supabaseUrl && supabaseServiceKey
   : null
 
 // ═══ FIX #3: AES-256-GCM шифрование ═══
-const ENCRYPTION_KEY = process.env.DELIVERY_ENCRYPTION_KEY || '' // 64 hex chars = 32 bytes
+const ENCRYPTION_KEY = process.env.DELIVERY_ENCRYPTION_KEY || ''
 
 function encryptAddress(plaintext) {
-  // Пакет 3: убран небезопасный Base64-fallback
   if (!ENCRYPTION_KEY || ENCRYPTION_KEY.length < 64) {
     throw new Error('DELIVERY_ENCRYPTION_KEY не настроен. Задайте переменную окружения в Vercel (64 hex символа).')
   }
   const key = Buffer.from(ENCRYPTION_KEY, 'hex')
-  const iv = crypto.randomBytes(12) // 96 бит для GCM
+  const iv = crypto.randomBytes(12)
   const cipher = crypto.createCipheriv('aes-256-gcm', key, iv)
   let encrypted = cipher.update(plaintext, 'utf8', 'hex')
   encrypted += cipher.final('hex')
   const tag = cipher.getAuthTag().toString('hex')
-  // Формат: v1:iv:tag:ciphertext (v1 — версия для будущей ротации ключа)
   return `v1:${iv.toString('hex')}:${tag}:${encrypted}`
 }
 
-// ═══ Пакет 3: Безопасная валидация URL ═══
+// Безопасная валидация URL
 function sanitizeUrl(url) {
   if (!url) return null
   const s = String(url).trim().slice(0, 2000)
@@ -59,7 +61,7 @@ function sanitizeUrl(url) {
   }
 }
 
-// ═══ FIX #2: Проверка GW уровня через RPC ═══
+// Проверка GW уровня через RPC
 const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || 'https://opbnb-mainnet-rpc.bnbchain.org'
 const NSS_PLATFORM_ADDR = '0xFb1ddFa8A7EAB0081EAe24ec3d24B0ED4Dd84f2B'
 
@@ -93,8 +95,7 @@ async function getGWLevel(walletAddress) {
 
 const MIN_GW_LEVEL = parseInt(process.env.SHOWCASE_MIN_LEVEL || '4')
 
-// Реферальные проценты (из контракта GemVaultV2)
-const REFERRAL_SHARES = [20, 15, 10, 10, 9, 8, 7, 6, 5] // 9 уровней, итого 90%
+const REFERRAL_SHARES = [20, 15, 10, 10, 9, 8, 7, 6, 5]
 
 const MARKETING = {
   sellerPct: 5,
@@ -179,9 +180,9 @@ export async function POST(request) {
   try {
     const body = await request.json()
     const { wallet, type, category, title, description, photos, videoUrl, certUrl,
-      retailPrice, clubPrice, customPrice, carat, shape, clarity, color, gemId } = body
+      retailPrice, clubPrice, customPrice, carat, shape, clarity, color, gemId,
+      previewPhotoUrl } = body // <-- добавлено
 
-    // Подпись пользователя — дефолт 1 час
     const verified = await verifyWallet(body)
     if (!verified) {
       return NextResponse.json({ ok: false, error: 'Неверная подпись кошелька' }, { status: 401 })
@@ -195,7 +196,6 @@ export async function POST(request) {
     const wLower = wallet.toLowerCase()
     const clean = (s) => String(s || '').replace(/[<>"';]/g, '').slice(0, 500)
 
-    // Проверка прав
     if (type === 'corporate') {
       const { data: admin } = await supabase
         .from('dc_admins')
@@ -206,7 +206,6 @@ export async function POST(request) {
         return NextResponse.json({ ok: false, error: 'Только администратор может создавать корпоративные объявления' }, { status: 403 })
       }
     } else {
-      // Партнёрские — серверная проверка GW уровня
       const gwStatus = await getGWLevel(wLower)
       if (!gwStatus || !gwStatus.isRegistered) {
         return NextResponse.json({ ok: false, error: 'Пользователь не зарегистрирован в GlobalWay' }, { status: 403 })
@@ -216,19 +215,18 @@ export async function POST(request) {
       }
     }
 
-    // Проверка цены: клубная не выше 50% от розничной
     const rp = parseFloat(retailPrice) || 0
     const cp = parseFloat(clubPrice) || 0
     if (cp > 0 && rp > 0 && cp > rp * 0.5) {
       return NextResponse.json({ ok: false, error: 'Клубная цена не может быть выше 50% от розничной' }, { status: 400 })
     }
 
-    // Пакет 3: валидация URL-ов
     const safePhotos = Array.isArray(photos)
       ? photos.slice(0, 10).map(sanitizeUrl).filter(Boolean)
       : []
     const safeVideo = sanitizeUrl(videoUrl)
     const safeCert = sanitizeUrl(certUrl)
+    const safePreview = sanitizeUrl(previewPhotoUrl) // <-- новое
 
     const { data, error } = await supabase
       .from('dc_showcase')
@@ -241,6 +239,7 @@ export async function POST(request) {
         photos: safePhotos,
         video_url: safeVideo,
         cert_url: safeCert,
+        preview_photo_url: safePreview, // <-- новое
         retail_price: Math.max(0, rp),
         club_price: Math.max(0, cp),
         custom_price: parseFloat(customPrice) || null,
@@ -273,7 +272,6 @@ export async function PATCH(request) {
     const body = await request.json()
     const { id, wallet, action, buyerWallet, deliveryAddress, newPrice, newStatus } = body
 
-    // Подпись пользователя — дефолт 1 час
     const verified = await verifyWallet(body)
     if (!verified) {
       return NextResponse.json({ ok: false, error: 'Неверная подпись кошелька' }, { status: 401 })
@@ -293,7 +291,6 @@ export async function PATCH(request) {
 
     if (!item) return NextResponse.json({ ok: false, error: 'Не найдено' }, { status: 404 })
 
-    // Проверка прав (владелец или админ)
     const isOwner = item.seller_wallet === wLower
     const { data: admin } = await supabase
       .from('dc_admins')
@@ -318,7 +315,6 @@ export async function PATCH(request) {
         sold_at: new Date().toISOString(),
       }
 
-      // Пакет 3: encryptAddress бросает ошибку при отсутствии ключа
       if (deliveryAddress) {
         try {
           updates.delivery_address_encrypted = encryptAddress(deliveryAddress)
@@ -370,11 +366,12 @@ export async function PATCH(request) {
       if (body.title !== undefined) updates.title = clean(body.title)
       if (body.description !== undefined) updates.description = clean(body.description)
       if (body.photos !== undefined && Array.isArray(body.photos)) {
-        // Пакет 3: валидация URL
         updates.photos = body.photos.slice(0, 10).map(sanitizeUrl).filter(Boolean)
       }
       if (body.videoUrl !== undefined) updates.video_url = sanitizeUrl(body.videoUrl)
       if (body.certUrl !== undefined) updates.cert_url = sanitizeUrl(body.certUrl)
+      // <-- новое: можно обновлять или убирать preview_photo_url
+      if (body.previewPhotoUrl !== undefined) updates.preview_photo_url = sanitizeUrl(body.previewPhotoUrl)
       if (body.retailPrice !== undefined) updates.retail_price = Math.max(0, parseFloat(body.retailPrice) || 0)
       if (body.clubPrice !== undefined) updates.club_price = Math.max(0, parseFloat(body.clubPrice) || 0)
       if (body.carat !== undefined) updates.carat = parseFloat(body.carat) || null
