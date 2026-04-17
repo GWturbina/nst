@@ -2,12 +2,17 @@
 /**
  * ShowcaseAdmin.jsx — Управление витриной из админки
  * Все товары, создание корпоративных, модерация, продажи
+ *
+ * ИЗМЕНЕНИЯ (17 апр 2026):
+ *   • Новое поле previewPhoto — отдельная маленькая картинка 1200×630
+ *     специально для OG-превью в WhatsApp/Telegram/Viber. Основные photos[]
+ *     остаются как есть (высокое качество для витрины).
  */
 import { useState, useEffect, useCallback } from 'react'
 import useGameStore from '@/lib/store'
 import { shortAddress } from '@/lib/web3'
 import { authFetch } from '@/lib/authClient'
-import { uploadShowcaseFile, compressImage } from '@/lib/showcaseStorage'
+import { uploadShowcaseFile, compressImage, compressPreview } from '@/lib/showcaseStorage'
 import { formatUSD } from '@/lib/gemCatalog'
 
 const STATUS_MAP = {
@@ -16,22 +21,25 @@ const STATUS_MAP = {
   sold:   { label: 'Продан', color: 'text-purple-400', bg: 'bg-purple-500/10' },
 }
 
+const EMPTY_FORM = {
+  category: 'diamond', title: '', description: '',
+  retailPrice: '', clubPrice: '', carat: '', shape: '',
+  clarity: '', color: '', certUrl: '', photos: [], videoUrl: '',
+  previewPhotoUrl: '', // <-- новое поле
+}
+
 export default function ShowcaseAdmin() {
   const { wallet, addNotification } = useGameStore()
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [txPending, setTxPending] = useState(false)
-  const [filter, setFilter] = useState('active') // active | hidden | sold | all
+  const [filter, setFilter] = useState('active')
   const [showCreate, setShowCreate] = useState(false)
   const [expandedItem, setExpandedItem] = useState(null)
 
   // Форма создания
-  const [form, setForm] = useState({
-    category: 'diamond', title: '', description: '',
-    retailPrice: '', clubPrice: '', carat: '', shape: '',
-    clarity: '', color: '', certUrl: '', photos: [], videoUrl: '',
-  })
-  const resetForm = () => setForm({ category: 'diamond', title: '', description: '', retailPrice: '', clubPrice: '', carat: '', shape: '', clarity: '', color: '', certUrl: '', photos: [], videoUrl: '' })
+  const [form, setForm] = useState({ ...EMPTY_FORM })
+  const resetForm = () => setForm({ ...EMPTY_FORM })
 
   // Модалка продажи
   const [sellId, setSellId] = useState(null)
@@ -47,7 +55,6 @@ export default function ShowcaseAdmin() {
       const data = await res.json()
       if (data.ok) setItems(data.items || [])
 
-      // Если фильтр "all" — дополнительно подгружаем hidden и sold
       if (filter === 'all') {
         const [h, s] = await Promise.all([
           fetch('/api/showcase?status=hidden').then(r => r.json()).catch(() => ({ items: [] })),
@@ -259,6 +266,49 @@ export default function ShowcaseAdmin() {
             )}
           </div>
 
+          {/* ═══ НОВОЕ: Превью для мессенджеров ═══ */}
+          <div className="p-2.5 rounded-xl bg-gold-400/5 border border-gold-400/20 space-y-1.5">
+            <div className="text-[10px] font-bold text-gold-400">🔗 Превью для WhatsApp / Telegram</div>
+            <div className="text-[9px] text-slate-500 leading-tight">
+              Маленькая картинка, которую увидят при отправке ссылки на этот товар.
+              Загрузите обычное фото — оно автоматически сожмётся до нужного размера.
+              Если не загружать — будет использоваться первое основное фото.
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="flex-1 py-2 rounded-xl text-[10px] font-bold text-center cursor-pointer bg-gold-400/10 text-gold-400 border border-gold-400/25">
+                {form.previewPhotoUrl ? '🔄 Заменить превью' : '🖼 Загрузить превью'}
+                <input type="file" accept="image/*" className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    const compressed = await compressPreview(file)
+                    const result = await uploadShowcaseFile(compressed, wallet)
+                    if (result.ok) {
+                      setForm(f => ({ ...f, previewPhotoUrl: result.url }))
+                      addNotification('✅ Превью загружено')
+                    } else {
+                      addNotification(`❌ ${result.error}`)
+                    }
+                    e.target.value = ''
+                  }} />
+              </label>
+              {form.previewPhotoUrl && (
+                <button onClick={() => setForm(f => ({ ...f, previewPhotoUrl: '' }))}
+                  className="px-3 py-2 rounded-xl text-[10px] text-red-400 border border-red-500/25 bg-red-500/5">
+                  ✕
+                </button>
+              )}
+            </div>
+            {form.previewPhotoUrl && (
+              <div className="flex items-center gap-2 mt-1">
+                <div className="w-16 h-9 rounded-md overflow-hidden border border-gold-400/25 flex-shrink-0">
+                  <img src={form.previewPhotoUrl} alt="" className="w-full h-full object-cover" />
+                </div>
+                <div className="text-[9px] text-slate-400 truncate">Превью готово</div>
+              </div>
+            )}
+          </div>
+
           {/* Маржа */}
           {form.clubPrice && form.retailPrice && parseFloat(form.retailPrice) > parseFloat(form.clubPrice) && (
             <div className="p-2 rounded-xl bg-blue-500/8 text-[9px] text-slate-400">
@@ -315,6 +365,13 @@ export default function ShowcaseAdmin() {
                             <img src={url} alt="" className="w-full h-full object-cover" />
                           </div>
                         ))}
+                      </div>
+                    )}
+
+                    {/* Индикатор превью */}
+                    {item.preview_photo_url && (
+                      <div className="flex items-center gap-2 text-[9px] text-gold-400">
+                        🔗 <span>Превью для мессенджеров загружено</span>
                       </div>
                     )}
 
