@@ -2,10 +2,15 @@
  * API Route: /api/level-content
  * GET  — получить тексты всех уровней (публичное)
  * POST — обновить тексты уровня (только админ)
+ *
+ * ИЗМЕНЕНИЯ (17 апр 2026):
+ *   • Добавлен checkOrigin в POST — отсекает запросы с чужих сайтов
+ *     ещё до проверки подписи. Соответствует остальным API-роутам.
  */
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { verifyWallet } from '@/lib/authHelper'
+import { checkOrigin } from '@/lib/checkOrigin'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY
@@ -37,6 +42,7 @@ export async function GET() {
 // POST: обновить тексты уровня (только админ)
 export async function POST(request) {
   if (!supabase) return NextResponse.json({ ok: false, error: 'Сервер не настроен' }, { status: 503 })
+  if (!checkOrigin(request)) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 })
 
   try {
     const body = await request.json()
