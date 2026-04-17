@@ -1,22 +1,14 @@
 /**
  * API Route: /api/showcase
  *
- * GET    — список товаров витрины (фильтры: type, category, status)
- * POST   — создать объявление (корпоративная = только админ, общая = партнёр с мин. 4 уровнями GW)
- * PATCH  — обновить (статус, цена, продажа, редактирование)
- * DELETE — удалить (только свои или админ)
- *
- * FIX #2: Серверная проверка GW уровня через RPC (не доверяем фронтенду)
- * FIX #3: AES-256-GCM шифрование адреса доставки
- *
  * ИЗМЕНЕНИЯ (17 апр 2026):
- *   • Поддержка preview_photo_url — отдельная маленькая картинка 1200×630
- *     (~150KB) специально для OG-превью в WhatsApp/Telegram. Основные photos[]
- *     используются в витрине как раньше.
+ *   • ИСПРАВЛЕНО: sanitizeVideoUrl теперь поддерживает:
+ *     - префикс "VFIRST\n" (флаг "видео показывается первым")
+ *     - несколько ссылок YouTube через перенос строки (до 5)
+ *     Раньше такие строки целиком считались невалидным URL и стирались.
  *
- * ИЗМЕНЕНИЯ (Пакет 3):
- *   • Валидация URL для photos/video_url/cert_url — только http/https протоколы
- *   • Убран небезопасный Base64-fallback при отсутствии ENCRYPTION_KEY
+ *   • Поддержка preview_photo_url — отдельная маленькая картинка 1200×630
+ *     для OG-превью в WhatsApp/Telegram/Viber.
  */
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
@@ -31,7 +23,7 @@ const supabase = supabaseUrl && supabaseServiceKey
   ? createClient(supabaseUrl, supabaseServiceKey)
   : null
 
-// ═══ FIX #3: AES-256-GCM шифрование ═══
+// ═══ AES-256-GCM шифрование адреса доставки ═══
 const ENCRYPTION_KEY = process.env.DELIVERY_ENCRYPTION_KEY || ''
 
 function encryptAddress(plaintext) {
@@ -47,7 +39,7 @@ function encryptAddress(plaintext) {
   return `v1:${iv.toString('hex')}:${tag}:${encrypted}`
 }
 
-// Безопасная валидация URL
+// Безопасная валидация URL — только http/https
 function sanitizeUrl(url) {
   if (!url) return null
   const s = String(url).trim().slice(0, 2000)
@@ -61,7 +53,28 @@ function sanitizeUrl(url) {
   }
 }
 
-// Проверка GW уровня через RPC
+// ═══ Валидация видео: поддержка префикса VFIRST и multi-line (до 5 ссылок) ═══
+const VFIRST_PREFIX = 'VFIRST\n'
+const MAX_VIDEO_LINKS = 5
+function sanitizeVideoUrl(input) {
+  if (!input) return null
+  const raw = String(input)
+  // Снимаем префикс VFIRST если есть
+  let hasFirst = false
+  let body = raw
+  if (raw.startsWith(VFIRST_PREFIX)) {
+    hasFirst = true
+    body = raw.slice(VFIRST_PREFIX.length)
+  }
+  // Разбиваем по строкам, валидируем каждую, оставляем валидные (максимум 5)
+  const lines = body.split('\n').map(l => l.trim()).filter(Boolean)
+  const validUrls = lines.map(sanitizeUrl).filter(Boolean).slice(0, MAX_VIDEO_LINKS)
+  if (validUrls.length === 0) return null
+  const joined = validUrls.join('\n')
+  return hasFirst ? VFIRST_PREFIX + joined : joined
+}
+
+// ═══ Проверка GW уровня через RPC ═══
 const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || 'https://opbnb-mainnet-rpc.bnbchain.org'
 const NSS_PLATFORM_ADDR = '0xFb1ddFa8A7EAB0081EAe24ec3d24B0ED4Dd84f2B'
 
@@ -181,7 +194,7 @@ export async function POST(request) {
     const body = await request.json()
     const { wallet, type, category, title, description, photos, videoUrl, certUrl,
       retailPrice, clubPrice, customPrice, carat, shape, clarity, color, gemId,
-      previewPhotoUrl } = body // <-- добавлено
+      previewPhotoUrl } = body
 
     const verified = await verifyWallet(body)
     if (!verified) {
@@ -224,9 +237,9 @@ export async function POST(request) {
     const safePhotos = Array.isArray(photos)
       ? photos.slice(0, 10).map(sanitizeUrl).filter(Boolean)
       : []
-    const safeVideo = sanitizeUrl(videoUrl)
+    const safeVideo = sanitizeVideoUrl(videoUrl)
     const safeCert = sanitizeUrl(certUrl)
-    const safePreview = sanitizeUrl(previewPhotoUrl) // <-- новое
+    const safePreview = sanitizeUrl(previewPhotoUrl)
 
     const { data, error } = await supabase
       .from('dc_showcase')
@@ -239,7 +252,7 @@ export async function POST(request) {
         photos: safePhotos,
         video_url: safeVideo,
         cert_url: safeCert,
-        preview_photo_url: safePreview, // <-- новое
+        preview_photo_url: safePreview,
         retail_price: Math.max(0, rp),
         club_price: Math.max(0, cp),
         custom_price: parseFloat(customPrice) || null,
@@ -368,9 +381,8 @@ export async function PATCH(request) {
       if (body.photos !== undefined && Array.isArray(body.photos)) {
         updates.photos = body.photos.slice(0, 10).map(sanitizeUrl).filter(Boolean)
       }
-      if (body.videoUrl !== undefined) updates.video_url = sanitizeUrl(body.videoUrl)
+      if (body.videoUrl !== undefined) updates.video_url = sanitizeVideoUrl(body.videoUrl)
       if (body.certUrl !== undefined) updates.cert_url = sanitizeUrl(body.certUrl)
-      // <-- новое: можно обновлять или убирать preview_photo_url
       if (body.previewPhotoUrl !== undefined) updates.preview_photo_url = sanitizeUrl(body.previewPhotoUrl)
       if (body.retailPrice !== undefined) updates.retail_price = Math.max(0, parseFloat(body.retailPrice) || 0)
       if (body.clubPrice !== undefined) updates.club_price = Math.max(0, parseFloat(body.clubPrice) || 0)
@@ -408,7 +420,7 @@ export async function PATCH(request) {
   }
 }
 
-// DELETE: удалить объявление (только владелец или админ)
+// DELETE: удалить объявление
 export async function DELETE(request) {
   if (!supabase) return NextResponse.json({ ok: false, error: 'Сервер не настроен' }, { status: 503 })
   if (!checkOrigin(request)) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 })
