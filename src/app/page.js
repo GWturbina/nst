@@ -25,9 +25,23 @@ const TAB_COMPONENTS = {
   admin: AdminPanel,
 }
 
+// Проверяем, есть ли у пользователя сохранённый кошелёк в Zustand-store
+// Ключ 'dc-storage-v3' = имя persist store (см. store.js внизу файла)
+function hasStoredWallet() {
+  try {
+    const raw = localStorage.getItem('dc-storage-v3')
+    if (!raw) return false
+    const parsed = JSON.parse(raw)
+    // Zustand persist хранит структуру { state: {...}, version: N }
+    return !!(parsed?.state?.wallet)
+  } catch (e) {
+    return false
+  }
+}
+
 export default function MainPage() {
   useBlockchainInit()
-  const { activeTab, dayMode, level, showAutoRegister, wallet } = useGameStore()
+  const { activeTab, dayMode, level, showAutoRegister } = useGameStore()
   const [redirecting, setRedirecting] = useState(true)
 
   useEffect(() => {
@@ -42,6 +56,7 @@ export default function MainPage() {
 
     // 2. Захватываем start_param из Telegram WebApp (если открыт из бота)
     const tg = window.Telegram?.WebApp
+    const isTelegramWebApp = !!tg
     if (tg) {
       const startParam = tg.initDataUnsafe?.start_param
       if (startParam && /^\d+$/.test(startParam)) {
@@ -49,37 +64,35 @@ export default function MainPage() {
       }
     }
 
-    // 3. Смотрим: был ли юзер уже в кабинете? (флаг ставится после входа)
-    const hasVisitedCabinet = localStorage.getItem('dc_visited_cabinet') === '1'
+    // 3. Проверяем: есть ли у юзера сохранённый кошелёк?
+    const walletExists = hasStoredWallet()
 
-    // 4. Решаем куда пускать:
-    //    — Если есть кошелёк → он свой, пускаем в кабинет
-    //    — Если нет кошелька, но был раньше → тоже пускаем (возвращающийся)
-    //    — Если нет кошелька и никогда не был → отправляем на лендинг
-    //    — Исключение: Telegram WebApp (внутри бота) всегда показывает кабинет
-    const isTelegramWebApp = !!tg
-    const shouldShowCabinet = wallet || hasVisitedCabinet || isTelegramWebApp
+    // 4. Параметр ?cabinet=1 — принудительно открыть кабинет (для отладки/партнёров)
+    const forceCabinet = urlParams.get('cabinet') === '1'
+
+    // 5. Решение:
+    //    — Есть кошелёк → свой → кабинет
+    //    — Telegram WebApp → всегда кабинет (внутри бота)
+    //    — ?cabinet=1 → всегда кабинет (ручной override)
+    //    — Иначе → гость → на лендинг (с ref если был)
+    const shouldShowCabinet = walletExists || isTelegramWebApp || forceCabinet
 
     if (!shouldShowCabinet) {
-      // Гость без кошелька — на лендинг (с сохранением ref если был)
       const refParam = refFromUrl ? `?ref=${refFromUrl}` : ''
       window.location.replace('/landing.html' + refParam)
       return
     }
 
-    // Помечаем что юзер в кабинете — чтобы в следующий раз сразу пускало
-    localStorage.setItem('dc_visited_cabinet', '1')
-
-    // Чистим ?ref= из URL (чтобы не мешал)
+    // Чистим ?ref= из URL (чтобы не светился в адресной строке)
     if (refFromUrl && window.history) {
       const cleanUrl = window.location.pathname + window.location.hash
       window.history.replaceState({}, '', cleanUrl)
     }
 
     setRedirecting(false)
-  }, [wallet])
+  }, [])
 
-  // Пока идёт проверка — показываем пустой экран (чтобы не мигало)
+  // Пока идёт проверка — пустой экран (чтобы не мигало содержимое кабинета перед редиректом)
   if (redirecting) {
     return (
       <div style={{
