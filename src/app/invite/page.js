@@ -46,6 +46,15 @@ function validateContact(messenger, contact) {
   }
 }
 
+// Сохраняем ref перед переходом в кабинет — чтобы при подключении SafePal в кабинете
+// срабатывала привязка к спонсору через мост GlobalWay
+function goToCabinet(ref) {
+  if (ref && ref !== '0') {
+    try { localStorage.setItem('dc_ref', ref) } catch(e) {}
+  }
+  window.location.href = '/'
+}
+
 function InviteContent() {
   const searchParams = useSearchParams(); const params = useParams()
   const rawRef = searchParams.get('ref') || '0'; const ref = /^\d+$/.test(rawRef) ? rawRef : '0'
@@ -60,7 +69,7 @@ function InviteContent() {
   const [tempId, setTempId] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [contactError, setContactError] = useState('')
-  const BOT_USERNAME = 'DiamondClubNSSBot'
+  const BOT_USERNAME = 'DiamondClubGWSBot'
 
   useEffect(() => { const s = localStorage.getItem('dc_capture_id'); if (s) { setTempId(s); setRegistered(true) } }, [])
 
@@ -110,14 +119,17 @@ function InviteContent() {
         <div className="space-y-2 mb-6">{FEATURES.map((f,i)=>(<div key={i} className="flex items-start gap-3 p-3 rounded-xl" style={{background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.06)'}}><span className="text-xl mt-0.5">{f.emoji}</span><div><div className="text-[13px] font-bold text-white">{f.title}</div><div className="text-[11px] text-slate-400">{f.desc}</div></div></div>))}</div>
 
         {!registered ? (
-          <button onClick={handleJoin} className="w-full py-4 rounded-2xl text-lg font-black mb-4" style={{background:'linear-gradient(135deg, #ffd700, #f5a623)',color:'#000'}}>🎁 Присоединиться — БЕСПЛАТНО</button>
+          <>
+            <button onClick={handleJoin} className="w-full py-4 rounded-2xl text-lg font-black mb-3" style={{background:'linear-gradient(135deg, #ffd700, #f5a623)',color:'#000'}}>🎁 Присоединиться — БЕСПЛАТНО</button>
+            <button onClick={() => goToCabinet(ref)} className="w-full text-[12px] text-slate-400 py-2" style={{background:'none',border:'none',cursor:'pointer'}}>Уже партнёр? → Войти в кабинет</button>
+          </>
         ) : (
           <div className="space-y-3 mb-4">
             <div className="p-4 rounded-2xl" style={{background:'rgba(16,185,129,0.08)',border:'1px solid rgba(16,185,129,0.2)'}}>
               <div className="text-center">
                 <div className="text-[13px] text-emerald-400 font-bold">✅ Реферал сохранён!</div><div className="text-sm font-black text-white mt-1">Спонсор ID: #{ref}</div>
-                <a href="/" className="block w-full py-3 rounded-2xl text-center text-sm font-black mt-3" style={{background:'linear-gradient(135deg, #10b981, #059669)',color:'#fff'}}>🚀 Войти в приложение</a>
-                <a href={`safepalwallet://open?url=${encodeURIComponent(baseUrl)}`} className="block w-full py-3 rounded-2xl text-center text-sm font-black mt-2" style={{background:'linear-gradient(135deg, #3b82f6, #2563eb)',color:'#fff'}}>🔐 Открыть в SafePal</a>
+                <button onClick={() => goToCabinet(ref)} className="block w-full py-3 rounded-2xl text-center text-sm font-black mt-3" style={{background:'linear-gradient(135deg, #10b981, #059669)',color:'#fff',border:'none'}}>🚀 Войти в приложение</button>
+                <a href={`safepalwallet://open?url=${encodeURIComponent(baseUrl)}?ref=${ref}`} className="block w-full py-3 rounded-2xl text-center text-sm font-black mt-2" style={{background:'linear-gradient(135deg, #3b82f6, #2563eb)',color:'#fff'}}>🔐 Открыть в SafePal</a>
                 <div className="text-[9px] text-slate-500 mt-1.5">Из Telegram? Нажми «Открыть в SafePal»</div>
               </div>
             </div>
@@ -156,14 +168,24 @@ function InviteContent() {
               <button onClick={skipCapture} className="w-full text-[12px] text-slate-500 py-2" style={{background:'none',border:'none',cursor:'pointer'}}>Пропустить →</button>
             </>)}
             {captureStep===2&&(<>
-              <div className="text-center mb-4"><div className="text-4xl mb-3">🎉</div><h3 className="text-lg font-black text-white mb-1">Контакт сохранён!</h3><p className="text-[12px] text-slate-400">Скоро вы получите информацию о Diamond Club</p></div>
-              <div className="p-4 rounded-2xl mb-4" style={{background:'linear-gradient(135deg, rgba(168,85,247,0.12), rgba(124,58,237,0.08))',border:'1px solid rgba(168,85,247,0.3)'}}>
-                <div className="text-center mb-3"><div className="text-2xl mb-1">🎁</div><div className="text-[14px] font-black text-white">Получите бонус в Telegram!</div><p className="text-[11px] text-slate-400 mt-1">Запустите бот — получите инструкции и персональные уведомления</p></div>
-                <a href={`https://t.me/DiamondClubNSSBot?start=ref_${tempId||ref}`} target="_blank" rel="noopener noreferrer" className="block w-full py-3.5 rounded-2xl text-center text-[15px] font-black mb-2" style={{background:'linear-gradient(135deg, #0088cc, #0066aa)',color:'#fff',textDecoration:'none'}}>🤖 Запустить бот Diamond Club</a>
-                <div className="text-center text-[10px] text-slate-500">Нажмите Start в Telegram</div>
+              <div className="text-center mb-4"><div className="text-4xl mb-3">🎉</div><h3 className="text-lg font-black text-white mb-1">Контакт сохранён!</h3><p className="text-[12px] text-slate-400">Выбери следующий шаг — все доступны одновременно</p></div>
+
+              <div className="p-4 rounded-2xl mb-3" style={{background:'linear-gradient(135deg, rgba(168,85,247,0.12), rgba(124,58,237,0.08))',border:'1px solid rgba(168,85,247,0.3)'}}>
+                <div className="text-center mb-2"><div className="text-[13px] font-black text-white">🤖 1. Запустить бот Diamond Club</div><p className="text-[10px] text-slate-400 mt-0.5">30 дней поддержки. Без спама.</p></div>
+                <a href={`https://t.me/${BOT_USERNAME}?start=${tempId||ref}`} target="_blank" rel="noopener noreferrer" className="block w-full py-3 rounded-xl text-center text-[14px] font-black" style={{background:'linear-gradient(135deg, #0088cc, #0066aa)',color:'#fff',textDecoration:'none'}}>🤖 Открыть бота → Start</a>
               </div>
-              <button onClick={finishCapture} className="w-full py-3 rounded-2xl text-[14px] font-black" style={{background:'linear-gradient(135deg, #10b981, #059669)',color:'#fff',border:'none'}}>🚀 Продолжить</button>
-              <button onClick={finishCapture} className="w-full text-[12px] text-slate-500 py-2 mt-1" style={{background:'none',border:'none',cursor:'pointer'}}>Пропустить →</button>
+
+              <div className="p-4 rounded-2xl mb-3" style={{background:'linear-gradient(135deg, rgba(59,130,246,0.12), rgba(37,99,235,0.08))',border:'1px solid rgba(59,130,246,0.3)'}}>
+                <div className="text-center mb-2"><div className="text-[13px] font-black text-white">💎 2. Регистрация в клубе</div><p className="text-[10px] text-slate-400 mt-0.5">Через SafePal · 2 минуты · твой ID уже сохранён</p></div>
+                <a href={`safepalwallet://open?url=${encodeURIComponent(baseUrl)}?ref=${ref}`} className="block w-full py-3 rounded-xl text-center text-[14px] font-black" style={{background:'linear-gradient(135deg, #3b82f6, #2563eb)',color:'#fff',textDecoration:'none'}}>🔐 Открыть в SafePal</a>
+              </div>
+
+              <div className="p-4 rounded-2xl mb-3" style={{background:'rgba(16,185,129,0.08)',border:'1px solid rgba(16,185,129,0.25)'}}>
+                <div className="text-center mb-2"><div className="text-[13px] font-black text-white">🔓 3. Посмотреть кабинет</div><p className="text-[10px] text-slate-400 mt-0.5">Зайди изнутри — регистрацию можно позже</p></div>
+                <button onClick={() => goToCabinet(ref)} className="block w-full py-3 rounded-xl text-center text-[14px] font-black" style={{background:'linear-gradient(135deg, #10b981, #059669)',color:'#fff',border:'none'}}>🚀 Войти в кабинет</button>
+              </div>
+
+              <button onClick={finishCapture} className="w-full text-[12px] text-slate-500 py-2 mt-1" style={{background:'none',border:'none',cursor:'pointer'}}>Позже →</button>
             </>)}
           </div>
         </div>
@@ -171,7 +193,7 @@ function InviteContent() {
 
       {showExitPopup&&(<div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.85)'}}><div className="max-w-[380px] w-full p-5 rounded-3xl" style={{background:'linear-gradient(180deg, #1a1040, #0a0a20)',border:'1px solid rgba(255,215,0,0.2)'}}><div className="text-center"><div className="text-4xl mb-2">⏳</div><h3 className="text-xl font-black text-white mb-1">Не спеши уходить!</h3><p className="text-[12px] text-slate-400 mb-4">Ты в одном шаге от вступления в клуб</p><button onClick={handleJoin} className="w-full py-3 rounded-2xl text-base font-black mb-2" style={{background:'linear-gradient(135deg, #ffd700, #f5a623)',color:'#000'}}>🎁 Присоединиться</button><button onClick={()=>setShowExitPopup(false)} className="text-[11px] text-slate-500" style={{background:'none',border:'none',cursor:'pointer'}}>Нет, спасибо</button></div></div></div>)}
 
-      {showViralPopup&&(<div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.9)'}}><div className="max-w-[380px] w-full p-5 rounded-3xl" style={{background:'linear-gradient(180deg, #1a1040, #0a0a20)',border:'1px solid rgba(255,215,0,0.3)'}}><div className="text-center"><div className="text-4xl mb-2">🔥</div><h3 className="text-xl font-black text-white mb-1">Не уходи с пустыми руками!</h3><div className="text-[13px] font-bold mb-1" style={{color:'#ffd700'}}>+5-10% скидки за 5 друзей!</div><div className="p-2.5 rounded-xl bg-black/40 text-[10px] text-white break-all mb-3 font-mono border border-white/10">{myLink}</div><button onClick={copyLink} className="w-full py-2.5 rounded-xl text-[12px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 mb-3">{copied?'✅':'📋 Копировать'}</button><div className="flex gap-2 mb-4"><a href={shareLinks.tg} target="_blank" rel="noopener noreferrer" className="flex-1 py-2.5 rounded-xl text-[11px] font-bold text-center" style={{background:'rgba(59,130,246,0.15)',color:'#3b82f6'}}>📱 TG</a><a href={shareLinks.wa} target="_blank" rel="noopener noreferrer" className="flex-1 py-2.5 rounded-xl text-[11px] font-bold text-center" style={{background:'rgba(34,197,94,0.15)',color:'#22c55e'}}>💬 WA</a><a href={shareLinks.vb} target="_blank" rel="noopener noreferrer" className="flex-1 py-2.5 rounded-xl text-[11px] font-bold text-center" style={{background:'rgba(168,85,247,0.15)',color:'#a855f7'}}>📞 VB</a></div><a href="/" className="block w-full py-3 rounded-2xl text-center text-sm font-black mb-2" style={{background:'linear-gradient(135deg, #ffd700, #f5a623)',color:'#000'}}>🚀 Войти</a><button onClick={()=>setShowViralPopup(false)} className="text-[11px] text-slate-500" style={{background:'none',border:'none',cursor:'pointer'}}>Закрыть</button></div></div></div>)}
+      {showViralPopup&&(<div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.9)'}}><div className="max-w-[380px] w-full p-5 rounded-3xl" style={{background:'linear-gradient(180deg, #1a1040, #0a0a20)',border:'1px solid rgba(255,215,0,0.3)'}}><div className="text-center"><div className="text-4xl mb-2">🔥</div><h3 className="text-xl font-black text-white mb-1">Не уходи с пустыми руками!</h3><div className="text-[13px] font-bold mb-1" style={{color:'#ffd700'}}>+5-10% скидки за 5 друзей!</div><div className="p-2.5 rounded-xl bg-black/40 text-[10px] text-white break-all mb-3 font-mono border border-white/10">{myLink}</div><button onClick={copyLink} className="w-full py-2.5 rounded-xl text-[12px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 mb-3">{copied?'✅':'📋 Копировать'}</button><div className="flex gap-2 mb-4"><a href={shareLinks.tg} target="_blank" rel="noopener noreferrer" className="flex-1 py-2.5 rounded-xl text-[11px] font-bold text-center" style={{background:'rgba(59,130,246,0.15)',color:'#3b82f6'}}>📱 TG</a><a href={shareLinks.wa} target="_blank" rel="noopener noreferrer" className="flex-1 py-2.5 rounded-xl text-[11px] font-bold text-center" style={{background:'rgba(34,197,94,0.15)',color:'#22c55e'}}>💬 WA</a><a href={shareLinks.vb} target="_blank" rel="noopener noreferrer" className="flex-1 py-2.5 rounded-xl text-[11px] font-bold text-center" style={{background:'rgba(168,85,247,0.15)',color:'#a855f7'}}>📞 VB</a></div><button onClick={() => goToCabinet(ref)} className="block w-full py-3 rounded-2xl text-center text-sm font-black mb-2" style={{background:'linear-gradient(135deg, #ffd700, #f5a623)',color:'#000',border:'none'}}>🚀 Войти</button><button onClick={()=>setShowViralPopup(false)} className="text-[11px] text-slate-500" style={{background:'none',border:'none',cursor:'pointer'}}>Закрыть</button></div></div></div>)}
     </div>
   )
 }
