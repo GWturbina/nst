@@ -85,15 +85,30 @@ export default function LinksTab() {
             </div>
           )}
 
-          {/* Telegram Bot */}
+          {/* Telegram Bot — одна кнопка запуска */}
           {tgBotLink && (
             <div className="p-3 rounded-2xl border" style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}>
-              <div className="text-[10px] text-slate-500 mb-1">🤖 Telegram Bot</div>
-              <div className="text-[10px] text-white break-all mb-2 p-2 rounded-lg bg-white/5 font-mono">{tgBotLink}</div>
-              <button onClick={() => copy(tgBotLink)}
-                className="w-full py-2 rounded-xl text-[11px] font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 transition-all">
-                📋 Копировать
-              </button>
+              <div className="text-[10px] text-slate-500 mb-2">🤖 Diamond Club Bot · рассылка и новости клуба</div>
+
+              {/* ГЛАВНАЯ КНОПКА — активировать бота */}
+              <a href={tgBotLink} target="_blank" rel="noopener noreferrer"
+                className="block w-full py-3.5 rounded-xl text-[13px] font-bold text-center mb-2 transition-all"
+                style={{
+                  background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
+                  color: '#fff',
+                  boxShadow: '0 4px 12px rgba(59,130,246,0.35)'
+                }}>
+                🚀 Активировать бот → нажми Start
+              </a>
+
+              {/* Мелкая строка — ссылка + скопировать для пересылки друзьям */}
+              <div className="flex items-center gap-2">
+                <div className="text-[9px] text-slate-400 break-all flex-1 p-2 rounded-lg bg-white/5 font-mono">{tgBotLink}</div>
+                <button onClick={() => copy(tgBotLink)}
+                  className="shrink-0 px-3 py-2 rounded-lg text-[10px] font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 transition-all">
+                  📋
+                </button>
+              </div>
             </div>
           )}
 
