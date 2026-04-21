@@ -678,7 +678,7 @@ h1, h2, h3, h4 {
       <button>EN</button>
       <button>UK</button>
     </div>
-    <a href="https://gws.ink/" data-cta="cabinet" class="btn btn-primary">Войти в клуб</a>
+    <a href="https://gws.ink/cabinet" data-cta="cabinet" class="btn btn-primary">Войти в клуб</a>
   </div>
 </nav>
 
@@ -715,7 +715,7 @@ h1, h2, h3, h4 {
         Порог входа — <span class="amount ice-text">от $50</span>
       </div>
       <div class="hero-cta">
-        <a href="https://gws.ink/" data-cta="cabinet" class="btn btn-primary btn-large">Войти в клуб →</a>
+        <a href="https://gws.ink/cabinet" data-cta="cabinet" class="btn btn-primary btn-large">Войти в клуб →</a>
         <a href="#concept" class="btn btn-ghost btn-large">Как это работает</a>
       </div>
       <div class="hero-trust">
@@ -1698,7 +1698,7 @@ h1, h2, h3, h4 {
         </div>
       </div>
 
-      <a href="https://gws.ink/" data-cta="cabinet" class="btn btn-primary btn-large">Забронировать долю →</a>
+      <a href="https://gws.ink/cabinet" data-cta="cabinet" class="btn btn-primary btn-large">Забронировать долю →</a>
     </div>
   </div>
 </section>
@@ -2747,9 +2747,11 @@ h1, h2, h3, h4 {
   }
 
   // Итоговые адреса — кабинет Diamond Club и рекламная платформа GWAD
+  // С ref (пришёл по рекламе/партнёрской ссылке) → форма регистрации
+  // Без ref (пришёл сам, наверняка уже партнёр) → сразу в кабинет
   const cabinetUrl = ref
     ? 'https://gws.ink/invite?ref=' + encodeURIComponent(ref)
-    : 'https://gws.ink/';
+    : 'https://gws.ink/cabinet';
   const gwadUrl = ref
     ? 'https://gwad.ink/?ref=' + encodeURIComponent(ref)
     : 'https://gwad.ink/';
