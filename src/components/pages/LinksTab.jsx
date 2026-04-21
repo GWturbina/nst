@@ -14,7 +14,7 @@ export default function LinksTab() {
     : wallet ? `${baseUrl}/invite?ref=${wallet.slice(2, 10)}` : ''
 
   const tgBotLink = sponsorId
-    ? `https://t.me/DiamondClubNSSBot?start=${sponsorId}`
+    ? `https://t.me/DiamondClubGWSBot?start=${sponsorId}`
     : ''
 
   const shareText = `💎 Бриллианты со скидкой до 70%! Стейкинг от 50% годовых. Бесплатный старт! Присоединяйся:`
