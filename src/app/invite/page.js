@@ -52,7 +52,7 @@ function goToCabinet(ref) {
   if (ref && ref !== '0') {
     try { localStorage.setItem('dc_ref', ref) } catch(e) {}
   }
-  window.location.href = '/'
+  window.location.href = '/cabinet'
 }
 
 function InviteContent() {
