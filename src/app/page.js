@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import useGameStore from '@/lib/store'
 import { useBlockchainInit } from '@/lib/useBlockchain'
 import Header from '@/components/ui/Header'
@@ -25,38 +25,22 @@ const TAB_COMPONENTS = {
   admin: AdminPanel,
 }
 
-// Проверяем, есть ли у пользователя сохранённый кошелёк в Zustand-store
-// Ключ 'dc-storage-v3' = имя persist store (см. store.js внизу файла)
-function hasStoredWallet() {
-  try {
-    const raw = localStorage.getItem('dc-storage-v3')
-    if (!raw) return false
-    const parsed = JSON.parse(raw)
-    // Zustand persist хранит структуру { state: {...}, version: N }
-    return !!(parsed?.state?.wallet)
-  } catch (e) {
-    return false
-  }
-}
-
 export default function MainPage() {
   useBlockchainInit()
   const { activeTab, dayMode, level, showAutoRegister } = useGameStore()
-  const [redirecting, setRedirecting] = useState(true)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    // 1. Захватываем ?ref=X из URL и сохраняем в localStorage
+    // 1. Захватываем ?ref=X из URL
     const urlParams = new URLSearchParams(window.location.search)
     const refFromUrl = urlParams.get('ref')
     if (refFromUrl && /^\d+$/.test(refFromUrl)) {
       localStorage.setItem('dc_ref', refFromUrl)
     }
 
-    // 2. Захватываем start_param из Telegram WebApp (если открыт из бота)
+    // 2. Telegram WebApp start_param
     const tg = window.Telegram?.WebApp
-    const isTelegramWebApp = !!tg
     if (tg) {
       const startParam = tg.initDataUnsafe?.start_param
       if (startParam && /^\d+$/.test(startParam)) {
@@ -64,48 +48,17 @@ export default function MainPage() {
       }
     }
 
-    // 3. Проверяем: есть ли у юзера сохранённый кошелёк?
-    const walletExists = hasStoredWallet()
+    // 3. Ставим cookie dc_session=1 — чтобы middleware знал что юзер уже "свой"
+    //    и в следующий раз не редиректил на лендинг
+    //    Cookie живёт 30 дней
+    document.cookie = 'dc_session=1; path=/; max-age=2592000; SameSite=Lax'
 
-    // 4. Параметр ?cabinet=1 — принудительно открыть кабинет (для отладки/партнёров)
-    const forceCabinet = urlParams.get('cabinet') === '1'
-
-    // 5. Решение:
-    //    — Есть кошелёк → свой → кабинет
-    //    — Telegram WebApp → всегда кабинет (внутри бота)
-    //    — ?cabinet=1 → всегда кабинет (ручной override)
-    //    — Иначе → гость → на лендинг (с ref если был)
-    const shouldShowCabinet = walletExists || isTelegramWebApp || forceCabinet
-
-    if (!shouldShowCabinet) {
-      const refParam = refFromUrl ? `?ref=${refFromUrl}` : ''
-      window.location.replace('/landing.html' + refParam)
-      return
-    }
-
-    // Чистим ?ref= из URL (чтобы не светился в адресной строке)
+    // 4. Чистим ?ref= из URL
     if (refFromUrl && window.history) {
       const cleanUrl = window.location.pathname + window.location.hash
       window.history.replaceState({}, '', cleanUrl)
     }
-
-    setRedirecting(false)
   }, [])
-
-  // Пока идёт проверка — пустой экран (чтобы не мигало содержимое кабинета перед редиректом)
-  if (redirecting) {
-    return (
-      <div style={{
-        minHeight: '100vh',
-        background: '#1a1a2e',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
-      }}>
-        <div style={{ color: '#666', fontSize: 14 }}>Загрузка...</div>
-      </div>
-    )
-  }
 
   const ActiveComponent = TAB_COMPONENTS[activeTab] || MineTab
 
