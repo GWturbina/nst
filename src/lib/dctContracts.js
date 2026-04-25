@@ -706,8 +706,20 @@ export async function createFractionalLot(p) {
     giftRecipients:  Array.isArray(p.giftRecipients) ? p.giftRecipients : [],
     giftAmounts:     (Array.isArray(p.giftAmounts) ? p.giftAmounts : []).map(a => BigInt(a)),
   }
-  const tx = await c.createLot(params)
-  return await tx.wait()
+  // Сначала пробуем штатно (с симуляцией)
+  try {
+    const tx = await c.createLot(params)
+    return await tx.wait()
+  } catch (err) {
+    // Если симуляция упала — пробуем явно с gasLimit (минуем eth_estimateGas)
+    const msg = err?.shortMessage || err?.message || ''
+    if (msg.includes('missing revert data') || msg.includes('cannot estimate gas') || msg.includes('execution reverted')) {
+      console.warn('Estimate gas failed, retrying with explicit gasLimit:', msg)
+      const tx = await c.createLot(params, { gasLimit: 800000n })
+      return await tx.wait()
+    }
+    throw err
+  }
 }
 
 // V2: startFundraising убрано — лот сразу создаётся в FUNDRAISING.
