@@ -1,0 +1,50 @@
+{
+  "_comment": "Diamond Club — Українська. Щоб додати нову мову: скопіюй файл, перейменуй в landing-XX.json, переклади рядки, потім зареєструй у landing.html в масиві I18N_AVAILABLE та додай кнопку в .lang-switch.",
+
+  "meta": {
+    "title": "Diamond Club — Володій часткою справжнього діаманта",
+    "description": "Інвестиційні частки природних діамантів від $50. 12% річних у USDT + зростання токена DCT до 420% за рік. Блокчейн opBNB. Смарт-контракт з аудитом.",
+    "og_title": "💎 Diamond Club — Діаманти від $50 за частку",
+    "og_description": "Прибутковість +420% за рік. Стейкінг 12% USDT. Діаманти зі знижкою до 70% від ринку. Блокчейн opBNB."
+  },
+
+  "nav": {
+    "concept": "Концепція",
+    "math": "Математика",
+    "lot": "Перший лот",
+    "system": "Система",
+    "safety": "Безпека",
+    "cta": "Увійти в клуб"
+  },
+
+  "hero": {
+    "eyebrow": "Часткова участь · opBNB · Смарт-контракт",
+    "title_html": "Володій <span class=\"accent ice-text\">часткою</span><br>справжнього<br><span class=\"ice-text\">діаманта.</span>",
+    "subtitle": "Сертифікований природний камінь. Без ювелірної націнки. Без посередників. Токен DCT у блокчейні — твоя частка у твоєму гаманці.",
+    "price_label_html": "Поріг входу — <span class=\"amount ice-text\">від $50</span>",
+    "cta_primary": "Увійти в клуб →",
+    "cta_secondary": "Як це працює",
+    "trust1_label": "річних USDT · гарантія",
+    "trust2_label": "зростання токена DCT за рік",
+    "trust3_label": "система працює без тебе",
+    "diamond_alt": "Природний діамант"
+  },
+
+  "footer": {
+    "brand_description": "Інвестиційні частки природних діамантів у блокчейні opBNB. Частина екосистеми GlobalWay.",
+    "col_club": "Клуб",
+    "col_club_concept": "Концепція",
+    "col_club_math": "Математика",
+    "col_club_lot": "Поточний лот",
+    "col_club_system": "Система",
+    "col_ecosystem": "Екосистема GW",
+    "col_docs": "Документи",
+    "doc_privacy": "Privacy Policy",
+    "doc_terms": "Terms of Use",
+    "doc_contract": "Smart Contract",
+    "doc_audit": "Аудит безпеки",
+    "doc_soon": "(незабаром)",
+    "copyright": "© Diamond Club 2026. Частина екосистеми GlobalWay.",
+    "tech_info": "opBNB · Chain ID 204 · SafePal wallet required"
+  }
+}
