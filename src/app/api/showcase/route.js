@@ -1,6 +1,15 @@
 /**
  * API Route: /api/showcase
  *
+ * ИЗМЕНЕНИЯ (25 апр 2026):
+ *   • getGWLevel: добавлен in-memory кеш по wallet, TTL 60 сек.
+ *     Снижает нагрузку на opBNB RPC при пиковой нагрузке (50+ партнёров
+ *     одновременно создают/редактируют объявления). Кешируются только
+ *     успешные результаты — если RPC упал, через минуту попробуем заново.
+ *   • getGWLevel: добавлен таймаут 8 сек на каждый RPC-вызов через
+ *     Promise.race (как в partner-listing). Защита Vercel-функции от
+ *     подвисания при сбое RPC opBNB.
+ *
  * ИЗМЕНЕНИЯ (17 апр 2026):
  *   • Action 'sell' теперь проверяет что item.status === 'active' перед
  *     оформлением продажи — нельзя продать уже проданное или скрытое.
@@ -89,21 +98,70 @@ const NSS_ABI_FRAGMENT = [
   'function bridge() external view returns (address)',
 ]
 
+// Таймаут одного RPC-вызова
+const RPC_TIMEOUT_MS = 8000
+
+// In-memory кеш для getGWLevel — key: wallet, value: { data, expiresAt }
+// Хранится в памяти Vercel-функции (warm instance переиспользует его).
+// Cold start кеш потеряет — это норма, в худшем случае один RPC-вызов на запрос.
+const GW_CACHE_TTL_MS = 60 * 1000 // 60 секунд
+const gwLevelCache = new Map()
+const GW_CACHE_MAX_SIZE = 1000 // защита от утечки памяти
+
+function getCachedGW(wallet) {
+  const entry = gwLevelCache.get(wallet)
+  if (!entry) return null
+  if (Date.now() > entry.expiresAt) {
+    gwLevelCache.delete(wallet)
+    return null
+  }
+  return entry.data
+}
+
+function setCachedGW(wallet, data) {
+  if (!data) return // не кешируем null/falsy — возможно RPC упал, через минуту попробуем
+  // Простая защита от разрастания кеша: если больше лимита, чистим всё (LRU не нужен, TTL короткий)
+  if (gwLevelCache.size >= GW_CACHE_MAX_SIZE) {
+    gwLevelCache.clear()
+  }
+  gwLevelCache.set(wallet, { data, expiresAt: Date.now() + GW_CACHE_TTL_MS })
+}
+
+/**
+ * Promise.race с таймаутом. Если promise не разрешился за ms — бросает TimeoutError.
+ */
+function withTimeout(promise, ms, label = 'RPC') {
+  let timer
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timeout after ${ms}ms`)), ms)
+  })
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
+}
+
 async function getGWLevel(walletAddress) {
+  // Сначала проверяем кеш
+  const cached = getCachedGW(walletAddress)
+  if (cached) return cached
+
   try {
     const { ethers } = await import('ethers')
     const provider = new ethers.JsonRpcProvider(RPC_URL)
 
     const nss = new ethers.Contract(NSS_PLATFORM_ADDR, NSS_ABI_FRAGMENT, provider)
-    const bridgeAddr = await nss.bridge()
+    const bridgeAddr = await withTimeout(nss.bridge(), RPC_TIMEOUT_MS, 'bridge()')
 
     const bridge = new ethers.Contract(bridgeAddr, BRIDGE_ABI_FRAGMENT, provider)
-    const status = await bridge.getUserStatus(walletAddress)
+    const status = await withTimeout(bridge.getUserStatus(walletAddress), RPC_TIMEOUT_MS, 'getUserStatus()')
 
-    return {
+    const result = {
       isRegistered: status.isRegistered,
       maxPackage: Number(status.maxPackage),
     }
+
+    // Кешируем только успешный результат
+    setCachedGW(walletAddress, result)
+
+    return result
   } catch (err) {
     console.error('GW level check failed:', err.message)
     return null
@@ -224,7 +282,13 @@ export async function POST(request) {
       }
     } else {
       const gwStatus = await getGWLevel(wLower)
-      if (!gwStatus || !gwStatus.isRegistered) {
+      if (!gwStatus) {
+        return NextResponse.json({
+          ok: false,
+          error: 'Не удалось проверить регистрацию в GlobalWay (RPC недоступен или превышен таймаут). Попробуйте через минуту.'
+        }, { status: 503 })
+      }
+      if (!gwStatus.isRegistered) {
         return NextResponse.json({ ok: false, error: 'Пользователь не зарегистрирован в GlobalWay' }, { status: 403 })
       }
       if (gwStatus.maxPackage < MIN_GW_LEVEL) {
