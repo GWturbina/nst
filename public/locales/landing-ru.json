@@ -1,0 +1,50 @@
+{
+  "_comment": "Diamond Club — Русский (основной). Все ключи должны быть в каждом языковом файле. Чтобы добавить казахский/киргизский — скопируй этот файл, переименуй в landing-kk.json (или landing-ky.json), переведи строки. Затем в landing.html в массиве I18N_AVAILABLE добавь код языка и в .lang-switch — кнопку.",
+
+  "meta": {
+    "title": "Diamond Club — Владей долей настоящего бриллианта",
+    "description": "Инвестиционные доли природных бриллиантов от $50. 12% годовых в USDT + рост токена DCT до 420% за год. Блокчейн opBNB. Смарт-контракт с аудитом.",
+    "og_title": "💎 Diamond Club — Бриллианты от $50 за долю",
+    "og_description": "Доходность +420% за год. Стейкинг 12% USDT. Бриллианты со скидкой до 70% от рынка. Блокчейн opBNB."
+  },
+
+  "nav": {
+    "concept": "Концепция",
+    "math": "Математика",
+    "lot": "Первый лот",
+    "system": "Система",
+    "safety": "Безопасность",
+    "cta": "Войти в клуб"
+  },
+
+  "hero": {
+    "eyebrow": "Долевое участие · opBNB · Смарт-контракт",
+    "title_html": "Владей <span class=\"accent ice-text\">долей</span><br>настоящего<br><span class=\"ice-text\">бриллианта.</span>",
+    "subtitle": "Сертифицированный природный камень. Без ювелирной наценки. Без посредников. Токен DCT на блокчейне — твоя доля в твоём кошельке.",
+    "price_label_html": "Порог входа — <span class=\"amount ice-text\">от $50</span>",
+    "cta_primary": "Войти в клуб →",
+    "cta_secondary": "Как это работает",
+    "trust1_label": "годовых USDT · гарантия",
+    "trust2_label": "рост токена DCT за год",
+    "trust3_label": "система работает без тебя",
+    "diamond_alt": "Природный бриллиант"
+  },
+
+  "footer": {
+    "brand_description": "Инвестиционные доли природных бриллиантов на блокчейне opBNB. Часть экосистемы GlobalWay.",
+    "col_club": "Клуб",
+    "col_club_concept": "Концепция",
+    "col_club_math": "Математика",
+    "col_club_lot": "Текущий лот",
+    "col_club_system": "Система",
+    "col_ecosystem": "Экосистема GW",
+    "col_docs": "Документы",
+    "doc_privacy": "Privacy Policy",
+    "doc_terms": "Terms of Use",
+    "doc_contract": "Smart Contract",
+    "doc_audit": "Аудит безопасности",
+    "doc_soon": "(скоро)",
+    "copyright": "© Diamond Club 2026. Часть экосистемы GlobalWay.",
+    "tech_info": "opBNB · Chain ID 204 · SafePal wallet required"
+  }
+}
