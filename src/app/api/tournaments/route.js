@@ -4,6 +4,13 @@
  * GET — лидерборд за текущий/указанный месяц
  * POST — обновить статистику (вызывается при тапах, покупках, продажах)
  *
+ * ИЗМЕНЕНИЯ (25 апр 2026):
+ *   • action='tap' — добавлен optimistic lock на dc_tournaments (тот же
+ *     механизм что в /api/tap). Параллельные запросы из одного кошелька
+ *     больше не задваивают taps_dct: второй UPDATE не пройдёт по WHERE
+ *     last_total_nss=<прочитанное значение>, вернёт 0 строк → 429.
+ *     Поддерживается случай когда last_total_nss = null (старые записи).
+ *
  * ИЗМЕНЕНИЯ (17 апр 2026):
  *   • action='tap' — amount с клиента больше не используется. Сервер сам
  *     считает дельту: (текущий total_nss из dc_taps) − (last_total_nss
@@ -131,7 +138,7 @@ export async function POST(request) {
         return NextResponse.json({ ok: false, error: 'Нет прав администратора' }, { status: 403 })
       }
     } else if (action === 'tap') {
-      // ─── Новая логика (17 апр 2026): дельта вместо клиентского amount ───
+      // ─── Логика: дельта вместо клиентского amount + optimistic lock ───
       // Читаем фактический total_nss из серверной тапалки.
       const { data: tapRecord } = await supabase
         .from('dc_taps')
@@ -162,7 +169,11 @@ export async function POST(request) {
             taps_dct: 0,
             last_total_nss: currentTotal,
           })
-        if (error) throw error
+        if (error) {
+          // Возможно, параллельный запрос успел вставить запись первым
+          // (unique constraint на wallet+month). Возвращаем 429 — клиент перешлёт.
+          return NextResponse.json({ ok: false, error: 'Concurrent insert, retry', retry: true }, { status: 429 })
+        }
         return NextResponse.json({ ok: true, earned: 0, snapshot: currentTotal })
       }
 
@@ -173,7 +184,11 @@ export async function POST(request) {
       // (сгорание NSS после 180 дней неактивности). Просто не увеличиваем taps_dct.
       const newTapsDct = +(parseFloat(record.taps_dct || 0) + delta).toFixed(4)
 
-      const { error } = await supabase
+      // ─── Optimistic lock ───
+      // UPDATE сработает только если last_total_nss в БД ещё равен тому что мы прочитали.
+      // При параллельном запросе второй получит count=0 и вернёт 429.
+      // Поддерживаем случай null (старые записи до миграции last_total_nss).
+      let updateQuery = supabase
         .from('dc_tournaments')
         .update({
           taps_dct: newTapsDct,
@@ -183,7 +198,25 @@ export async function POST(request) {
         .eq('wallet', wLower)
         .eq('month', month)
 
-      if (error) throw error
+      if (record.last_total_nss === null || record.last_total_nss === undefined) {
+        updateQuery = updateQuery.is('last_total_nss', null)
+      } else {
+        updateQuery = updateQuery.eq('last_total_nss', record.last_total_nss)
+      }
+
+      const { data: updated, error: updErr } = await updateQuery.select()
+
+      if (updErr) throw updErr
+      if (!updated || updated.length === 0) {
+        // Параллельный запрос обновил last_total_nss до нас.
+        // Возвращаем 429 — клиент может попробовать снова или просто пропустить.
+        return NextResponse.json({
+          ok: false,
+          error: 'Concurrent tournament update rejected',
+          retry: true,
+        }, { status: 429 })
+      }
+
       return NextResponse.json({ ok: true, earned: delta, total: newTapsDct })
     } else {
       return NextResponse.json({ ok: false, error: 'Неизвестное действие' }, { status: 400 })
