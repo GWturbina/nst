@@ -19,6 +19,8 @@ export default function FractionalLotsAdmin() {
   const [txPending, setTxPending] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [expandedLot, setExpandedLot] = useState(null)
+  const [showAdminMgr, setShowAdminMgr] = useState(false)
+  const [adminAddr, setAdminAddr] = useState('')
 
   // Форма создания (V2 — поля контракта)
   const [form, setForm] = useState({
@@ -125,6 +127,49 @@ export default function FractionalLotsAdmin() {
         className="w-full py-3 rounded-2xl text-[12px] font-black gold-btn">
         {showCreate ? '✕ Закрыть' : '+ Создать фракционный лот'}
       </button>
+
+      {/* Кнопка управления админами */}
+      <button onClick={() => setShowAdminMgr(!showAdminMgr)}
+        className="w-full py-2 rounded-2xl text-[11px] font-bold border border-white/10 text-slate-300">
+        {showAdminMgr ? '✕ Закрыть' : '👑 Управление админами контракта'}
+      </button>
+
+      {/* ═══ УПРАВЛЕНИЕ АДМИНАМИ ═══ */}
+      {showAdminMgr && (
+        <div className="p-4 rounded-2xl glass space-y-2" style={{ border: '1px solid rgba(168,85,247,0.3)' }}>
+          <div className="text-[12px] font-black text-purple-400 mb-1">👑 Админы контракта FractionalGem V2</div>
+          <div className="text-[10px] text-slate-400 mb-2">Только owner контракта может добавлять и удалять админов. Админы могут создавать лоты.</div>
+          <input value={adminAddr} onChange={e => setAdminAddr(e.target.value.trim())}
+            placeholder="0x... адрес кошелька"
+            className="w-full p-2.5 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none font-mono" />
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={async () => {
+              if (!/^0x[a-fA-F0-9]{40}$/.test(adminAddr)) return addNotification('❌ Неверный адрес')
+              setTxPending(true)
+              const r = await safeCall(() => DCT.addFractionalAdmin(adminAddr))
+              setTxPending(false)
+              if (r.ok) { addNotification(`✅ Админ ${adminAddr.slice(0,6)}...${adminAddr.slice(-4)} добавлен`); setAdminAddr('') }
+              else addNotification('❌ ' + r.error)
+            }} disabled={txPending}
+              className="py-2.5 rounded-xl text-[11px] font-bold disabled:opacity-50"
+              style={{ background: 'linear-gradient(135deg,#10b981,#059669)', color: '#fff' }}>
+              {txPending ? '⏳' : '+ Добавить'}
+            </button>
+            <button onClick={async () => {
+              if (!/^0x[a-fA-F0-9]{40}$/.test(adminAddr)) return addNotification('❌ Неверный адрес')
+              setTxPending(true)
+              const r = await safeCall(() => DCT.removeFractionalAdmin(adminAddr))
+              setTxPending(false)
+              if (r.ok) { addNotification(`✅ Админ удалён`); setAdminAddr('') }
+              else addNotification('❌ ' + r.error)
+            }} disabled={txPending}
+              className="py-2.5 rounded-xl text-[11px] font-bold disabled:opacity-50"
+              style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444' }}>
+              − Удалить
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ═══ ФОРМА СОЗДАНИЯ (V2) ═══ */}
       {showCreate && (
