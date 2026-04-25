@@ -812,6 +812,19 @@ export async function isFractionalGemAdmin(address) {
   } catch { return false }
 }
 
+// Управление админами (owner-only)
+export async function addFractionalAdmin(address) {
+  const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
+  const tx = await c.addAdmin(address)
+  return await tx.wait()
+}
+
+export async function removeFractionalAdmin(address) {
+  const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
+  const tx = await c.removeAdmin(address)
+  return await tx.wait()
+}
+
 // ═══════════════════════════════════════════════════
 // GemShowcase — Витрина циклов (только чтение, управление из AdminPanel)
 // ═══════════════════════════════════════════════════
