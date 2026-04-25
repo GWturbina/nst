@@ -20,20 +20,21 @@ export default function FractionalLotsAdmin() {
   const [showCreate, setShowCreate] = useState(false)
   const [expandedLot, setExpandedLot] = useState(null)
 
-  // Форма создания
+  // Форма создания (V2 — поля контракта)
   const [form, setForm] = useState({
-    gemId: '0',
-    caratX100: '',
-    name: '',
-    imageURI: '',
-    certified: false,
-    certLab: '0',
-    certNumber: '',
-    totalFractions: '100',
-    fractionPriceDCT: '',
-    stakingAPR: '1200',
+    // ═══ V2 контрактные поля ═══
+    costPriceUSDT: '',          // закупочная цена камня в USDT (например 5600)
+    totalFractions: '100',      // сколько долей (например 100)
+    stakingAPR: '1200',         // 1200 BP = 12%
     stakingDays: '365',
+    fundraisingDays: '30',
     lotSupplier: '',
+    reservedCount: '0',         // резервные доли админу (ghost-резерв)
+    // ═══ Мета (для админа — пока не записывается в контракт) ═══
+    name: '',
+    caratX100: '',
+    certNumber: '',
+    imageURI: '',
   })
 
   // Формы действий
@@ -55,29 +56,37 @@ export default function FractionalLotsAdmin() {
 
   // ═══ Создать лот ═══
   const handleCreate = async () => {
-    if (!form.caratX100 || !form.name || !form.fractionPriceDCT) {
-      return addNotification('❌ Заполните: караты, название, цена доли')
+    // V2: для контракта нужны только costPrice + totalFractions + staking
+    if (!form.costPriceUSDT || !form.totalFractions || !form.name) {
+      return addNotification('❌ Заполните: название, цена камня (USDT), кол-во долей')
     }
+    const cost = parseFloat(form.costPriceUSDT)
+    const fractions = parseInt(form.totalFractions)
+    if (isNaN(cost) || cost <= 0) return addNotification('❌ Неверная цена камня')
+    if (isNaN(fractions) || fractions < 2) return addNotification('❌ Минимум 2 доли')
+
     setTxPending(true)
     const result = await safeCall(() => DCT.createFractionalLot({
-      gemId: parseInt(form.gemId) || 0,
-      caratX100: parseInt(form.caratX100),
-      name: form.name,
-      imageURI: form.imageURI,
-      certified: form.certified,
-      certLab: parseInt(form.certLab) || 0,
-      certNumber: form.certNumber,
-      totalFractions: parseInt(form.totalFractions),
-      fractionPriceDCT: form.fractionPriceDCT,
-      stakingAPR: parseInt(form.stakingAPR),
-      stakingDays: parseInt(form.stakingDays),
-      lotSupplier: form.lotSupplier || wallet,
+      costPriceUSDT:   form.costPriceUSDT,
+      totalFractions:  fractions,
+      stakingAPR:      parseInt(form.stakingAPR) || 1200,
+      stakingDays:     parseInt(form.stakingDays) || 365,
+      fundraisingDays: parseInt(form.fundraisingDays) || 30,
+      lotSupplier:     form.lotSupplier || wallet,
+      reservedCount:   parseInt(form.reservedCount) || 0,
+      giftRecipients:  [],
+      giftAmounts:     [],
     }))
     setTxPending(false)
     if (result.ok) {
-      addNotification(`✅ Фракционный лот «${form.name}» создан!`)
+      addNotification(`✅ Фракционный лот «${form.name}» создан on-chain!`)
+      // TODO: сохранить мета (name, caratX100, certNumber, imageURI) в БД с привязкой к новому lotId
       setShowCreate(false)
-      setForm({ gemId: '0', caratX100: '', name: '', imageURI: '', certified: false, certLab: '0', certNumber: '', totalFractions: '100', fractionPriceDCT: '', stakingAPR: '1200', stakingDays: '365', lotSupplier: '' })
+      setForm({
+        costPriceUSDT: '', totalFractions: '100', stakingAPR: '1200',
+        stakingDays: '365', fundraisingDays: '30', lotSupplier: '', reservedCount: '0',
+        name: '', caratX100: '', certNumber: '', imageURI: '',
+      })
       reload()
     } else addNotification('❌ ' + result.error)
   }
@@ -117,56 +126,50 @@ export default function FractionalLotsAdmin() {
         {showCreate ? '✕ Закрыть' : '+ Создать фракционный лот'}
       </button>
 
-      {/* ═══ ФОРМА СОЗДАНИЯ ═══ */}
+      {/* ═══ ФОРМА СОЗДАНИЯ (V2) ═══ */}
       {showCreate && (
         <div className="p-4 rounded-2xl glass space-y-2" style={{ border: '1px solid rgba(212,168,67,0.2)' }}>
-          <div className="text-[13px] font-black text-gold-400 mb-2">💎 Новый фракционный лот (on-chain)</div>
+          <div className="text-[13px] font-black text-gold-400 mb-2">💎 Новый фракционный лот (on-chain V2)</div>
 
+          {/* МЕТА — для отображения в админке */}
+          <div className="text-[10px] text-slate-500 mb-1">Мета (для админки):</div>
           <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-            placeholder="Название (напр. Бриллиант 2.5ct VVS1 E)"
+            placeholder="Название (напр. Round Brilliant 2.20ct H VVS2)"
             className="w-full p-2.5 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-[9px] text-slate-500">Караты ×100</label>
               <input value={form.caratX100} onChange={e => setForm(f => ({ ...f, caratX100: e.target.value }))}
-                placeholder="250 = 2.50ct" type="number"
+                placeholder="220 = 2.20ct" type="number"
                 className="w-full p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
             </div>
             <div>
-              <label className="text-[9px] text-slate-500">Gem ID</label>
-              <input value={form.gemId} onChange={e => setForm(f => ({ ...f, gemId: e.target.value }))}
-                type="number" className="w-full p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
-            </div>
-            <div>
-              <label className="text-[9px] text-slate-500">Сертификат</label>
-              <select value={form.certLab} onChange={e => setForm(f => ({ ...f, certLab: e.target.value, certified: e.target.value !== '0' }))}
-                className="w-full p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none">
-                {CERT_LABS.map((lab, i) => <option key={i} value={i}>{lab}</option>)}
-              </select>
+              <label className="text-[9px] text-slate-500">Номер сертификата (GIA)</label>
+              <input value={form.certNumber} onChange={e => setForm(f => ({ ...f, certNumber: e.target.value }))}
+                placeholder="6352546167"
+                className="w-full p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
             </div>
           </div>
-
-          {form.certified && (
-            <input value={form.certNumber} onChange={e => setForm(f => ({ ...f, certNumber: e.target.value }))}
-              placeholder="Номер сертификата"
-              className="w-full p-2.5 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
-          )}
 
           <input value={form.imageURI} onChange={e => setForm(f => ({ ...f, imageURI: e.target.value }))}
             placeholder="URL фото (необязательно)"
             className="w-full p-2.5 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
 
+          {/* КОНТРАКТНЫЕ ПОЛЯ V2 */}
+          <div className="text-[10px] text-gold-400 font-bold mt-3 mb-1">⛓ Параметры on-chain (V2):</div>
+
           <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[9px] text-slate-500">Закупка камня (USDT)</label>
+              <input value={form.costPriceUSDT} onChange={e => setForm(f => ({ ...f, costPriceUSDT: e.target.value }))}
+                type="number" step="0.01" placeholder="5600"
+                className="w-full p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
+            </div>
             <div>
               <label className="text-[9px] text-slate-500">Кол-во долей</label>
               <input value={form.totalFractions} onChange={e => setForm(f => ({ ...f, totalFractions: e.target.value }))}
-                type="number" className="w-full p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
-            </div>
-            <div>
-              <label className="text-[9px] text-slate-500">Цена доли (DCT)</label>
-              <input value={form.fractionPriceDCT} onChange={e => setForm(f => ({ ...f, fractionPriceDCT: e.target.value }))}
-                type="number" step="0.01" placeholder="10.0"
+                type="number" placeholder="100"
                 className="w-full p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
             </div>
           </div>
@@ -181,7 +184,23 @@ export default function FractionalLotsAdmin() {
             <div>
               <label className="text-[9px] text-slate-500">Стейкинг (дней)</label>
               <input value={form.stakingDays} onChange={e => setForm(f => ({ ...f, stakingDays: e.target.value }))}
-                type="number" className="w-full p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
+                type="number" placeholder="365"
+                className="w-full p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[9px] text-slate-500">Срок сбора (дней)</label>
+              <input value={form.fundraisingDays} onChange={e => setForm(f => ({ ...f, fundraisingDays: e.target.value }))}
+                type="number" placeholder="30"
+                className="w-full p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
+            </div>
+            <div>
+              <label className="text-[9px] text-slate-500">Резерв админу (долей)</label>
+              <input value={form.reservedCount} onChange={e => setForm(f => ({ ...f, reservedCount: e.target.value }))}
+                type="number" placeholder="0"
+                className="w-full p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
             </div>
           </div>
 
@@ -192,17 +211,25 @@ export default function FractionalLotsAdmin() {
               className="w-full p-2.5 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none font-mono" />
           </div>
 
-          {/* Сводка */}
-          {form.caratX100 && form.fractionPriceDCT && form.totalFractions && (
+          {/* Сводка экономики V2 */}
+          {form.costPriceUSDT && form.totalFractions && (
             <div className="p-2.5 rounded-xl bg-gold-400/8 text-[11px] space-y-0.5">
-              <div><span className="text-slate-400">Камень: </span><span className="text-white font-bold">{(parseInt(form.caratX100) / 100).toFixed(2)} ct</span></div>
-              <div><span className="text-slate-400">Долей: </span><span className="text-white font-bold">{form.totalFractions}</span>
-                <span className="text-slate-400"> × </span><span className="text-gold-400 font-bold">{form.fractionPriceDCT} DCT</span>
-                <span className="text-slate-400"> = </span><span className="text-emerald-400 font-bold">{(parseInt(form.totalFractions) * parseFloat(form.fractionPriceDCT)).toFixed(0)} DCT</span>
-              </div>
-              <div><span className="text-slate-400">APR: </span><span className="text-blue-400 font-bold">{(parseInt(form.stakingAPR) / 100).toFixed(1)}%</span>
-                <span className="text-slate-400"> на </span><span className="text-white">{form.stakingDays} дней</span>
-              </div>
+              {(() => {
+                const cost = parseFloat(form.costPriceUSDT)
+                const fr = parseInt(form.totalFractions) || 1
+                const club = cost * 10000 / 8500    // = cost / 0.85 (формула V2)
+                const perFr = club / fr
+                const marketing = club - cost
+                return (
+                  <>
+                    <div><span className="text-slate-400">Закупка: </span><span className="text-white font-bold">${cost.toFixed(2)} USDT</span></div>
+                    <div><span className="text-slate-400">Полный сбор: </span><span className="text-emerald-400 font-bold">${club.toFixed(2)}</span> <span className="text-slate-500">(85% backing + 15% маркетинг)</span></div>
+                    <div><span className="text-slate-400">Цена 1 доли: </span><span className="text-gold-400 font-bold">${perFr.toFixed(2)} USDT</span></div>
+                    <div><span className="text-slate-400">Маркетинг: </span><span className="text-blue-400 font-bold">${marketing.toFixed(2)}</span></div>
+                    <div><span className="text-slate-400">APR: </span><span className="text-blue-400 font-bold">{(parseInt(form.stakingAPR) / 100).toFixed(1)}%</span> на <span className="text-white">{form.stakingDays} дней</span></div>
+                  </>
+                )
+              })()}
             </div>
           )}
 
