@@ -10,6 +10,12 @@
  *   • Цена >= clubPrice ИЛИ isNegotiable = true ("договорная")
  *   • Нельзя ниже клубной цены (из dc_showcase.club_price)
  *
+ * ИЗМЕНЕНИЯ (25 апр 2026):
+ *   • getGWStatus: добавлен таймаут 8 сек через Promise.race.
+ *     Если opBNB RPC зависает — функция вернёт null, POST вернёт 503
+ *     "RPC недоступен" вместо подвисшего запроса на 30+ секунд.
+ *     Защита Vercel-функции от выхода за лимит времени.
+ *
  * ИЗМЕНЕНИЯ (17 апр 2026):
  *   • POST теперь серверно проверяет через RPC opBNB, что присланный gwId
  *     действительно принадлежит подписавшему кошельку. Раньше wallet и gwId
@@ -40,16 +46,33 @@ const NSS_ABI_FRAGMENT = [
   'function bridge() external view returns (address)',
 ]
 
+// Таймаут для RPC — защита от подвисшего opBNB
+const RPC_TIMEOUT_MS = 8000
+
+/**
+ * Promise.race с таймаутом. Если promise не разрешился за ms — бросает TimeoutError.
+ * Оригинальный promise продолжит выполняться в фоне (и будет проигнорирован).
+ */
+function withTimeout(promise, ms, label = 'RPC') {
+  let timer
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timeout after ${ms}ms`)), ms)
+  })
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
+}
+
 async function getGWStatus(walletAddress) {
   try {
     const { ethers } = await import('ethers')
     const provider = new ethers.JsonRpcProvider(RPC_URL)
 
     const nss = new ethers.Contract(NSS_PLATFORM_ADDR, NSS_ABI_FRAGMENT, provider)
-    const bridgeAddr = await nss.bridge()
+
+    // Защищаем оба RPC-вызова таймаутом
+    const bridgeAddr = await withTimeout(nss.bridge(), RPC_TIMEOUT_MS, 'bridge()')
 
     const bridge = new ethers.Contract(bridgeAddr, BRIDGE_ABI_FRAGMENT, provider)
-    const status = await bridge.getUserStatus(walletAddress)
+    const status = await withTimeout(bridge.getUserStatus(walletAddress), RPC_TIMEOUT_MS, 'getUserStatus()')
 
     return {
       isRegistered: Boolean(status.isRegistered),
@@ -135,11 +158,12 @@ export async function POST(request) {
     }
 
     // ─── Серверная проверка: gwId действительно принадлежит wallet ───
+    // С таймаутом 8 сек на каждый RPC-вызов внутри getGWStatus.
     const gwStatus = await getGWStatus(wLower)
     if (!gwStatus) {
       return NextResponse.json({
         ok: false,
-        error: 'Не удалось проверить регистрацию в GlobalWay (RPC недоступен)'
+        error: 'Не удалось проверить регистрацию в GlobalWay (RPC недоступен или превышен таймаут). Попробуйте через минуту.'
       }, { status: 503 })
     }
     if (!gwStatus.isRegistered || !gwStatus.odixId) {
