@@ -1,0 +1,50 @@
+{
+  "_comment": "Diamond Club — English. To translate to a new language: copy this file, rename to landing-XX.json, translate strings, then register in landing.html I18N_AVAILABLE array and add a button to .lang-switch.",
+
+  "meta": {
+    "title": "Diamond Club — Own a share of a real diamond",
+    "description": "Fractional ownership of natural diamonds from $50. 12% APR in USDT + DCT token growth up to 420% per year. opBNB blockchain. Audited smart contract.",
+    "og_title": "💎 Diamond Club — Diamonds from $50 per share",
+    "og_description": "Up to +420% yearly returns. 12% USDT staking. Diamonds at up to 70% market discount. opBNB blockchain."
+  },
+
+  "nav": {
+    "concept": "Concept",
+    "math": "Math",
+    "lot": "First lot",
+    "system": "System",
+    "safety": "Safety",
+    "cta": "Join the club"
+  },
+
+  "hero": {
+    "eyebrow": "Fractional ownership · opBNB · Smart contract",
+    "title_html": "Own <span class=\"accent ice-text\">a share</span><br>of a real<br><span class=\"ice-text\">diamond.</span>",
+    "subtitle": "Certified natural stone. No jewelry markup. No middlemen. DCT token on the blockchain — your share in your wallet.",
+    "price_label_html": "Entry from <span class=\"amount ice-text\">$50</span>",
+    "cta_primary": "Join the club →",
+    "cta_secondary": "How it works",
+    "trust1_label": "APR USDT · guaranteed",
+    "trust2_label": "DCT token growth per year",
+    "trust3_label": "system works for you",
+    "diamond_alt": "Natural diamond"
+  },
+
+  "footer": {
+    "brand_description": "Fractional shares of natural diamonds on the opBNB blockchain. Part of the GlobalWay ecosystem.",
+    "col_club": "Club",
+    "col_club_concept": "Concept",
+    "col_club_math": "Math",
+    "col_club_lot": "Current lot",
+    "col_club_system": "System",
+    "col_ecosystem": "GW Ecosystem",
+    "col_docs": "Documents",
+    "doc_privacy": "Privacy Policy",
+    "doc_terms": "Terms of Use",
+    "doc_contract": "Smart Contract",
+    "doc_audit": "Security audit",
+    "doc_soon": "(soon)",
+    "copyright": "© Diamond Club 2026. Part of the GlobalWay ecosystem.",
+    "tech_info": "opBNB · Chain ID 204 · SafePal wallet required"
+  }
+}
