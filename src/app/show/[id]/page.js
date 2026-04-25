@@ -12,6 +12,11 @@
  *   5. При отправке дублирует заявку:
  *      - в cgift.club/api/viral-registration (общий CRM gwad.ink)
  *      - в /api/buyer-request (Diamond Club кабинет партнёра)
+ *
+ * ИЗМЕНЕНИЯ (25 апр 2026):
+ *   • Anti-spam: добавлены honeypot field "website" и formStartedAt timestamp.
+ *     Реальные пользователи защиту не видят, боты с авто-fill попадаются.
+ *     Сервер тихо отклоняет (200 OK с фейковым requestId).
  */
 import { useEffect, useState } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
@@ -79,6 +84,13 @@ export default function ShowPage() {
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+
+  // ─── Anti-spam: honeypot field + timing check ───
+  // honeypot — скрытое поле, заполняется только ботами с авто-fill.
+  // formStartedAt — timestamp загрузки формы; сервер проверяет
+  // что между загрузкой и submit прошло >= 3 сек.
+  const [honeypot, setHoneypot] = useState('')
+  const [formStartedAt] = useState(() => Date.now())
 
   // Загрузка товара + цены партнёра
   useEffect(() => {
@@ -162,6 +174,9 @@ export default function ShowPage() {
       contact: contact.trim(),
       note: note.trim() || null,
       offeredPrice: displayPrice.value,
+      // ─── Anti-spam (тихо проверяется на сервере) ───
+      website: honeypot,           // honeypot, должен быть пустым
+      formStartedAt: formStartedAt, // timestamp загрузки формы (мс)
     }
 
     // Отправка параллельно в два сервера:
@@ -466,6 +481,22 @@ export default function ShowPage() {
                 color: '#ef4444', fontSize: 12, textAlign: 'center'
               }}>❌ {formError}</div>
             )}
+
+            {/* ─── Honeypot: скрытое поле для ловли ботов с авто-fill ─── */}
+            {/* Реальный пользователь его не увидит и не заполнит. */}
+            {/* Бот с автоматической подстановкой заполнит — сервер тихо отклонит заявку. */}
+            <div style={{ position: 'absolute', left: '-9999px', top: '-9999px', width: 1, height: 1, overflow: 'hidden' }} aria-hidden="true">
+              <label htmlFor="dc_website_field">Website (do not fill)</label>
+              <input
+                id="dc_website_field"
+                type="text"
+                name="website"
+                value={honeypot}
+                onChange={e => setHoneypot(e.target.value)}
+                tabIndex={-1}
+                autoComplete="off"
+              />
+            </div>
 
             <button
               onClick={handleSubmit}
