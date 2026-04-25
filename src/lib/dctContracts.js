@@ -52,45 +52,54 @@ const DCTBRIDGE_ABI = [
 ]
 
 const FRACTIONALGEM_ABI = [
-  // Views — лоты
-  'function getLotCount() view returns (uint256)',
-  'function getLotInfo(uint256 id) view returns (tuple(uint256 gemId, uint16 caratX100, string name, string imageURI, uint8 certLab, string certNumber, bool certified, uint256 costPrice, uint256 clubPrice, uint256 wholesalePrice, uint256 totalFractions, uint256 soldFractions, uint256 fractionPriceDCT, uint8 mode, uint16 stakingAPR, uint64 stakingStartedAt, uint256 stakingDays, uint256 totalCycleProfit, uint8 cyclesCompleted, uint256 jewelryCost, uint256 jewelryFunded, bool jewelryActive, uint256 saleAmountUSDT, uint8 status, address lotSupplier, address lotOriginator) l, uint256 sr, uint256 tv)',
-  'function getUserLotInfo(uint256 id, address u) view returns (uint256 fr, uint256 cl, bool v, uint256 pct)',
-  'function getLotStatus(uint256 id) view returns (uint8)',
-  'function getLotCostPrice(uint256 id) view returns (uint256)',
-  'function getLotCyclesCompleted(uint256 id) view returns (uint8)',
+  // ═══ V2 (FractionalGemV2) — реальный задеплоенный контракт ═══
+  // Views — состояние лота
+  'function lots(uint256) view returns (uint256 costPriceUSDT, uint256 clubPriceUSDT, uint256 fractionPriceUSDT, uint256 totalFractions, uint256 soldFractions, uint16 stakingAPR, uint64 stakingStartedAt, uint256 stakingDays, uint8 status, uint64 createdAt, uint64 fundraisingDeadline, uint8 cyclesCompleted, bool supplierPaid, uint256 totalGhost, uint256 dissolvedGhost, uint256 ghostDebtUSDT, address lotSupplier)',
+  'function lotCount() view returns (uint256)',
   'function holderFractions(uint256, address) view returns (uint256)',
   'function stakingReserveUSDT(uint256) view returns (uint256)',
   'function getClaimableStaking(uint256 lotId, address user) view returns (uint256)',
+  'function lockedDCTPerLot(uint256, address) view returns (uint256)',
+  'function lotContributedUSDT(uint256, address) view returns (uint256)',
+  'function lotMintedDCT(uint256, address) view returns (uint256)',
+  'function accumulatedCycleProfit(uint256) view returns (uint256)',
+  'function saleAmountUSDT(uint256) view returns (uint256)',
+  'function hasClaimedSale(uint256, address) view returns (bool)',
+  'function refundClaimed(uint256, address) view returns (bool)',
   'function balanceOf(address account, uint256 id) view returns (uint256)',
   'function isApprovedForAll(address account, address operator) view returns (bool)',
-  'function lotCount() view returns (uint256)',
   'function MAX_CYCLES() view returns (uint8)',
-  // Views — цены
-  'function getClubPrice(uint256 caratX100, bool cert) view returns (uint256)',
-  'function getWholesalePrice(uint256 caratX100, bool cert) view returns (uint256)',
-  'function getMarketPrice(uint256 caratX100, bool cert) view returns (uint256)',
-  'function getPriceInfo(uint256 c, bool cert) view returns (uint256 cost, uint256 club, uint256 ws, uint256 mkt)',
-  'function getRegisteredCarats() view returns (uint256[])',
-  // Write
-  'function buyFractions(uint256 lotId, uint256 amount)',
-  'function claimStaking(uint256 lotId)',
-  'function voteForSale(uint256 lotId)',
-  'function claimSaleProceeds(uint256 lotId)',
-  'function setApprovalForAll(address operator, bool approved)',
-  // Admin
-  'function createLot(uint256 gemId, uint16 caratX100, string name, string imageURI, bool certified, uint8 certLab, string certNumber, uint256 totalFractions, uint256 fractionPriceDCT, uint16 stakingAPR, uint256 stakingDays, address lotSupplier)',
-  'function startFundraising(uint256 lotId)',
-  'function addCycleProfit(uint256 lotId, uint256 profitUSDT)',
-  'function fundStakingReserve(uint256 lotId, uint256 amountUSDT)',
-  'function requestJewelryProduction(uint256 lotId, uint256 jewelryCost, uint8 mode)',
-  'function fundJewelryProduction(uint256 lotId, uint256 amountUSDT)',
-  'function forceForSale(uint256 lotId)',
-  'function confirmSale(uint256 lotId, uint256 saleAmountUSDT)',
-  'function emergencyClaimStaking(uint256 lotId)',
-  'function emergencyRefundToPartner(address p, uint256 amt, string reason)',
-  'function buyWholeGem(uint256 lotId)',
+  'function MAX_FRACTIONS() view returns (uint256)',
+  'function MARKETING_BP() view returns (uint16)',
+  'function BACKING_BP() view returns (uint16)',
+  'function VERSION() view returns (string)',
+  'function admins(address) view returns (bool)',
   'function owner() view returns (address)',
+  'function dctToken() view returns (address)',
+  'function usdt() view returns (address)',
+  // Write — для партнёров
+  'function buyFractionsUSDT(uint256 lotId, uint256 amount)',
+  'function buyFractionsDCT(uint256 lotId, uint256 amount)',
+  'function claimStakingAndContinue(uint256 lotId)',
+  'function claimStakingAndUnlock(uint256 lotId)',
+  'function extendStaking(uint256 lotId)',
+  'function claimAfterFinalSale(uint256 lotId)',
+  'function refundCancelledLot(uint256 lotId)',
+  'function setApprovalForAll(address operator, bool approved)',
+  // Admin — управление лотом
+  'function createLot(tuple(uint256 costPriceUSDT, uint256 totalFractions, uint16 stakingAPR, uint256 stakingDays, uint64 fundraisingDays, address lotSupplier, uint256 reservedCount, address[] giftRecipients, uint256[] giftAmounts) p) returns (uint256)',
+  'function payToSupplier(uint256 lotId)',
+  'function clubBuyRemaining(uint256 lotId)',
+  'function extendDeadline(uint256 lotId, uint64 additionalDays)',
+  'function cancelLot(uint256 lotId, bool force)',
+  'function settleGiftDebt(uint256 lotId, address recipient, uint256 amountUSDT)',
+  'function fundStakingReserve(uint256 lotId, uint256 amount)',
+  'function confirmCycleSale(uint256 lotId, uint256 saleUSDT)',
+  'function withdrawCycleProfit(uint256 lotId, address to, uint256 amount)',
+  'function forceForSale(uint256 id)',
+  'function confirmFinalSale(uint256 lotId, uint256 amt)',
+  'function addAdmin(address a)',
+  'function removeAdmin(address a)',
 ]
 
 const DCTEXCHANGE_ABI = [
@@ -269,44 +278,42 @@ export async function getAllFractionalLots() {
   const c = getDCTRead('FractionalGem', FRACTIONALGEM_ABI)
   if (!c) return []
   try {
-    const count = Number(await c.getLotCount())
+    const count = Number(await c.lotCount())
     const lots = []
     for (let i = 0; i < count && i < 100; i++) {
       try {
-        const [lotData, stakingReserve, totalValue] = await c.getLotInfo(i)
+        const lot = await c.lots(i)
+        // Дополнительно подтянем резерв стейкинга (отдельный геттер)
+        let stakingReserve = 0n
+        try { stakingReserve = await c.stakingReserveUSDT(i) } catch {}
+
         lots.push({
           id: i,
-          gemId: Number(lotData.gemId),
-          caratX100: Number(lotData.caratX100),
-          carats: (Number(lotData.caratX100) / 100).toFixed(2),
-          name: lotData.name,
-          imageURI: lotData.imageURI,
-          certified: lotData.certified,
-          certLab: Number(lotData.certLab),
-          certNumber: lotData.certNumber,
-          costPrice: fmt6(lotData.costPrice),
-          clubPrice: fmt6(lotData.clubPrice),
-          wholesalePrice: fmt6(lotData.wholesalePrice),
-          totalFractions: Number(lotData.totalFractions),
-          soldFractions: Number(lotData.soldFractions),
-          fractionPriceDCT: fmt(lotData.fractionPriceDCT),
-          mode: Number(lotData.mode),
-          // mode: 0=CREATED, 1=FUNDRAISING, 2=STAKING, 3=JEWELRY, 4=FOR_SALE, 5=SOLD, 6=CLOSED
-          stakingAPR: Number(lotData.stakingAPR),
-          stakingStartedAt: Number(lotData.stakingStartedAt),
-          stakingDays: Number(lotData.stakingDays),
-          totalCycleProfit: fmt6(lotData.totalCycleProfit),
-          cyclesCompleted: Number(lotData.cyclesCompleted),
-          jewelryCost: fmt6(lotData.jewelryCost),
-          jewelryFunded: fmt6(lotData.jewelryFunded),
-          jewelryActive: lotData.jewelryActive,
-          saleAmountUSDT: fmt6(lotData.saleAmountUSDT),
-          status: Number(lotData.status),
-          supplier: lotData.lotSupplier,
-          originator: lotData.lotOriginator,
+          // Экономика (V2)
+          costPrice: fmt6(lot.costPriceUSDT),         // закупка камня в USDT
+          clubPrice: fmt6(lot.clubPriceUSDT),         // = costPrice / 0.85
+          fractionPriceUSDT: fmt6(lot.fractionPriceUSDT), // цена 1 доли в USDT
+          totalFractions: Number(lot.totalFractions),
+          soldFractions: Number(lot.soldFractions),
+          // Стейкинг
+          stakingAPR: Number(lot.stakingAPR),         // BP, 1200 = 12%
+          stakingStartedAt: Number(lot.stakingStartedAt),
+          stakingDays: Number(lot.stakingDays),
+          // Жизненный цикл (V2 enum LotStatus)
+          // 0=PENDING 1=FUNDRAISING 2=FULLY_FUNDED 3=STAKING_ACTIVE 4=FOR_SALE 5=SOLD 6=CANCELLED
+          status: Number(lot.status),
+          createdAt: Number(lot.createdAt),
+          fundraisingDeadline: Number(lot.fundraisingDeadline),
+          cyclesCompleted: Number(lot.cyclesCompleted),
+          supplierPaid: lot.supplierPaid,
+          // Ghost-доли
+          totalGhost: Number(lot.totalGhost),
+          dissolvedGhost: Number(lot.dissolvedGhost),
+          ghostDebtUSDT: fmt6(lot.ghostDebtUSDT),
+          // Адрес
+          supplier: lot.lotSupplier,
           // Дополнительно
           stakingReserve: fmt6(stakingReserve),
-          totalValue: fmt6(totalValue),
         })
       } catch { break }
     }
@@ -315,15 +322,23 @@ export async function getAllFractionalLots() {
 }
 
 export async function getUserLotInfo(lotId, address) {
+  // V2: getUserLotInfo больше нет — собираем из отдельных геттеров
   const c = getDCTRead('FractionalGem', FRACTIONALGEM_ABI)
   if (!c) return null
   try {
-    const info = await c.getUserLotInfo(lotId, address)
+    const [fractions, claimable, contributedUSDT, mintedDCT, lockedDCT] = await Promise.all([
+      c.holderFractions(lotId, address),
+      c.getClaimableStaking(lotId, address),
+      c.lotContributedUSDT(lotId, address),
+      c.lotMintedDCT(lotId, address),
+      c.lockedDCTPerLot(lotId, address),
+    ])
     return {
-      fractions: Number(info.fr),           // мои доли
-      claimableStaking: fmt6(info.cl),       // доступный стейкинг-доход в USDT
-      hasVoted: info.v,                      // голосовал за продажу?
-      ownershipPct: Number(info.pct),        // % владения (BP, /100 для %)
+      fractions: Number(fractions),
+      claimableStaking: fmt6(claimable),
+      contributedUSDT: fmt6(contributedUSDT),
+      mintedDCT: fmt(mintedDCT),
+      lockedDCT: fmt(lockedDCT),
     }
   } catch { return null }
 }
@@ -337,33 +352,71 @@ export async function getClaimableStaking(lotId, address) {
   } catch { return '0' }
 }
 
-export async function buyFractions(lotId, amount) {
-  // Оплата DCT — нужен approve DCT на FractionalGem
+// V2: оплата USDT (партнёр платит USDT, контракт минтит DCT с локом)
+export async function buyFractionsUSDT(lotId, amount) {
   const cRead = getDCTRead('FractionalGem', FRACTIONALGEM_ABI)
-  const lotInfo = await cRead.getLotInfo(lotId)
-  const fractionPrice = lotInfo[0].fractionPriceDCT
-  const totalCost = fractionPrice * BigInt(amount)
-  await ensureDCTApproval(ADDRESSES.FractionalGem, totalCost)
+  const lot = await cRead.lots(lotId)
+  const totalCost = lot.fractionPriceUSDT * BigInt(amount)
+  // Approve USDT (6 decimals) на контракт FractionalGem
+  await ensureUSDTApproval(ADDRESSES.FractionalGem, totalCost)
   const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
-  const tx = await c.buyFractions(lotId, amount)
+  const tx = await c.buyFractionsUSDT(lotId, amount)
   return await tx.wait()
 }
 
+// V2: оплата DCT (партнёр платит уже накопленными DCT)
+export async function buyFractionsDCT(lotId, amount) {
+  const cRead = getDCTRead('FractionalGem', FRACTIONALGEM_ABI)
+  const lot = await cRead.lots(lotId)
+  // В DCT-режиме бэкинг идёт без маркетинга → = totalUSDT × 0.85
+  const totalUSDT = lot.fractionPriceUSDT * BigInt(amount)
+  const backingUSDT = totalUSDT * 8500n / 10000n
+  // dctRequired считает контракт сам через getCurrentPrice — мы только approve максимум
+  // Approve с запасом по безопасности (×2)
+  await ensureDCTApproval(ADDRESSES.FractionalGem, backingUSDT * 4n)
+  const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
+  const tx = await c.buyFractionsDCT(lotId, amount)
+  return await tx.wait()
+}
+
+// Совместимость со старым кодом — buyFractions по-умолчанию = USDT-вариант
+export async function buyFractions(lotId, amount) {
+  return await buyFractionsUSDT(lotId, amount)
+}
+
+// V2: claimStaking разделён на 2 функции
+//  - claimStakingAndContinue — забрать накопленный USDT, стейкинг продолжается
+//  - claimStakingAndUnlock — после окончания stakingDays: забрать USDT + разблокировать DCT
 export async function claimFractionalStaking(lotId) {
   const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
-  const tx = await c.claimStaking(lotId)
+  const tx = await c.claimStakingAndContinue(lotId)
   return await tx.wait()
 }
 
-export async function voteForSale(lotId) {
+export async function claimStakingAndUnlock(lotId) {
   const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
-  const tx = await c.voteForSale(lotId)
+  const tx = await c.claimStakingAndUnlock(lotId)
   return await tx.wait()
+}
+
+// V2: voteForSale заменён — после финальной продажи держатели вызывают claimAfterFinalSale
+export async function voteForSale(lotId) {
+  // Совместимость со старым UI — теперь это noop, голосование убрано в V2
+  // Финальную продажу запускает админ через forceForSale + confirmFinalSale
+  return { ok: false, error: 'В V2 голосование убрано — продажу запускает админ' }
 }
 
 export async function claimSaleProceeds(lotId) {
+  // V2: после finalSale партнёры забирают свою долю через claimAfterFinalSale
   const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
-  const tx = await c.claimSaleProceeds(lotId)
+  const tx = await c.claimAfterFinalSale(lotId)
+  return await tx.wait()
+}
+
+// V2: возврат денег при отменённом лоте
+export async function refundCancelledLot(lotId) {
+  const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
+  const tx = await c.refundCancelledLot(lotId)
   return await tx.wait()
 }
 
@@ -619,80 +672,144 @@ export async function approveDCTForHeritage() {
 // FractionalGem — Админские функции (owner only)
 // ═══════════════════════════════════════════════════
 
-export async function createFractionalLot({ gemId, caratX100, name, imageURI, certified, certLab, certNumber, totalFractions, fractionPriceDCT, stakingAPR, stakingDays, lotSupplier }) {
+// ═══════════════════════════════════════════════════
+// FractionalGem V2 — Админские функции (owner / admin only)
+// ═══════════════════════════════════════════════════
+
+/**
+ * Создать фракционный лот в контракте V2.
+ * V2 принимает структуру CreateLotParams. Меты камня (название, фото, сертификат)
+ * хранятся вне контракта — в БД (Supabase), привязка по lotId после возврата tx.
+ *
+ * @param {object} p
+ * @param {number|string} p.costPriceUSDT     — закупочная цена камня в USDT (обычные доллары, например 5600)
+ * @param {number} p.totalFractions           — сколько долей всего (например 100)
+ * @param {number} p.stakingAPR               — APR в BP (1200 = 12%)
+ * @param {number} p.stakingDays              — длительность стейкинга в днях (например 365)
+ * @param {number} [p.fundraisingDays=0]      — дней на сбор (0 = дефолт 30)
+ * @param {string} [p.lotSupplier]            — адрес поставщика (если пусто — дефолтный supplierWallet контракта)
+ * @param {number} [p.reservedCount=0]        — резервные доли (ghost) для админа
+ * @param {string[]} [p.giftRecipients=[]]    — получатели подарочных долей
+ * @param {number[]} [p.giftAmounts=[]]       — кол-во подарочных долей для каждого получателя
+ */
+export async function createFractionalLot(p) {
   const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
-  const priceParsed = ethers.parseEther(String(fractionPriceDCT))
-  const tx = await c.createLot(gemId, caratX100, name, imageURI || '', certified, certLab || 0, certNumber || '', totalFractions, priceParsed, stakingAPR, stakingDays, lotSupplier)
-  await tx.wait()
-  return tx
+  // USDT: 6 decimals (parse6) — это правильно для opBNB USDT
+  const params = {
+    costPriceUSDT:   parse6(String(p.costPriceUSDT)),
+    totalFractions:  BigInt(p.totalFractions),
+    stakingAPR:      parseInt(p.stakingAPR),
+    stakingDays:     BigInt(p.stakingDays),
+    fundraisingDays: BigInt(p.fundraisingDays || 0),
+    lotSupplier:     p.lotSupplier || ethers.ZeroAddress,
+    reservedCount:   BigInt(p.reservedCount || 0),
+    giftRecipients:  Array.isArray(p.giftRecipients) ? p.giftRecipients : [],
+    giftAmounts:     (Array.isArray(p.giftAmounts) ? p.giftAmounts : []).map(a => BigInt(a)),
+  }
+  const tx = await c.createLot(params)
+  return await tx.wait()
 }
 
+// V2: startFundraising убрано — лот сразу создаётся в FUNDRAISING.
+// Оставлено как noop для совместимости со старым UI.
 export async function startLotFundraising(lotId) {
-  const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
-  const tx = await c.startFundraising(lotId)
-  await tx.wait()
-  return tx
+  return { skipped: true, reason: 'В V2 сбор стартует автоматически при создании лота' }
 }
 
+// V2: addCycleProfit заменён на confirmCycleSale
 export async function addLotCycleProfit(lotId, profitUSDT) {
   const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
-  const tx = await c.addCycleProfit(lotId, ethers.parseEther(String(profitUSDT)))
-  await tx.wait()
-  return tx
+  const tx = await c.confirmCycleSale(lotId, parse6(String(profitUSDT)))
+  return await tx.wait()
 }
 
 export async function fundLotStakingReserve(lotId, amountUSDT) {
   const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
-  const tx = await c.fundStakingReserve(lotId, ethers.parseEther(String(amountUSDT)))
-  await tx.wait()
-  return tx
+  // Approve USDT на контракт фракций (admin тоже должен approve)
+  const amount = parse6(String(amountUSDT))
+  await ensureUSDTApproval(ADDRESSES.FractionalGem, amount)
+  const tx = await c.fundStakingReserve(lotId, amount)
+  return await tx.wait()
 }
 
+// V2: ювелирка убрана из контракта (вся ювелирная логика теперь во внешних сервисах)
 export async function requestLotJewelry(lotId, jewelryCost, mode) {
-  const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
-  const tx = await c.requestJewelryProduction(lotId, ethers.parseEther(String(jewelryCost)), mode)
-  await tx.wait()
-  return tx
+  return { skipped: true, reason: 'В V2 запрос ювелирки убран из контракта' }
 }
 
 export async function fundLotJewelry(lotId, amountUSDT) {
-  const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
-  const tx = await c.fundJewelryProduction(lotId, ethers.parseEther(String(amountUSDT)))
-  await tx.wait()
-  return tx
+  return { skipped: true, reason: 'В V2 финансирование ювелирки убрано из контракта' }
 }
 
 export async function forceLotForSale(lotId) {
   const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
   const tx = await c.forceForSale(lotId)
-  await tx.wait()
-  return tx
+  return await tx.wait()
 }
 
+// V2: confirmSale переименован в confirmFinalSale
 export async function confirmLotSale(lotId, saleAmountUSDT) {
   const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
-  const tx = await c.confirmSale(lotId, ethers.parseEther(String(saleAmountUSDT)))
-  await tx.wait()
-  return tx
+  const tx = await c.confirmFinalSale(lotId, parse6(String(saleAmountUSDT)))
+  return await tx.wait()
 }
 
+// V2: emergencyClaimStaking — нет такой функции, осталось только cancelLot для отмены
 export async function emergencyLotClaimStaking(lotId) {
   const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
-  const tx = await c.emergencyClaimStaking(lotId)
-  await tx.wait()
-  return tx
+  const tx = await c.cancelLot(lotId, true)
+  return await tx.wait()
 }
 
+// V2: emergencyRefundToPartner убран — в V2 возврат идёт через refundCancelledLot (партнёр сам)
 export async function emergencyRefundPartner(address, amountUSDT, reason) {
+  return { skipped: true, reason: 'В V2 возврат идёт через cancelLot + refundCancelledLot (партнёр сам)' }
+}
+
+// ═══ Доп. функции V2 ═══
+export async function payLotToSupplier(lotId) {
   const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
-  const tx = await c.emergencyRefundToPartner(address, ethers.parseEther(String(amountUSDT)), reason)
-  await tx.wait()
-  return tx
+  const tx = await c.payToSupplier(lotId)
+  return await tx.wait()
+}
+
+export async function clubBuyRemainingFractions(lotId) {
+  const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
+  const tx = await c.clubBuyRemaining(lotId)
+  return await tx.wait()
+}
+
+export async function extendLotDeadline(lotId, additionalDays) {
+  const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
+  const tx = await c.extendDeadline(lotId, BigInt(additionalDays))
+  return await tx.wait()
+}
+
+export async function cancelFractionalLot(lotId, force = false) {
+  const c = getDCT('FractionalGem', FRACTIONALGEM_ABI)
+  const tx = await c.cancelLot(lotId, !!force)
+  return await tx.wait()
 }
 
 export async function getFractionalGemOwner() {
   const c = getDCTRead('FractionalGem', FRACTIONALGEM_ABI)
   return await c.owner()
+}
+
+export async function getFractionalGemVersion() {
+  const c = getDCTRead('FractionalGem', FRACTIONALGEM_ABI)
+  try { return await c.VERSION() } catch { return null }
+}
+
+export async function isFractionalGemAdmin(address) {
+  const c = getDCTRead('FractionalGem', FRACTIONALGEM_ABI)
+  try {
+    const [isAdmin, owner] = await Promise.all([
+      c.admins(address),
+      c.owner()
+    ])
+    return isAdmin || (owner && address && owner.toLowerCase() === address.toLowerCase())
+  } catch { return false }
 }
 
 // ═══════════════════════════════════════════════════
