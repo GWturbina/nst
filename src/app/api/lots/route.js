@@ -5,6 +5,17 @@
  * POST   — создать лот (только админ, TTL 5 мин)
  * PATCH  — record_purchase (юзер, TTL 1 час), reserve/gift/set_winner/cancel/link_contract (админ, TTL 5 мин)
  *
+ * ИЗМЕНЕНИЯ (25 апр 2026):
+ *   • action='link_contract' теперь серверно проверяет через RPC opBNB:
+ *     1) что лот с указанным contractLotId реально существует в контракте
+ *        (через getLotCount());
+ *     2) если передан contractTxHash — что в логах этой транзакции есть
+ *        событие LotCreated с этим lotId, и параметры (gemCost, sharePrice,
+ *        totalShares) совпадают с БД.
+ *     Раньше принимался любой contractLotId на слово — админ мог по
+ *     ошибке привязать несуществующий или неправильный ID, и первая же
+ *     покупка пользователя падала на verifyClubLotsPurchase, теряя газ.
+ *
  * ИЗМЕНЕНИЯ (17 апр 2026):
  *   • record_purchase теперь проверяет транзакцию on-chain через verifyClubLotsPurchase
  *     (раньше принимал любой валидный по формату txHash на слово)
@@ -19,7 +30,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { verifyWallet } from '@/lib/authHelper'
 import { checkOrigin } from '@/lib/checkOrigin'
-import { verifyClubLotsPurchase } from '@/lib/verifyPurchase'
+import { verifyClubLotsPurchase, verifyClubLotsCreation } from '@/lib/verifyPurchase'
 
 const ADMIN_TTL_SEC = 300 // 5 минут для админских действий
 
@@ -422,6 +433,7 @@ export async function PATCH(request) {
     }
 
     // ═══ LINK_CONTRACT — админ привязывает контракт (TTL 5 мин) ═══
+    // ─── Обновлено 25 апр 2026: серверная on-chain проверка ───
     if (action === 'link_contract') {
       const verified = await verifyWallet(body, 'adminWallet', ADMIN_TTL_SEC)
       if (!verified) return NextResponse.json({ ok: false, error: 'Неверная подпись или срок истёк (5 мин)' }, { status: 401 })
@@ -433,23 +445,74 @@ export async function PATCH(request) {
         return NextResponse.json({ ok: false, error: 'Не указан ID лота в контракте' }, { status: 400 })
       }
 
+      const cLotId = parseInt(contractLotId)
+      if (isNaN(cLotId) || cLotId < 0) {
+        return NextResponse.json({ ok: false, error: 'Неверный contractLotId' }, { status: 400 })
+      }
+
+      // 1. Проверка что нет уже привязки этого contractLotId к другому лоту в БД
       const { data: existing } = await supabase
         .from('dc_lots')
         .select('id')
-        .eq('contract_lot_id', parseInt(contractLotId))
+        .eq('contract_lot_id', cLotId)
         .limit(1)
       if (existing && existing.length > 0 && existing[0].id !== lotId) {
-        return NextResponse.json({ ok: false, error: `Contract lot #${contractLotId} уже привязан к лоту #${existing[0].id}` }, { status: 409 })
+        return NextResponse.json({
+          ok: false,
+          error: `Contract lot #${cLotId} уже привязан к лоту #${existing[0].id}`
+        }, { status: 409 })
       }
 
+      // 2. Получаем параметры лота из БД для сверки с контрактом
+      const { data: dbLot } = await supabase
+        .from('dc_lots')
+        .select('gem_cost, share_price, total_shares')
+        .eq('id', lotId)
+        .single()
+      if (!dbLot) {
+        return NextResponse.json({ ok: false, error: 'Лот не найден в БД' }, { status: 404 })
+      }
+
+      // 3. ─── Серверная on-chain проверка ───
+      // Если передан contractTxHash → глубокая сверка (gemCost/sharePrice/totalShares).
+      // Иначе → базовая (контракт реально содержит лот с таким ID).
+      const check = await verifyClubLotsCreation({
+        contractLotId: cLotId,
+        txHash: contractTxHash || null,
+        expectedGemCost: dbLot.gem_cost,
+        expectedSharePrice: dbLot.share_price,
+        expectedTotalShares: dbLot.total_shares,
+      })
+
+      if (!check.ok) {
+        return NextResponse.json({
+          ok: false,
+          error: check.error || 'On-chain проверка не прошла'
+        }, { status: 400 })
+      }
+
+      // 4. Если все проверки прошли — пишем в БД
       const updates = {
-        contract_lot_id: parseInt(contractLotId),
+        contract_lot_id: cLotId,
       }
       if (contractTxHash) updates.contract_tx_hash = clean(contractTxHash)
 
-      await supabase.from('dc_lots').update(updates).eq('id', lotId)
-      await addLog(lotId, 'LINKED_CONTRACT', adminWallet, `contract_lot_id=${contractLotId} tx:${clean(contractTxHash || '').slice(0, 10)}`)
-      return NextResponse.json({ ok: true })
+      const { error: updErr } = await supabase
+        .from('dc_lots')
+        .update(updates)
+        .eq('id', lotId)
+
+      if (updErr) {
+        return NextResponse.json({ ok: false, error: 'Ошибка обновления БД' }, { status: 500 })
+      }
+
+      await addLog(
+        lotId,
+        'LINKED_CONTRACT',
+        adminWallet,
+        `contract_lot_id=${cLotId} verified=${check.verified} tx:${clean(contractTxHash || '').slice(0, 10)}`
+      )
+      return NextResponse.json({ ok: true, verified: check.verified })
     }
 
     return NextResponse.json({ ok: false, error: 'Неизвестное действие' }, { status: 400 })
