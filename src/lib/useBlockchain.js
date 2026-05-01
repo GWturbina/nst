@@ -258,6 +258,15 @@ export function useBlockchainInit() {
               }
             }
             // Если authSig свежая — ничего не делаем, используем сохранённую
+          } else {
+            // ★ FIX: Кошелёк подключён, но НЕ зарегистрирован → показать модалку
+            // Раньше эта ветка отсутствовала — модалка показывалась только
+            // при ручном клике "Подключить" (doConnect), а при автоподключении
+            // SafePal пользователь видел кабинет с подключённым кошельком,
+            // но без всплывающей формы регистрации.
+            store.updateRegistration(false, null)
+            const savedRef = typeof localStorage !== 'undefined' ? localStorage.getItem('dc_ref') : null
+            store.setAutoRegister(savedRef && /^\d+$/.test(savedRef) ? savedRef : null)
           }
 
           await refreshDataForAddress(result.address)
