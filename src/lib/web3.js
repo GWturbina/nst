@@ -49,6 +49,50 @@ class Web3Module {
   // ПОДКЛЮЧЕНИЕ
   // ───────────────────────────────────────────────────
 
+  /**
+   * Тихое подключение — НЕ показывает окно "Connect" в кошельке.
+   * Использует eth_accounts (читает уже выданные разрешения).
+   * Возвращает данные кошелька если разрешение уже было, иначе null.
+   * Используется при автозаходе на /cabinet, чтобы не дёргать SafePal.
+   */
+  async silentConnect() {
+    const walletType = this.detectWallet();
+    if (!walletType) return null;
+
+    try {
+      // eth_accounts НЕ запрашивает разрешение — возвращает уже одобренные.
+      const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+      if (!accounts || accounts.length === 0) return null;
+
+      this.walletType = walletType;
+      this.provider = new ethers.BrowserProvider(window.ethereum);
+      this.signer   = await this.provider.getSigner();
+      this.address  = accounts[0];
+
+      const network = await this.provider.getNetwork();
+      this.chainId  = Number(network.chainId);
+
+      // Подписываемся на события кошелька (если ещё не подписаны)
+      if (!this._handlersAttached) {
+        window.ethereum.on('accountsChanged', this._handleAccountsChanged.bind(this));
+        window.ethereum.on('chainChanged',    this._handleChainChanged.bind(this));
+        this._handlersAttached = true;
+      }
+
+      this.isConnected = true;
+
+      return {
+        address:    this.address,
+        chainId:    this.chainId,
+        walletType: this.walletType,
+      };
+    } catch (e) {
+      // eth_accounts не должно бросать, но на всякий случай
+      console.warn('silentConnect failed:', e?.message);
+      return null;
+    }
+  }
+
   async connect() {
     const walletType = this.detectWallet();
     if (!walletType) {
