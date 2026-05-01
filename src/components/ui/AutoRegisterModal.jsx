@@ -47,6 +47,29 @@ export default function AutoRegisterModal() {
     setRegistering(true)
     setErrorMsg('')
     try {
+      // ═══ PRE-CHECK 1: Может адрес УЖЕ зарегистрирован? ═══
+      // Без этой проверки контракт ревёртит без сообщения
+      // и пользователь видит "missing revert data" вместо понятной фразы.
+      const preStatus = await C.getGWUserStatus(wallet).catch(() => null)
+      if (preStatus?.isRegistered) {
+        addNotification('ℹ️ Этот кошелёк уже зарегистрирован!')
+        useGameStore.getState().updateRegistration(true, preStatus.odixId || sid)
+        if (preStatus.maxPackage > 0) useGameStore.getState().setLevel(preStatus.maxPackage)
+        afterRegistration().catch(() => {})
+        setStep('telegram')
+        setRegistering(false)
+        return
+      }
+
+      // ═══ PRE-CHECK 2: Хватает ли BNB на газ? ═══
+      // Без газа eth_estimateGas падает с пустым revert => "missing revert data".
+      const currentBnb = parseFloat(useGameStore.getState().bnb || '0')
+      if (currentBnb < 0.001) {
+        setErrorMsg(`Недостаточно BNB на газ. У вас ${currentBnb.toFixed(4)} BNB, нужно минимум 0.005 BNB. Пополните кошелёк.`)
+        setRegistering(false)
+        return
+      }
+
       addNotification(`⏳ Регистрация с ID #${sid}...`)
       await C.register(sid)
 
@@ -72,19 +95,34 @@ export default function AutoRegisterModal() {
 
     } catch (err) {
       const msg = err?.reason || err?.shortMessage || err?.message || 'Ошибка'
+      console.error('Register error:', err)
+
       if (msg.includes('Already registered')) {
         addNotification('ℹ️ Вы уже зарегистрированы!')
         useGameStore.getState().updateRegistration(true, sid)
         afterRegistration().catch(() => {})
         setStep('telegram')
+      } else if (msg.includes('user rejected') || msg.includes('User rejected') || msg.includes('User denied')) {
+        setErrorMsg('Транзакция отклонена в кошельке. Попробуйте ещё раз.')
+      } else if (msg.includes('insufficient funds')) {
+        setErrorMsg('Недостаточно BNB для газа. Пополните кошелёк (~0.005 BNB).')
       } else if (msg.includes('Sponsor not found') || msg.includes('Invalid sponsor')) {
         setErrorMsg(`Спонсор #${sid} не найден. Проверьте ID.`)
-      } else if (msg.includes('user rejected')) {
-        setErrorMsg('Транзакция отклонена. Попробуйте ещё раз.')
-      } else if (msg.includes('insufficient funds')) {
-        setErrorMsg('Недостаточно BNB для газа. Пополните кошелёк.')
+      } else if (msg.includes('missing revert data') || msg.includes('CALL_EXCEPTION') || msg.includes('execution reverted')) {
+        // Контракт ревёртит без причины. Часто это означает что транзакция
+        // на самом деле прошла или адрес уже зарегистрирован — перепроверим.
+        const recheck = await C.getGWUserStatus(wallet).catch(() => null)
+        if (recheck?.isRegistered) {
+          addNotification('✅ Регистрация подтверждена!')
+          useGameStore.getState().updateRegistration(true, recheck.odixId || sid)
+          if (recheck.maxPackage > 0) useGameStore.getState().setLevel(recheck.maxPackage)
+          afterRegistration().catch(() => {})
+          setStep('telegram')
+        } else {
+          setErrorMsg(`Контракт отклонил вызов. Возможно: спонсор #${sid} не существует, или сеть не opBNB. Проверьте сеть в SafePal (нужен opBNB Mainnet, chainId 204).`)
+        }
       } else {
-        setErrorMsg(msg.slice(0, 120))
+        setErrorMsg(msg.slice(0, 140))
       }
     }
     setRegistering(false)
