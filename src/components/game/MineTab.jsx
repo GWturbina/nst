@@ -47,10 +47,6 @@ export default function MineTab() {
       }
     }).catch(() => {})
   }, [])
-  const [showRegModal, setShowRegModal] = useState(false)
-  const [sponsorInput, setSponsorInput] = useState('')
-  const [registering, setRegistering] = useState(false)
-  const [refFromLink, setRefFromLink] = useState(false)
   const [showSafePal, setShowSafePal] = useState(false)
 
   // Умное подключение — показать SafePal prompt если нет кошелька
@@ -64,16 +60,6 @@ export default function MineTab() {
   }
 
   const totalNss = localNss
-
-  // Автозаполнение спонсора
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const savedRef = localStorage.getItem('dc_ref')
-    if (savedRef && /^\d+$/.test(savedRef)) {
-      setSponsorInput(savedRef)
-      setRefFromLink(true)
-    }
-  }, [])
 
   // Испарение
   useEffect(() => {
@@ -201,55 +187,17 @@ export default function MineTab() {
     }
   }, [showThought])
 
-  // Регистрация
+  // Регистрация — открываем общую модалку <AutoRegisterModal/>
   const openRegModal = () => {
     if (!wallet) return
-    const savedRef = typeof window !== 'undefined' ? localStorage.getItem('dc_ref') || '' : ''
-    if (savedRef && /^\d+$/.test(savedRef)) {
-      setSponsorInput(savedRef)
-      setRefFromLink(true)
-    }
-    setShowRegModal(true)
+    const savedRef = typeof window !== 'undefined' ? localStorage.getItem('dc_ref') : null
+    useGameStore.getState().setAutoRegister(savedRef && /^\d+$/.test(savedRef) ? savedRef : null)
   }
 
   const handleBuyNextLevel = () => {
     if (!wallet || !nextLv) return
     if (!registered) { openRegModal(); return }
     doBuyLevel()
-  }
-
-  const handleRegisterOnly = async () => {
-    const sid = parseInt(sponsorInput)
-    if (!sid || sid <= 0) { addNotification('❌ ' + t('enterValidSponsorId')); return }
-    setRegistering(true)
-    setTxPending(true)
-    try {
-      addNotification(`⏳ ${t('registering')} #${sid}...`)
-      await C.register(sid)
-      addNotification('✅ ' + t('registrationSuccess'))
-      setShowRegModal(false)
-      const confirmed = await C.waitForRegistration(wallet)
-      const gwStatus = await C.getGWUserStatus(wallet).catch(() => null)
-      if (gwStatus) {
-        useGameStore.getState().updateRegistration(gwStatus.isRegistered, gwStatus.odixId || sid)
-        if (gwStatus.maxPackage > 0) useGameStore.getState().setLevel(gwStatus.maxPackage)
-      } else {
-        useGameStore.getState().updateRegistration(true, sid)
-      }
-    } catch (err) {
-      const msg = err?.reason || err?.shortMessage || err?.message || 'Ошибка'
-      if (msg.includes('Already registered')) {
-        addNotification('ℹ️ ' + t('alreadyRegistered'))
-        useGameStore.getState().updateRegistration(true, sid)
-        setShowRegModal(false)
-      } else if (msg.includes('Sponsor not found') || msg.includes('Invalid sponsor')) {
-        addNotification(`❌ ${t('sponsorNotFound')} #${sid}`)
-      } else {
-        addNotification(`❌ ${msg.slice(0, 100)}`)
-      }
-    }
-    setTxPending(false)
-    setRegistering(false)
   }
 
   const doBuyLevel = async () => {
@@ -341,61 +289,11 @@ export default function MineTab() {
           <SafePalPrompt compact onClose={() => setShowSafePal(false)} />
         )}
 
-        {wallet && !registered && !showRegModal && !showAutoRegister && (
+        {wallet && !registered && !showAutoRegister && (
           <button onClick={openRegModal}
             className="w-full p-2.5 rounded-xl text-[11px] font-bold text-center bg-yellow-500/8 border border-yellow-500/25 text-yellow-400 hover:bg-yellow-500/12 transition-all">
             🆔 {t('registerInNSS')}
           </button>
-        )}
-
-        {/* Модал регистрации */}
-        {showRegModal && (
-          <div className="fixed inset-0 z-50 flex items-end justify-center pb-6 px-3" style={{ background: 'rgba(0,0,0,0.7)' }}
-            onClick={() => setShowRegModal(false)}>
-            <div className="w-full max-w-[400px] rounded-3xl p-5 space-y-4"
-              style={{ background: 'var(--bg-card)', border: '1px solid rgba(255,215,0,0.25)' }}
-              onClick={e => e.stopPropagation()}>
-              <div className="text-center">
-                <div className="text-2xl mb-1">🆔</div>
-                <div className="text-sm font-black text-white">{t('regModalTitle')}</div>
-                <div className="text-[10px] text-slate-400 mt-1 leading-relaxed">{t('regModalDesc')}</div>
-              </div>
-
-              <div>
-                <label className="text-[10px] text-slate-500 mb-1 block">{t('sponsorIdLabel')}:</label>
-                {refFromLink && sponsorInput ? (
-                  <div>
-                    <div className="w-full p-3 rounded-xl text-sm text-white flex items-center justify-between"
-                      style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(34,197,94,0.3)' }}>
-                      <span>✅ #{sponsorInput}</span>
-                      <span className="text-[9px] text-emerald-400">{t('fromReferralLink')}</span>
-                    </div>
-                    <button onClick={() => setRefFromLink(false)} className="text-[9px] text-slate-500 mt-1 underline">{t('changeSponsor')}</button>
-                  </div>
-                ) : (
-                  <div>
-                    <input type="number" value={sponsorInput} onChange={e => setSponsorInput(e.target.value)}
-                      placeholder={t('sponsorIdPlaceholder')}
-                      className="w-full p-3 rounded-xl text-sm text-white outline-none"
-                      style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,215,0,0.2)' }}
-                      autoFocus />
-                    {!sponsorInput && <div className="text-[9px] text-slate-500 mt-1">💡 {t('sponsorIdHint')}</div>}
-                  </div>
-                )}
-              </div>
-
-              <div className="flex gap-2">
-                <button onClick={() => setShowRegModal(false)}
-                  className="flex-1 py-3 rounded-2xl text-[11px] font-bold text-slate-400 border border-white/10">{t('cancel')}</button>
-                <button onClick={handleRegisterOnly}
-                  disabled={registering || !sponsorInput || parseInt(sponsorInput) <= 0}
-                  className="flex-1 py-3 rounded-2xl text-[11px] font-black gold-btn"
-                  style={{ opacity: (!sponsorInput || parseInt(sponsorInput) <= 0 || registering) ? 0.5 : 1 }}>
-                  {registering ? '⏳ ...' : '✅ ' + t('register')}
-                </button>
-              </div>
-            </div>
-          </div>
         )}
 
         {/* Кнопка покупки уровня */}
