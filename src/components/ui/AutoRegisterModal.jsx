@@ -1,10 +1,15 @@
 'use client'
 /**
  * AutoRegisterModal — Модал регистрации для новых пользователей
- * 
+ *
  * Показывается СРАЗУ после подключения кошелька, если адрес не зарегистрирован.
  * ID спонсора подтягивается из реферальной ссылки (dc_ref) и ЗАБЛОКИРОВАН.
  * Подпись кошелька запрашивается ПОСЛЕ регистрации, не до.
+ *
+ * Шаги:
+ *   register → форма ввода спонсора и регистрация в смарт-контракте
+ *   telegram → активация Telegram-бота @DiamondClubGWSBot после успеха
+ *   (ошибки отображаются через errorMsg прямо в форме register)
  */
 import { useState } from 'react'
 import useGameStore from '@/lib/store'
@@ -13,18 +18,24 @@ import * as C from '@/lib/contracts'
 import { shortAddress } from '@/lib/web3'
 import { LEVELS } from '@/lib/gameData'
 
+const BOT_USERNAME = 'DiamondClubGWSBot'
+
 export default function AutoRegisterModal() {
   const { wallet, pendingRefId, clearAutoRegister, addNotification, t } = useGameStore()
   const { afterRegistration } = useBlockchain()
-  
+
   const [sponsorInput, setSponsorInput] = useState(pendingRefId || '')
   const [registering, setRegistering] = useState(false)
-  const [step, setStep] = useState('register') // register | success | error
+  const [step, setStep] = useState('register') // register | telegram
   const [errorMsg, setErrorMsg] = useState('')
-  
+  const [botClicked, setBotClicked] = useState(false)
+
   const hasRefFromLink = !!pendingRefId
   const bnbPrice = useGameStore(s => s.bnbPrice)
   const bnb = useGameStore(s => s.bnb)
+
+  // ★ Deep link в бот — бот при /start свяжет учётки по ID спонсора
+  const botLink = `https://t.me/${BOT_USERNAME}?start=${pendingRefId || sponsorInput || '0'}`
 
   const handleRegister = async () => {
     const sid = parseInt(sponsorInput)
@@ -32,37 +43,40 @@ export default function AutoRegisterModal() {
       setErrorMsg(t('enterValidSponsorId'))
       return
     }
-    
+
     setRegistering(true)
     setErrorMsg('')
     try {
       addNotification(`⏳ Регистрация с ID #${sid}...`)
       await C.register(sid)
-      
+
       // Ждём подтверждения из блокчейна
       const confirmed = await C.waitForRegistration(wallet)
       const gwStatus = await C.getGWUserStatus(wallet).catch(() => null)
-      
+
       if (gwStatus) {
         useGameStore.getState().updateRegistration(gwStatus.isRegistered, gwStatus.odixId || sid)
         if (gwStatus.maxPackage > 0) useGameStore.getState().setLevel(gwStatus.maxPackage)
       } else {
         useGameStore.getState().updateRegistration(true, sid)
       }
-      
+
       addNotification('✅ Регистрация прошла успешно!')
-      setStep('success')
-      
-      // Запускаем подпись + загрузку данных
-      setTimeout(() => afterRegistration(), 500)
-      
+
+      // Запускаем подпись + загрузку данных в фоне
+      // (не дожидаемся, чтобы пользователь сразу увидел экран бота)
+      afterRegistration().catch(() => {})
+
+      // Переходим на шаг активации Telegram
+      setStep('telegram')
+
     } catch (err) {
       const msg = err?.reason || err?.shortMessage || err?.message || 'Ошибка'
       if (msg.includes('Already registered')) {
         addNotification('ℹ️ Вы уже зарегистрированы!')
         useGameStore.getState().updateRegistration(true, sid)
-        setStep('success')
-        setTimeout(() => afterRegistration(), 500)
+        afterRegistration().catch(() => {})
+        setStep('telegram')
       } else if (msg.includes('Sponsor not found') || msg.includes('Invalid sponsor')) {
         setErrorMsg(`Спонсор #${sid} не найден. Проверьте ID.`)
       } else if (msg.includes('user rejected')) {
@@ -80,36 +94,90 @@ export default function AutoRegisterModal() {
     clearAutoRegister()
   }
 
-  // ═══ УСПЕШНАЯ РЕГИСТРАЦИЯ ═══
-  if (step === 'success') {
+  const handleBotClick = () => {
+    setBotClicked(true)
+  }
+
+  const handleFinish = () => {
+    clearAutoRegister()
+  }
+
+  // ═══ ШАГ 2: АКТИВАЦИЯ TELEGRAM-БОТА ═══
+  if (step === 'telegram') {
     return (
       <div className="fixed inset-0 z-[70] flex items-center justify-center p-4"
         style={{ background: 'rgba(0,0,0,0.9)' }}>
-        <div className="max-w-[400px] w-full p-6 rounded-3xl text-center"
+        <div className="max-w-[420px] w-full p-5 rounded-3xl"
           style={{ background: 'linear-gradient(180deg, #0d2818 0%, #0a0a20 100%)', border: '1px solid rgba(16,185,129,0.3)' }}>
-          <div className="text-5xl mb-3">✅</div>
-          <h3 className="text-xl font-black text-white mb-2">Добро пожаловать!</h3>
-          <p className="text-[13px] text-emerald-400 font-bold mb-1">Регистрация прошла успешно</p>
-          <p className="text-[11px] text-slate-400 mb-4">
-            Ваши камни теперь сохраняются навсегда. Тапайте, приглашайте друзей, зарабатывайте DCT!
-          </p>
-          <button onClick={handleSkip}
-            className="w-full py-3.5 rounded-2xl text-[14px] font-black"
-            style={{ background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff' }}>
-            🚀 Начать!
+
+          {/* Заголовок успеха */}
+          <div className="text-center mb-4">
+            <div className="text-5xl mb-2">✅</div>
+            <h3 className="text-xl font-black text-white mb-1">Регистрация прошла!</h3>
+            <p className="text-[13px] text-emerald-400 font-bold mb-1">Кошелёк привязан к Diamond Club</p>
+            <p className="text-[12px] text-slate-400">
+              Остался один шаг — <b className="text-white">активация Telegram-бота</b>
+            </p>
+          </div>
+
+          {/* ★ ГЛАВНАЯ КНОПКА — БОТ (яркая, пульсирующая) */}
+          <a
+            href={botLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={handleBotClick}
+            className="block w-full py-4 rounded-2xl text-center text-[16px] font-black mb-3 relative"
+            style={{
+              background: botClicked
+                ? 'linear-gradient(135deg, #10b981, #059669)'
+                : 'linear-gradient(135deg, #0088cc, #0066aa)',
+              color: '#fff',
+              textDecoration: 'none',
+              boxShadow: botClicked ? 'none' : '0 0 24px rgba(0,136,204,0.6), 0 6px 16px rgba(0,136,204,0.4)',
+              animation: botClicked ? 'none' : 'dc-pulse 2s ease-in-out infinite',
+            }}
+          >
+            {botClicked ? '✅ Откройте Telegram и нажмите Start' : '🚀 Активировать @' + BOT_USERNAME}
+          </a>
+
+          {/* Что даст бот */}
+          <div className="p-3 rounded-xl mb-4" style={{ background: 'rgba(0,136,204,0.08)', border: '1px solid rgba(0,136,204,0.2)' }}>
+            <div className="text-[12px] text-slate-300 leading-relaxed">
+              ✅ Пошаговые инструкции по клубу<br />
+              ✅ Уведомления о новых лотах и конференциях<br />
+              ✅ Ответы на вопросы<br />
+              ✅ Без спама — можно отписаться
+            </div>
+          </div>
+
+          {/* Пропуск */}
+          <button
+            onClick={handleFinish}
+            className="w-full py-2.5 text-[12px] text-slate-500 text-center"
+            style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+          >
+            Позже → перейти в кабинет
           </button>
+
+          {/* Анимация пульсации */}
+          <style jsx>{`
+            @keyframes dc-pulse {
+              0%, 100% { transform: scale(1); }
+              50% { transform: scale(1.02); }
+            }
+          `}</style>
         </div>
       </div>
     )
   }
 
-  // ═══ ФОРМА РЕГИСТРАЦИИ ═══
+  // ═══ ШАГ 1: ФОРМА РЕГИСТРАЦИИ ═══
   return (
     <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-3"
       style={{ background: 'rgba(0,0,0,0.9)' }}>
       <div className="max-w-[420px] w-full rounded-3xl overflow-hidden"
         style={{ background: 'linear-gradient(180deg, #1a1040 0%, #0c0c1e 100%)', border: '1px solid rgba(255,215,0,0.2)' }}>
-        
+
         {/* Header */}
         <div className="px-5 pt-5 pb-3 text-center">
           <div className="text-4xl mb-2">💎</div>
@@ -134,7 +202,7 @@ export default function AutoRegisterModal() {
           <label className="text-[11px] text-slate-400 mb-1.5 block">
             {hasRefFromLink ? '✅ Спонсор определён из ссылки:' : 'ID того, кто тебя пригласил:'}
           </label>
-          
+
           {hasRefFromLink ? (
             // Из реферальной ссылки — заблокировано
             <div className="p-3.5 rounded-xl text-center" style={{ background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.25)' }}>
