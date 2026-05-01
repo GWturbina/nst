@@ -2778,10 +2778,12 @@ h1, h2, h3, h4 {
   }
 
   // Итоговые адреса — кабинет Diamond Club и рекламная платформа GWAD
-  // С ref (пришёл по рекламе/партнёрской ссылке) → форма регистрации
-  // Без ref (пришёл сам, наверняка уже партнёр) → сразу в кабинет
+  // Все идут прямо в кабинет. Ref уже сохранён в localStorage (см. выше),
+  // его прочитает AutoRegisterModal и автоматически подставит спонсора.
+  // Виральный экран /invite остаётся доступен по прямой ссылке /invite/gems?ref=...
+  // для отдельных рекламных кампаний.
   const cabinetUrl = ref
-    ? 'https://gws.ink/invite?ref=' + encodeURIComponent(ref)
+    ? 'https://gws.ink/cabinet?ref=' + encodeURIComponent(ref)
     : 'https://gws.ink/cabinet';
   const gwadUrl = ref
     ? 'https://gwad.ink/?ref=' + encodeURIComponent(ref)
