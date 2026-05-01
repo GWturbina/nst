@@ -10,11 +10,13 @@ import web3 from './web3'
 import ADDRESSES from '@/contracts/addresses'
 
 import NSSPlatformABIFile from '@/contracts/abi/NSSPlatform.json'
+import GlobalWayABIFile from '@/contracts/abi/GlobalWay.json'
 import NSTTokenABIFile from '@/contracts/abi/NSTToken.json'
 import SwapHelperABIFile from '@/contracts/abi/SwapHelper.json'
 
 const ABIS = {
   NSSPlatform: NSSPlatformABIFile.abi || NSSPlatformABIFile,
+  GlobalWay: GlobalWayABIFile.abi || GlobalWayABIFile,
   NSTToken: NSTTokenABIFile.abi || NSTTokenABIFile,
   SwapHelper: SwapHelperABIFile.abi || SwapHelperABIFile,
 }
@@ -107,12 +109,19 @@ export async function getBNBPrice() {
 }
 
 // ═══════════════════════════════════════════════════
-// РЕГИСТРАЦИЯ / УРОВНИ (NSSPlatform + GlobalWay)
+// РЕГИСТРАЦИЯ / УРОВНИ
 // ═══════════════════════════════════════════════════
+// Регистрация ВСЕГДА идёт через GlobalWay.register() —
+// это вход в иерархию партнёрской программы (matrixRegistry → odixId).
+// NSSPlatform используется только для покупки уровней Diamond Club
+// и тап-маркетинга, но НЕ для базовой регистрации в систему.
+// GlobalWayBridge.registerUser() имеет модификатор onlyProjectOrDirector
+// и НЕ может быть вызван пользователем напрямую — это только для серверной
+// регистрации из внешних проектов (CardGift, GWAD).
 
 export async function register(sponsorId = 0) {
-  const nss = getContract('NSSPlatform')
-  const tx = await nss.register(sponsorId)
+  const gw = getContract('GlobalWay')
+  const tx = await gw.register(sponsorId)
   return await tx.wait()
 }
 
