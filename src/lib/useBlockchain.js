@@ -165,6 +165,48 @@ function stopRefreshCycle() {
   }
 }
 
+/**
+ * Общая логика после успешного подключения кошелька (любым способом):
+ * - проверка статуса регистрации в GlobalWay
+ * - если зарегистрирован → setLevel + подпись
+ * - если нет → setAutoRegister (открыть модалку регистрации)
+ * - refresh + старт цикла обновления
+ */
+async function setupSessionForAddress(address, options = {}) {
+  const store = useGameStore.getState()
+  const { skipSignature = false } = options
+
+  const gwStatus = await C.getGWUserStatus(address).catch(() => null)
+  if (gwStatus?.isRegistered) {
+    store.updateRegistration(true, gwStatus.odixId || null)
+    if (gwStatus.maxPackage > 0) store.setLevel(gwStatus.maxPackage)
+
+    // Подпись — только для зарегистрированных и только если она устарела
+    if (!skipSignature) {
+      const authAge = store.authTs ? Date.now() - store.authTs * 1000 : Infinity
+      if (!store.authSig || authAge > 12 * 60 * 60 * 1000) {
+        if (!window.__authDeclined) {
+          try {
+            const auth = await web3.signAuthMessage()
+            store.setAuth(auth)
+          } catch {
+            console.warn('Auth signature declined on auto-reconnect')
+            window.__authDeclined = true
+          }
+        }
+      }
+    }
+  } else {
+    // Кошелёк подключён, но НЕ зарегистрирован → открыть модалку
+    store.updateRegistration(false, null)
+    const savedRef = typeof localStorage !== 'undefined' ? localStorage.getItem('dc_ref') : null
+    store.setAutoRegister(savedRef && /^\d+$/.test(savedRef) ? savedRef : null)
+  }
+
+  await refreshDataForAddress(address)
+  startRefreshCycle(address)
+}
+
 export function useBlockchainInit() {
   const wallet = useGameStore(s => s.wallet)
 
@@ -220,6 +262,33 @@ export function useBlockchainInit() {
     }
   }, [])
 
+  // ═══ ТИХОЕ АВТОПОДКЛЮЧЕНИЕ при первом маунте /cabinet ═══
+  // Если SafePal уже разрешил доступ к этому сайту — подключаемся
+  // без всплывающего окна "Connect", даже если в zustand persist нет wallet.
+  // Это решает кейс: пользователь первый раз заходит на /cabinet,
+  // SafePal injected, eth_accounts уже возвращает адрес — но раньше
+  // нужен был ручной клик "Подключить".
+  useEffect(() => {
+    let cancelled = false
+    const trySilentConnect = async () => {
+      // Если wallet уже есть в persist — обработка идёт во втором useEffect
+      if (useGameStore.getState().wallet) return
+      if (web3.isConnected) return
+      try {
+        const result = await web3.silentConnect()
+        if (cancelled || !result) return
+        const store = useGameStore.getState()
+        store.setWallet(result)
+        store.addNotification(`✅ Кошелёк: ${result.address.slice(0, 6)}...${result.address.slice(-4)}`)
+        await setupSessionForAddress(result.address)
+      } catch (e) {
+        console.warn('silent autoConnect failed:', e?.message)
+      }
+    }
+    trySilentConnect()
+    return () => { cancelled = true }
+  }, [])
+
   // ═══ FIX BUG-6: Восстановление сессии ═══
   // Если wallet восстановлен из persist, но web3 не подключён —
   // автоматически переподключаем. Подпись НЕ запрашиваем если она свежая.
@@ -230,47 +299,20 @@ export function useBlockchainInit() {
           const walletType = web3.detectWallet()
           if (!walletType) return // нет провайдера — ждём ручного подключения
 
-          const result = await web3.connect()
+          // Сначала пробуем тихо — без всплывающего окна
+          let result = await web3.silentConnect()
+          // Если тихо не вышло (нет разрешения) — обычный connect (всплывёт окно)
+          if (!result) {
+            result = await web3.connect()
+          }
+
           const store = useGameStore.getState()
           // FIX: Не вызывать setWallet если адрес не изменился
           if (!store.wallet || store.wallet.toLowerCase() !== result.address.toLowerCase()) {
             store.setWallet(result)
           }
 
-          // Проверяем регистрацию
-          const gwStatus = await C.getGWUserStatus(result.address).catch(() => null)
-          if (gwStatus?.isRegistered) {
-            store.updateRegistration(true, gwStatus.odixId || null)
-            if (gwStatus.maxPackage > 0) store.setLevel(gwStatus.maxPackage)
-
-            // Подпись: используем сохранённую если она свежее 12 часов
-            const authAge = store.authTs ? Date.now() - store.authTs * 1000 : Infinity
-            if (!store.authSig || authAge > 12 * 60 * 60 * 1000) {
-              // FIX: Не спрашиваем если уже отклонили в этой сессии
-              if (!window.__authDeclined) {
-                try {
-                  const auth = await web3.signAuthMessage()
-                  store.setAuth(auth)
-                } catch {
-                  console.warn('Auth signature declined on auto-reconnect')
-                  window.__authDeclined = true // Не спрашивать больше до перезагрузки
-                }
-              }
-            }
-            // Если authSig свежая — ничего не делаем, используем сохранённую
-          } else {
-            // ★ FIX: Кошелёк подключён, но НЕ зарегистрирован → показать модалку
-            // Раньше эта ветка отсутствовала — модалка показывалась только
-            // при ручном клике "Подключить" (doConnect), а при автоподключении
-            // SafePal пользователь видел кабинет с подключённым кошельком,
-            // но без всплывающей формы регистрации.
-            store.updateRegistration(false, null)
-            const savedRef = typeof localStorage !== 'undefined' ? localStorage.getItem('dc_ref') : null
-            store.setAutoRegister(savedRef && /^\d+$/.test(savedRef) ? savedRef : null)
-          }
-
-          await refreshDataForAddress(result.address)
-          startRefreshCycle(result.address)
+          await setupSessionForAddress(result.address)
         } catch {
           // FIX: НЕ сбрасываем состояние при ошибке переподключения
           // SafePal может загружаться медленно — данные из persist остаются
