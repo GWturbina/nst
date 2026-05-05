@@ -1,6 +1,6 @@
 {
   "contractName": "ClubPools",
-  "address": "0x7cE3ac959c87683d6ccF4F82dA2Fad33f576B5C7",
+  "address": "0xf7e9c12D9f6DC0a426E0f43465958ce020b7432e",
   "network": "opBNB",
   "chainId": 204,
   "abi": [
@@ -743,6 +743,19 @@
       ],
       "name": "TreasuryReceived",
       "type": "event"
+    },
+    {
+      "inputs": [],
+      "name": "ADS_PCT",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
     },
     {
       "inputs": [],
