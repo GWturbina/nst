@@ -1,48 +1,45 @@
 'use client'
 /**
- * GemGallery.jsx — Галерея долевых камней
+ * GemGallery.jsx — Галерея пулов клуба (визуализация долей)
  * 
- * Визуализация: камень разделён на 100 частей.
- * Купленные доли — серые. Свободные — светятся.
- * Каждый камень с ID (C1.5W = кушон 1.5ct белый).
- * 
- * Данные из контракта FractionalGem (уже задеплоен).
+ * АДАПТАЦИЯ под v2.3:
+ * - Импорт: dctContracts → clubV23
+ * - Источник данных: getAllFractionalLots → getAllPools
+ * - Покупка: buyFractions (за DCT) → buyShare (за USDT, DCT начисляется)
+ * - Поля пула изменены: lot.totalFractions → pool.totalShares, lot.fractionPriceDCT → pool.sharePrice (USDT)
+ * - Удалены поля: stakingAPR, costPrice, clubPrice, wholesalePrice, claimableStaking
+ *   (эти данные в v2.3 не на блокчейне — могут быть в Supabase /api/lots если нужны)
+ * - Визуализация (сетка долей) — без изменений
  */
 import { useState, useEffect, useCallback } from 'react'
 import useGameStore from '@/lib/store'
 import { shortAddress } from '@/lib/web3'
 import { formatUSD } from '@/lib/gemCatalog'
-import * as DCT from '@/lib/dctContracts'
-
-const SHAPE_ICONS = {
-  round: '🔵', princess: '🟦', cushion: '🟡', oval: '🟢',
-  emerald: '🟩', pear: '🍐', heart: '❤️', trillion: '🔺', radiant: '💠',
-}
+import * as Club from '@/lib/clubV23'
 
 export default function GemGallery() {
   const { wallet, addNotification, setTxPending, txPending } = useGameStore()
-  const [lots, setLots] = useState([])
-  const [userLots, setUserLots] = useState({})
+  const [pools, setPools] = useState([])
+  const [userInvestments, setUserInvestments] = useState({})  // poolId → USDT invested
   const [loading, setLoading] = useState(true)
-  const [selectedLot, setSelectedLot] = useState(null)
-  const [buyAmount, setBuyAmount] = useState('1')
   const [showBuyModal, setShowBuyModal] = useState(null)
+  const [buyAmount, setBuyAmount] = useState('1')
 
   const reload = useCallback(async () => {
     setLoading(true)
     try {
-      const allLots = await DCT.getAllFractionalLots().catch(() => [])
-      // Только активные лоты (FUNDRAISING)
-      const active = allLots.filter(l => l.status >= 1 && l.status <= 4)
-      setLots(active)
+      const allPools = await Club.getAllPools().catch(() => [])
+      // Только активные пулы (status: 0=Сбор, 1=Собран, 2=Камень куплен)
+      const active = allPools.filter(p => p.status >= 0 && p.status <= 2)
+      setPools(active)
 
       if (wallet) {
-        const uLots = {}
-        for (const lot of active) {
-          const info = await DCT.getUserLotInfo(lot.id, wallet).catch(() => null)
-          if (info) uLots[lot.id] = info
+        const investments = {}
+        for (const pool of active) {
+          const inv = await Club.getUserInvestment(wallet, pool.poolId).catch(() => '0')
+          if (parseFloat(inv) > 0) investments[pool.poolId] = inv
         }
-        setUserLots(uLots)
+        setUserInvestments(investments)
       }
     } catch {}
     setLoading(false)
@@ -50,10 +47,10 @@ export default function GemGallery() {
 
   useEffect(() => { reload() }, [reload])
 
-  const handleBuyFractions = async () => {
+  const handleBuyShares = async () => {
     if (!showBuyModal || !buyAmount || parseInt(buyAmount) <= 0) return
     setTxPending(true)
-    const result = await DCT.buyFractions(showBuyModal, parseInt(buyAmount)).then(
+    const result = await Club.buyShare(showBuyModal, parseInt(buyAmount)).then(
       () => ({ ok: true }),
       (err) => ({ ok: false, error: err?.reason || err?.message || 'Ошибка' })
     )
@@ -64,7 +61,14 @@ export default function GemGallery() {
     } else addNotification(`❌ ${result.error}`)
   }
 
-  const MODE_LABELS = { 0: 'Создан', 1: '🟢 Сбор', 2: '⏳ Стейкинг', 3: '💍 Ювелирка', 4: '🏪 Продажа', 5: '✅ Продан', 6: '🔒 Закрыт' }
+  const STATUS_LABELS = {
+    0: '🟢 Сбор',
+    1: '🔵 Собран',
+    2: '🟡 Камень куплен',
+    3: '🏆 Продано',
+    4: '❌ Отменён',
+    5: '🚨 Drained',
+  }
 
   if (loading) return <div className="flex items-center justify-center py-12"><div className="text-2xl animate-spin">💎</div></div>
 
@@ -72,57 +76,61 @@ export default function GemGallery() {
     <div className="px-3 mt-2 space-y-3">
 
       <div className="text-center">
-        <div className="text-[14px] font-black text-gold-400">💎 Галерея долевых камней</div>
-        <div className="text-[10px] text-slate-500 mt-1">Купи долю дорогого камня — получай доход</div>
+        <div className="text-[14px] font-black text-gold-400">💎 Галерея пулов</div>
+        <div className="text-[10px] text-slate-500 mt-1">Купи долю в пуле — получи DCT и долю в камне</div>
       </div>
 
-      {lots.length === 0 ? (
+      {pools.length === 0 ? (
         <div className="py-12 text-center rounded-2xl" style={{background:'rgba(255,255,255,0.02)', border:'1px dashed rgba(255,255,255,0.08)'}}>
           <div className="text-4xl mb-3">💎</div>
-          <div className="text-[13px] font-bold text-slate-400">Нет доступных лотов</div>
-          <div className="text-[11px] text-slate-600 mt-1">Камни для долевого участия появятся позже</div>
+          <div className="text-[13px] font-bold text-slate-400">Нет активных пулов</div>
+          <div className="text-[11px] text-slate-600 mt-1">Пулы появятся когда клуб откроет новый сбор</div>
         </div>
       ) : (
         <div className="space-y-3">
-          {lots.map(lot => {
-            const myInfo = userLots[lot.id]
-            const myFractions = myInfo?.fractions || 0
-            const pctSold = lot.totalFractions > 0 ? Math.round(lot.soldFractions / lot.totalFractions * 100) : 0
-            const remaining = lot.totalFractions - lot.soldFractions
+          {pools.map(pool => {
+            // Считаем мои доли через USDT инвестиции / цену доли
+            const myInvestmentUSDT = parseFloat(userInvestments[pool.poolId] || 0)
+            const sharePrice = parseFloat(pool.sharePrice)
+            const myShares = sharePrice > 0 ? Math.round(myInvestmentUSDT / sharePrice) : 0
+            
+            const pctSold = pool.totalShares > 0 ? Math.round(pool.sharesSold / pool.totalShares * 100) : 0
+            const remaining = pool.totalShares - pool.sharesSold
 
             return (
-              <div key={lot.id} className="rounded-2xl overflow-hidden"
-                style={{background:'rgba(255,255,255,0.04)', border: myFractions > 0 ? '1px solid rgba(255,215,0,0.25)' : '1px solid rgba(255,255,255,0.07)'}}>
+              <div key={pool.poolId} className="rounded-2xl overflow-hidden"
+                style={{background:'rgba(255,255,255,0.04)', border: myShares > 0 ? '1px solid rgba(255,215,0,0.25)' : '1px solid rgba(255,255,255,0.07)'}}>
                 
                 {/* Заголовок */}
                 <div className="p-3">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <span className="text-2xl">{SHAPE_ICONS[lot.name?.toLowerCase()] || '💎'}</span>
+                      <span className="text-2xl">💎</span>
                       <div>
-                        <div className="text-[13px] font-black text-white">{lot.name || `Лот #${lot.id}`}</div>
-                        <div className="text-[10px] text-slate-500">{lot.carats}ct • ID: {lot.gemId ? `G${lot.gemId}` : `L${lot.id}`}</div>
+                        <div className="text-[13px] font-black text-white">{pool.name || `Пул #${pool.poolId}`}</div>
+                        <div className="text-[10px] text-slate-500">ID: P{pool.poolId}</div>
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className={`text-[10px] font-bold ${lot.status===1?'text-emerald-400':lot.status===2?'text-blue-400':'text-slate-400'}`}>
-                        {MODE_LABELS[lot.mode] || `Статус ${lot.mode}`}
+                      <div className={`text-[10px] font-bold ${pool.status===0?'text-emerald-400':pool.status===1?'text-blue-400':'text-amber-400'}`}>
+                        {STATUS_LABELS[pool.status] || `Статус ${pool.status}`}
                       </div>
-                      {lot.stakingAPR > 0 && (
-                        <div className="text-[9px] text-emerald-400">{lot.stakingAPR/100}% годовых</div>
+                      {pool.minGWLevel > 1 && (
+                        <div className="text-[9px] text-slate-500">мин. уровень {pool.minGWLevel}</div>
                       )}
                     </div>
                   </div>
 
                   {/* Визуализация долей — сетка 10×10 */}
                   <div className="grid gap-[2px] mb-2" style={{gridTemplateColumns: 'repeat(10, 1fr)'}}>
-                    {Array.from({length: lot.totalFractions > 100 ? 100 : lot.totalFractions}, (_, i) => {
-                      // Определяем состояние доли
-                      const soldCount = Math.round(lot.soldFractions * (lot.totalFractions > 100 ? 100 : lot.totalFractions) / lot.totalFractions)
-                      const myCount = Math.round(myFractions * (lot.totalFractions > 100 ? 100 : lot.totalFractions) / lot.totalFractions)
+                    {Array.from({length: pool.totalShares > 100 ? 100 : pool.totalShares}, (_, i) => {
+                      // Масштабируем количество долей к 100 ячейкам
+                      const scale = (pool.totalShares > 100 ? 100 : pool.totalShares) / pool.totalShares
+                      const soldCount = Math.round(pool.sharesSold * scale)
+                      const myCount = Math.round(myShares * scale)
                       
                       const isSold = i < soldCount
-                      const isMine = i >= (soldCount - myCount) && i < soldCount && myFractions > 0
+                      const isMine = i >= (soldCount - myCount) && i < soldCount && myShares > 0
 
                       return (
                         <div key={i}
@@ -132,7 +140,7 @@ export default function GemGallery() {
                               ? 'rgba(255,215,0,0.6)'      // Мои — золотые
                               : isSold
                                 ? 'rgba(100,100,120,0.3)'   // Чужие — серые
-                                : 'rgba(16,185,129,0.4)',    // Свободные — зелёные, светятся
+                                : 'rgba(16,185,129,0.4)',    // Свободные — зелёные
                             boxShadow: !isSold ? '0 0 4px rgba(16,185,129,0.5)' : 'none',
                           }}
                         />
@@ -140,13 +148,13 @@ export default function GemGallery() {
                     })}
                   </div>
 
-                  {/* Прогресс + цены */}
+                  {/* Прогресс + цена */}
                   <div className="flex items-center justify-between mb-2">
                     <div className="text-[10px] text-slate-400">
-                      <span className="text-white font-bold">{lot.soldFractions}</span>/{lot.totalFractions} долей ({pctSold}%)
+                      <span className="text-white font-bold">{pool.sharesSold}</span>/{pool.totalShares} долей ({pctSold}%)
                     </div>
                     <div className="text-[10px] text-gold-400 font-bold">
-                      {lot.fractionPriceDCT} DCT/доля
+                      ${sharePrice.toFixed(2)} USDT/доля
                     </div>
                   </div>
 
@@ -159,46 +167,43 @@ export default function GemGallery() {
                       }} />
                   </div>
 
-                  {/* Цены */}
-                  <div className="grid grid-cols-3 gap-1 text-[9px] text-center mb-2">
+                  {/* Цели */}
+                  <div className="grid grid-cols-2 gap-1 text-[9px] text-center mb-2">
                     <div className="p-1.5 rounded-lg bg-white/5">
-                      <div className="text-slate-500">Себестоимость</div>
-                      <div className="text-white font-bold">{formatUSD(parseFloat(lot.costPrice))}</div>
+                      <div className="text-slate-500">Цель сбора</div>
+                      <div className="text-gold-400 font-bold">{formatUSD(parseFloat(pool.targetUSDT))}</div>
                     </div>
                     <div className="p-1.5 rounded-lg bg-white/5">
-                      <div className="text-slate-500">Клубная</div>
-                      <div className="text-gold-400 font-bold">{formatUSD(parseFloat(lot.clubPrice))}</div>
-                    </div>
-                    <div className="p-1.5 rounded-lg bg-white/5">
-                      <div className="text-slate-500">Рыночная</div>
-                      <div className="text-emerald-400 font-bold">{formatUSD(parseFloat(lot.wholesalePrice))}</div>
+                      <div className="text-slate-500">Собрано</div>
+                      <div className="text-emerald-400 font-bold">{formatUSD(parseFloat(pool.collectedUSDT))}</div>
                     </div>
                   </div>
 
                   {/* Мои доли */}
-                  {myFractions > 0 && (
+                  {myShares > 0 && (
                     <div className="p-2 rounded-xl bg-gold-400/8 border border-gold-400/15 mb-2">
                       <div className="flex items-center justify-between">
                         <div>
-                          <div className="text-[10px] text-gold-400 font-bold">Мои доли: {myFractions}</div>
-                          <div className="text-[9px] text-slate-500">{myInfo?.ownershipPct ? (myInfo.ownershipPct/100).toFixed(1) : 0}% камня</div>
-                        </div>
-                        {parseFloat(myInfo?.claimableStaking || 0) > 0 && (
-                          <div className="text-right">
-                            <div className="text-[10px] text-emerald-400 font-bold">+${parseFloat(myInfo.claimableStaking).toFixed(2)}</div>
-                            <div className="text-[8px] text-slate-500">доход</div>
+                          <div className="text-[10px] text-gold-400 font-bold">Мои доли: {myShares}</div>
+                          <div className="text-[9px] text-slate-500">
+                            ${myInvestmentUSDT.toFixed(2)} вложено • {((myShares / pool.totalShares) * 100).toFixed(1)}% пула
                           </div>
-                        )}
+                        </div>
                       </div>
                     </div>
                   )}
 
                   {/* Кнопка покупки */}
-                  {remaining > 0 && lot.status === 1 && wallet && (
-                    <button onClick={() => { setShowBuyModal(lot.id); setBuyAmount('1') }}
+                  {remaining > 0 && pool.status === 0 && wallet && (
+                    <button onClick={() => { setShowBuyModal(pool.poolId); setBuyAmount('1') }}
                       className="w-full py-2.5 rounded-xl text-[11px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
                       🧩 Купить доли ({remaining} доступно)
                     </button>
+                  )}
+                  {pool.status >= 1 && (
+                    <div className="w-full py-2.5 rounded-xl text-[11px] font-bold text-center text-slate-500 bg-white/3">
+                      Сбор закрыт
+                    </div>
                   )}
                 </div>
 
@@ -225,10 +230,13 @@ export default function GemGallery() {
 
       {/* Модалка покупки долей */}
       {showBuyModal !== null && (() => {
-        const lot = lots.find(l => l.id === showBuyModal)
-        if (!lot) return null
-        const remaining = lot.totalFractions - lot.soldFractions
-        const totalCostDCT = parseInt(buyAmount || 0) * parseFloat(lot.fractionPriceDCT)
+        const pool = pools.find(p => p.poolId === showBuyModal)
+        if (!pool) return null
+        const remaining = pool.totalShares - pool.sharesSold
+        const sharePrice = parseFloat(pool.sharePrice)
+        const totalCostUSDT = parseInt(buyAmount || 0) * sharePrice
+        // 1 USDT = 2 DCT (стартовая цена)
+        const dctReceived = totalCostUSDT * 2
 
         return (
           <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setShowBuyModal(null)}>
@@ -237,13 +245,13 @@ export default function GemGallery() {
               <div className="text-center mb-3">
                 <div className="text-3xl mb-2">🧩</div>
                 <div className="text-[14px] font-black text-white">Купить доли</div>
-                <div className="text-[11px] text-slate-500">{lot.name || `Лот #${lot.id}`} • {lot.carats}ct</div>
+                <div className="text-[11px] text-slate-500">{pool.name || `Пул #${pool.poolId}`}</div>
               </div>
 
               <div className="grid grid-cols-2 gap-2 mb-3 text-center text-[9px]">
                 <div className="p-1.5 rounded-lg bg-white/5">
-                  <div className="text-[10px] font-bold text-white">{lot.fractionPriceDCT}</div>
-                  <div className="text-slate-500">DCT/доля</div>
+                  <div className="text-[10px] font-bold text-white">${sharePrice.toFixed(2)}</div>
+                  <div className="text-slate-500">USDT/доля</div>
                 </div>
                 <div className="p-1.5 rounded-lg bg-white/5">
                   <div className="text-[10px] font-bold text-emerald-400">{remaining}</div>
@@ -256,16 +264,21 @@ export default function GemGallery() {
                 <input type="number" value={buyAmount} onChange={e => setBuyAmount(e.target.value)}
                   placeholder="1" min="1" max={remaining}
                   className="w-full p-3 rounded-xl bg-white/5 border border-white/10 text-lg font-bold text-white outline-none text-center" />
-                {buyAmount && (
-                  <div className="text-center mt-1 text-[10px] text-slate-400">
-                    Итого: <span className="text-gold-400 font-bold">{totalCostDCT.toFixed(0)} DCT</span>
+                {buyAmount && parseInt(buyAmount) > 0 && (
+                  <div className="text-center mt-2 space-y-1">
+                    <div className="text-[10px] text-slate-400">
+                      Заплатишь: <span className="text-gold-400 font-bold">${totalCostUSDT.toFixed(2)} USDT</span>
+                    </div>
+                    <div className="text-[10px] text-slate-400">
+                      Получишь: <span className="text-emerald-400 font-bold">{dctReceived.toFixed(2)} DCT</span>
+                    </div>
                   </div>
                 )}
               </div>
 
-              <button onClick={handleBuyFractions} disabled={txPending || !buyAmount || parseInt(buyAmount) <= 0}
+              <button onClick={handleBuyShares} disabled={txPending || !buyAmount || parseInt(buyAmount) <= 0}
                 className="w-full py-3 rounded-xl text-sm font-bold gold-btn" style={{opacity:(!buyAmount||txPending)?0.5:1}}>
-                {txPending ? '⏳ ...' : '🧩 Купить доли'}
+                {txPending ? '⏳ ...' : '🧩 Купить'}
               </button>
               <button onClick={() => setShowBuyModal(null)}
                 className="w-full mt-2 py-2 rounded-xl text-[11px] font-bold text-slate-500 border border-white/8">Отмена</button>
