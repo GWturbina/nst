@@ -833,6 +833,45 @@ export async function claimEarnings() {
 export async function claimCompensation(poolId) {
   return await claimDrainedPool(poolId)
 }
-export async function createLotOnChain(...args) {
-  throw new Error('Используй ClubPools.createPool через owner-кошелёк')
+/**
+ * createPool — owner создаёт новый пул в ClubPools
+ * @returns {Promise<{poolId: number, receipt: object}>}
+ */
+export async function createPool(name, targetUSDT, totalShares, minGWLevel, fundraisingDays) {
+  const c = getContract('ClubPools', CLUBPOOLS_ABI)
+  const cRead = getReadContract('ClubPools', CLUBPOOLS_ABI)
+  
+  const tx = await c.createPool(
+    name,
+    parse6(String(targetUSDT)),
+    Number(totalShares),
+    Number(minGWLevel),
+    Number(fundraisingDays)
+  )
+  const receipt = await tx.wait()
+  
+  // Получаем poolId — это последний созданный пул
+  const count = await cRead.poolsCount()
+  const newPoolId = Number(count) - 1
+  
+  return { poolId: newPoolId, lotId: newPoolId, receipt }
+}
+
+/**
+ * createLotOnChain — алиас для совместимости со старым LotsAdmin.
+ * Старая сигнатура: (gemCost, sharePrice, minGWLevel, secret)
+ * Новая логика: вычисляем totalShares = gemCost / sharePrice, secret игнорируем.
+ * fundraisingDays по умолчанию 90 (можно передать пятым параметром).
+ */
+export async function createLotOnChain(gemCost, sharePrice, minGWLevel, _secret, options = {}) {
+  const targetUSDT = parseFloat(gemCost)
+  const sp = parseFloat(sharePrice)
+  if (sp <= 0) throw new Error('Цена доли должна быть > 0')
+  const totalShares = Math.floor(targetUSDT / sp)
+  if (totalShares <= 0) throw new Error('Цена доли > стоимости камня')
+  
+  const name = options.name || `Lot ${Date.now()}`
+  const fundraisingDays = options.fundraisingDays || 90
+  
+  return await createPool(name, targetUSDT, totalShares, minGWLevel, fundraisingDays)
 }
