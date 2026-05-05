@@ -1,13 +1,21 @@
 'use client'
 /**
- * LotsAdmin.jsx — Админка клубных лотов
- * Создание лотов, резервирование, подарки, определение получателя
+ * LotsAdmin.jsx — Админка клубных лотов (адаптировано под v2.3)
+ * 
+ * Создание лотов в Supabase, привязка к контракту ClubPools.
+ * 
+ * АДАПТАЦИЯ под v2.3:
+ * - Импорт: clubLotsContracts → clubV23
+ * - createLotOnChain теперь маппит на ClubPools.createPool
+ * - Убрана commit-reveal схема (секрет/секретное число) — в v2.3 не используется
+ * - Параметр lockDays теперь — fundraisingDays (период сбора в пуле)
+ * - Параметр totalShares вычисляется из gem_cost / share_price
  */
 import { useState, useEffect, useCallback } from 'react'
 import useGameStore from '@/lib/store'
 import { shortAddress } from '@/lib/web3'
 import { authFetch } from '@/lib/authClient'
-import * as CL from '@/lib/clubLotsContracts'
+import * as Club from '@/lib/clubV23'
 import { safeCall } from '@/lib/contracts'
 
 export default function LotsAdmin() {
@@ -21,11 +29,9 @@ export default function LotsAdmin() {
   const [form, setForm] = useState({
     title: '', description: '', photoUrl: '', gemType: 'diamond',
     shape: '', clarity: '', color: '', carats: '',
-    hasCert: false, gemCost: '', sharePrice: '50', minGwLevel: '4', lockDays: '180',
+    hasCert: false, gemCost: '', sharePrice: '50', minGwLevel: '4',
+    fundraisingDays: '90',  // вместо lockDays — на сколько открыт сбор
   })
-
-  // Секретное число (для commit-reveal)
-  const [secret, setSecret] = useState('')
 
   const reload = useCallback(async () => {
     setLoading(true)
@@ -39,34 +45,24 @@ export default function LotsAdmin() {
 
   useEffect(() => { reload() }, [reload])
 
-  // Генерация секрета
-  const generateSecret = () => {
-    const arr = new Uint8Array(32)
-    crypto.getRandomValues(arr)
-    const num = BigInt('0x' + [...arr].map(b => b.toString(16).padStart(2, '0')).join(''))
-    setSecret(num.toString())
-  }
-
-  // ═══ Задеплоить лот в контракт ClubLots и привязать ═══
+  // ═══ Задеплоить лот в контракт ClubPools и привязать ═══
   const handleDeployToContract = async (lot) => {
     if (!wallet) return
-    if (!secret) {
-      generateSecret()
-      addNotification('⚠️ Сгенерирован секрет — нажмите ещё раз для деплоя')
-      return
-    }
-
     setTxPending(true)
     try {
-      addNotification(`⏳ Создаю лот «${lot.title}» в контракте...`)
+      addNotification(`⏳ Создаю пул «${lot.title}» в контракте...`)
 
-      // 1. Создать лот в контракте ClubLots
+      // 1. Создать пул в контракте ClubPools (createLotOnChain → createPool)
       const result = await safeCall(() =>
-        CL.createLotOnChain(
-          lot.gem_cost,          // gemCostUSDT
-          lot.share_price,       // sharePriceUSDT
-          lot.min_gw_level || 4, // minGWLevel
-          BigInt(secret)         // secretNumber
+        Club.createLotOnChain(
+          lot.gem_cost,           // targetUSDT (стоимость камня = цель сбора)
+          lot.share_price,        // sharePriceUSDT
+          lot.min_gw_level || 4,  // minGWLevel
+          0,                      // _secret игнорируется
+          {
+            name: lot.title || `Lot ${lot.id}`,
+            fundraisingDays: lot.fundraising_days || lot.lock_days || 90,
+          }
         )
       )
 
@@ -76,11 +72,11 @@ export default function LotsAdmin() {
         return
       }
 
-      const contractLotId = result.data?.lotId
+      const contractLotId = result.data?.poolId ?? result.data?.lotId
       const txHash = result.data?.receipt?.hash || ''
 
       if (contractLotId === null || contractLotId === undefined) {
-        addNotification(`⚠️ TX прошла (${txHash.slice(0, 10)}...) но lotId не считан. Привяжите вручную.`)
+        addNotification(`⚠️ TX прошла (${txHash.slice(0, 10)}...) но poolId не считан. Привяжите вручную.`)
         setTxPending(false)
         return
       }
@@ -99,12 +95,10 @@ export default function LotsAdmin() {
       const data = await res.json()
 
       if (data.ok) {
-        addNotification(`✅ Лот «${lot.title}» задеплоен! Contract lot #${contractLotId}`)
-        addNotification(`📋 СОХРАНИ СЕКРЕТ: ${secret}`)
-        setSecret('')
+        addNotification(`✅ Пул «${lot.title}» задеплоен! Pool #${contractLotId}`)
         reload()
       } else {
-        addNotification(`⚠️ Контракт создан (lot #${contractLotId}), но привязка не удалась: ${data.error}`)
+        addNotification(`⚠️ Контракт создан (pool #${contractLotId}), но привязка не удалась: ${data.error}`)
       }
     } catch (err) {
       addNotification(`❌ ${err.message || 'Ошибка деплоя'}`)
@@ -112,10 +106,9 @@ export default function LotsAdmin() {
     setTxPending(false)
   }
 
-  // ═══ Создать лот ═══
+  // ═══ Создать лот в Supabase ═══
   const handleCreate = async () => {
     if (!form.title || !form.gemCost) return addNotification('❌ Укажите название и цену камня')
-    if (!secret) return addNotification('❌ Сгенерируйте секрет для розыгрыша')
 
     setTxPending(true)
     try {
@@ -127,17 +120,15 @@ export default function LotsAdmin() {
           gemCost: parseFloat(form.gemCost),
           sharePrice: parseInt(form.sharePrice),
           minGwLevel: parseInt(form.minGwLevel),
-          lockDays: parseInt(form.lockDays),
-          adminCommit: secret, // Сохраняем секрет в Supabase (зашифрованный в будущем)
+          fundraisingDays: parseInt(form.fundraisingDays),
+          lockDays: parseInt(form.fundraisingDays),  // совместимость со старым API
         }
       })
       const data = await res.json()
       if (data.ok) {
         addNotification(`✅ Лот «${form.title}» создан! ID: ${data.lot.id}`)
-        addNotification(`📋 СОХРАНИ СЕКРЕТ: ${secret}`)
         setShowCreate(false)
-        setForm({ title: '', description: '', photoUrl: '', gemType: 'diamond', shape: '', clarity: '', color: '', carats: '', hasCert: false, gemCost: '', sharePrice: '50', minGwLevel: '4', lockDays: '180' })
-        setSecret('')
+        setForm({ title: '', description: '', photoUrl: '', gemType: 'diamond', shape: '', clarity: '', color: '', carats: '', hasCert: false, gemCost: '', sharePrice: '50', minGwLevel: '4', fundraisingDays: '90' })
         reload()
       } else addNotification(`❌ ${data.error}`)
     } catch { addNotification('❌ Ошибка сети') }
@@ -198,83 +189,81 @@ export default function LotsAdmin() {
 
   return (
     <div className="space-y-3">
+      <div className="text-[12px] font-bold text-gold-400 px-3 mb-1">🎟 Управление лотами (v2.3)</div>
+
       {/* Кнопка создания */}
-      <button onClick={() => { setShowCreate(!showCreate); if (!secret) generateSecret() }}
-        className="w-full py-3 rounded-2xl text-[12px] font-black gold-btn">
-        {showCreate ? '✕ Закрыть' : '+ Создать новый лот'}
-      </button>
+      <div className="px-3">
+        <button onClick={() => setShowCreate(!showCreate)}
+          className="w-full py-3 rounded-2xl text-[12px] font-bold gold-btn">
+          {showCreate ? '✕ Закрыть форму' : '✨ Создать новый лот'}
+        </button>
+      </div>
 
       {/* Форма создания */}
       {showCreate && (
-        <div className="p-4 rounded-2xl glass space-y-2">
-          <div className="text-[13px] font-black text-gold-400 mb-2">✨ Новый клубный лот</div>
+        <div className="mx-3 p-3 rounded-2xl glass space-y-2">
+          <div className="text-[12px] font-bold text-white mb-2">📝 Новый лот</div>
 
-          <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-            placeholder="Название (напр. Бриллиант 1.5ct VS1 D)" className="w-full p-2.5 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
+          <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })}
+            placeholder="Название (Бриллиант 1.5ct)" className="w-full p-2.5 rounded-xl bg-white/5 border border-white/10 text-[12px] text-white outline-none" />
 
-          <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-            placeholder="Описание" rows={2} className="w-full p-2.5 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none resize-none" />
+          <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
+            placeholder="Описание" rows={2} className="w-full p-2.5 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
 
-          <div className="grid grid-cols-3 gap-2">
-            <input value={form.carats} onChange={e => setForm(f => ({ ...f, carats: e.target.value }))}
-              placeholder="Караты" type="number" className="p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
-            <input value={form.clarity} onChange={e => setForm(f => ({ ...f, clarity: e.target.value }))}
-              placeholder="Чистота" className="p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
-            <input value={form.color} onChange={e => setForm(f => ({ ...f, color: e.target.value }))}
-              placeholder="Цвет" className="p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
+          <input value={form.photoUrl} onChange={e => setForm({ ...form, photoUrl: e.target.value })}
+            placeholder="URL фото" className="w-full p-2.5 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
+
+          <div className="grid grid-cols-2 gap-2">
+            <input value={form.carats} onChange={e => setForm({ ...form, carats: e.target.value })}
+              placeholder="Караты (1.5)" className="p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
+            <select value={form.shape} onChange={e => setForm({ ...form, shape: e.target.value })}
+              className="p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none">
+              <option value="">— Огранка —</option>
+              <option value="round">Round</option>
+              <option value="princess">Princess</option>
+              <option value="cushion">Cushion</option>
+              <option value="oval">Oval</option>
+              <option value="emerald">Emerald</option>
+            </select>
+            <input value={form.clarity} onChange={e => setForm({ ...form, clarity: e.target.value })}
+              placeholder="Чистота (VS1)" className="p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
+            <input value={form.color} onChange={e => setForm({ ...form, color: e.target.value })}
+              placeholder="Цвет (D)" className="p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
           </div>
+
+          <label className="flex items-center gap-2 text-[11px] text-slate-300">
+            <input type="checkbox" checked={form.hasCert} onChange={e => setForm({ ...form, hasCert: e.target.checked })} />
+            Есть сертификат
+          </label>
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[10px] text-slate-500">Клубная цена камня ($)</label>
-              <input value={form.gemCost} onChange={e => setForm(f => ({ ...f, gemCost: e.target.value }))}
-                type="number" placeholder="4000" className="w-full p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
+              <div className="text-[10px] text-slate-500 mb-1">Стоимость камня (USDT)</div>
+              <input type="number" value={form.gemCost} onChange={e => setForm({ ...form, gemCost: e.target.value })}
+                placeholder="10000" className="w-full p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
             </div>
             <div>
-              <label className="text-[10px] text-slate-500">Цена доли ($)</label>
-              <select value={form.sharePrice} onChange={e => setForm(f => ({ ...f, sharePrice: e.target.value }))}
-                className="w-full p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none">
-                <option value="25">$25</option>
-                <option value="50">$50</option>
-                <option value="100">$100</option>
-              </select>
+              <div className="text-[10px] text-slate-500 mb-1">Цена доли (USDT)</div>
+              <input type="number" value={form.sharePrice} onChange={e => setForm({ ...form, sharePrice: e.target.value })}
+                placeholder="50" className="w-full p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
+            </div>
+            <div>
+              <div className="text-[10px] text-slate-500 mb-1">Мин. уровень GW</div>
+              <input type="number" value={form.minGwLevel} onChange={e => setForm({ ...form, minGwLevel: e.target.value })}
+                placeholder="4" min="1" max="12" className="w-full p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
+            </div>
+            <div>
+              <div className="text-[10px] text-slate-500 mb-1">Период сбора (дней)</div>
+              <input type="number" value={form.fundraisingDays} onChange={e => setForm({ ...form, fundraisingDays: e.target.value })}
+                placeholder="90" min="1" className="w-full p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
             </div>
           </div>
 
-          {/* Расчёт */}
-          {form.gemCost && (
-            <div className="p-2 rounded-xl bg-gold-400/8 text-[11px]">
-              <span className="text-slate-400">Цена лота: </span>
-              <span className="text-gold-400 font-bold">${(parseFloat(form.gemCost) * 1.25).toFixed(0)}</span>
-              <span className="text-slate-400"> | Долей: </span>
-              <span className="text-white font-bold">{Math.floor(parseFloat(form.gemCost) * 1.25 / parseInt(form.sharePrice || 50))}</span>
+          {form.gemCost && form.sharePrice && (
+            <div className="p-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-[10px] text-blue-300">
+              📊 Будет {Math.floor(parseFloat(form.gemCost) / parseFloat(form.sharePrice))} долей по ${form.sharePrice}
             </div>
           )}
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-[10px] text-slate-500">Мин. уровень GW</label>
-              <input value={form.minGwLevel} onChange={e => setForm(f => ({ ...f, minGwLevel: e.target.value }))}
-                type="number" min="1" max="12" className="w-full p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
-            </div>
-            <div>
-              <label className="text-[10px] text-slate-500">Заморозка (дней)</label>
-              <input value={form.lockDays} onChange={e => setForm(f => ({ ...f, lockDays: e.target.value }))}
-                type="number" min="30" max="730" className="w-full p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none" />
-            </div>
-          </div>
-
-          {/* Секрет */}
-          <div className="p-2 rounded-xl bg-red-500/8 border border-red-500/15">
-            <div className="text-[10px] text-red-400 font-bold mb-1">🔐 Секрет для розыгрыша (СОХРАНИ!)</div>
-            <div className="text-[9px] text-slate-300 font-mono break-all">{secret || '...'}</div>
-            <button onClick={generateSecret} className="mt-1 text-[10px] text-red-400 hover:text-red-300">🔄 Новый секрет</button>
-          </div>
-
-          <label className="flex items-center gap-2">
-            <input type="checkbox" checked={form.hasCert} onChange={e => setForm(f => ({ ...f, hasCert: e.target.checked }))} className="accent-yellow-500" />
-            <span className="text-[11px] text-slate-300">Есть сертификат</span>
-          </label>
 
           <button onClick={handleCreate} disabled={txPending}
             className="w-full py-3 rounded-2xl text-[12px] font-black gold-btn disabled:opacity-50">
@@ -298,7 +287,7 @@ export default function LotsAdmin() {
             {/* Статус привязки к контракту */}
             {lot.contract_lot_id !== null && lot.contract_lot_id !== undefined ? (
               <div className="text-[10px] text-emerald-400 font-bold mb-2">
-                ✅ Контракт: lot #{lot.contract_lot_id}
+                ✅ Контракт: pool #{lot.contract_lot_id}
                 {lot.contract_tx_hash && (
                   <a href={`https://opbnb.bscscan.com/tx/${lot.contract_tx_hash}`} target="_blank" rel="noopener noreferrer"
                     className="ml-1 text-blue-400 underline">tx↗</a>
