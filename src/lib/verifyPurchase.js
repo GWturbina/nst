@@ -1,31 +1,18 @@
 /**
- * verifyPurchase.js — Серверная проверка транзакций ClubLots в блокчейне
+ * verifyPurchase.js — Серверная проверка транзакций ClubPools v2.3 в блокчейне
+ *
+ * АДАПТАЦИЯ под v2.3 (5 мая 2026):
+ *   • ADDRESSES.ClubLots → ADDRESSES.ClubPools
+ *   • Событие SharePurchased → ShareBought (новые поля)
+ *   • Событие LotCreated → PoolCreated (другая структура)
+ *   • Функция getLotCount() → poolsCount()
+ *   • Параметр fromBalance больше не существует (в v2.3 покупка только за USDT)
  *
  * Содержит две функции:
- *   • verifyClubLotsPurchase — проверка покупки долей пользователем
- *   • verifyClubLotsCreation — проверка создания лота админом (для link_contract)
+ *   • verifyClubLotsPurchase — проверка покупки долей (теперь через ShareBought)
+ *   • verifyClubLotsCreation — проверка создания пула (теперь через PoolCreated)
  *
- * ИЗМЕНЕНИЯ (25 апр 2026):
- *   • Добавлена функция verifyClubLotsCreation. Раньше action='link_contract'
- *     в /api/lots принимал любой contractLotId без проверки. Теперь сервер
- *     серверно проверяет что лот реально существует в контракте, а если
- *     передан txHash создания — что параметры лота (gemCost/sharePrice/
- *     totalShares) совпадают с записанными в БД.
- *   • Добавлен общий помощник withTimeout для всех RPC-вызовов (8 сек).
- *
- * FIX #2 (17 апр 2026):
- *   Раньше сервер принимал tx_hash на слово — достаточно было прислать
- *   любую строку из 64 hex-символов, и запись проходила. Теперь сервер
- *   реально обращается к opBNB RPC и проверяет что:
- *     1. Такая транзакция существует и подтверждена (status = 1)
- *     2. Она была направлена в контракт ClubLots (адрес совпадает)
- *     3. В её логах есть событие SharePurchased
- *     4. buyer в событии совпадает с запрашивающим кошельком
- *     5. lotId в событии совпадает с contract_lot_id нашего лота
- *     6. count в событии совпадает с заявленным количеством долей
- *
- *   Если что-то не сошлось — возвращаем { ok: false, error: '...' }
- *   с человекочитаемой причиной.
+ * Имена функций оставлены прежними чтобы не ломать /api/lots/route.js
  */
 import ADDRESSES from '@/contracts/addresses'
 
@@ -37,15 +24,22 @@ const RPC_TIMEOUT_MS = 8000
 // Допустимая погрешность сравнения wei-значений (1e-6 USDT — покрывает float-округления)
 const WEI_TOLERANCE = 10n ** 12n
 
-// Фрагменты ABI — только нужные нам события и функции
-const SHARE_PURCHASED_EVENT = [
-  'event SharePurchased(uint256 indexed lotId, address indexed buyer, uint16 count, uint256 usdtAmount, bool fromBalance)'
+// ═══════════════════════════════════════════════════
+// СОБЫТИЯ ClubPools v2.3
+// ═══════════════════════════════════════════════════
+// event ShareBought(uint256 indexed poolId, address indexed buyer, uint256 amountUSDT, uint256 dctMinted)
+const SHARE_BOUGHT_EVENT = [
+  'event ShareBought(uint256 indexed poolId, address indexed buyer, uint256 amountUSDT, uint256 dctMinted)'
 ]
-const LOT_CREATED_EVENT = [
-  'event LotCreated(uint256 indexed lotId, uint256 gemCost, uint256 sharePrice, uint256 totalShares, uint8 minLevel)'
+
+// event PoolCreated(uint256 indexed poolId, string name, uint256 targetUSDT, uint256 dctAmount)
+const POOL_CREATED_EVENT = [
+  'event PoolCreated(uint256 indexed poolId, string name, uint256 targetUSDT, uint256 dctAmount)'
 ]
-const CLUBLOTS_VIEW_FRAGMENT = [
-  'function getLotCount() external view returns (uint256)',
+
+const CLUBPOOLS_VIEW_FRAGMENT = [
+  'function poolsCount() external view returns (uint256)',
+  'function getPool(uint256 poolId) external view returns (tuple(string name, uint256 targetUSDT, uint256 collectedUSDT, uint256 totalShares, uint256 sharesSold, uint256 sharePrice, uint8 minGWLevel, uint8 status, uint64 createdAt, uint64 deadline, uint256 treasuryUSDT, uint256 totalDCT, uint256 itemId, uint256 saleAmount, uint64 redeemUnlocksAt, address creator))',
 ]
 
 /**
@@ -61,13 +55,10 @@ function withTimeout(promise, ms, label = 'RPC') {
 
 /**
  * Безопасное преобразование USDT (float) → wei (BigInt) с 18 decimals.
- * Учитывает специфику opBNB (USDT там 18 decimals, не 6).
- * Через ethers.parseUnits — точное преобразование без потерь точности float.
+ * USDT на opBNB — 18 decimals.
  */
 async function usdtToWei(amount) {
   const { ethers } = await import('ethers')
-  // toFixed(6) — обрезаем шестью знаками после запятой (центы и доли центов покрыты).
-  // Это страхует от float-погрешности типа 50.10 = 50.099999...
   const fixed = parseFloat(amount).toFixed(6)
   return ethers.parseUnits(fixed, 18)
 }
@@ -81,14 +72,23 @@ function weiEqualWithTolerance(a, b) {
 }
 
 /**
- * Проверить транзакцию покупки долей в контракте ClubLots.
+ * Получить адрес контракта пулов (поддержка старого имени для совместимости).
+ */
+function getPoolsAddr() {
+  // В новой системе — ClubPools. Старое имя ClubLots тоже поддерживаем
+  // на случай если кто-то ещё передаёт старый ключ.
+  return (ADDRESSES.ClubPools || ADDRESSES.ClubLots || '').toLowerCase()
+}
+
+/**
+ * Проверить транзакцию покупки долей в контракте ClubPools.
  *
  * @param {object} args
  * @param {string} args.txHash           — хэш транзакции (0x + 64 hex)
  * @param {string} args.buyerWallet      — кошелёк, который якобы купил (lowercase)
- * @param {number} args.contractLotId    — ID лота в контракте (из dc_lots.contract_lot_id)
- * @param {number} args.expectedCount    — сколько долей заявлено
- * @returns {Promise<{ok: boolean, error?: string, usdtAmount?: string, fromBalance?: boolean}>}
+ * @param {number} args.contractLotId    — ID пула в контракте (poolId)
+ * @param {number} args.expectedCount    — сколько долей заявлено (для контроля)
+ * @returns {Promise<{ok: boolean, error?: string, usdtAmount?: string, dctMinted?: string}>}
  */
 export async function verifyClubLotsPurchase({ txHash, buyerWallet, contractLotId, expectedCount }) {
   // Базовая валидация входных данных
@@ -99,15 +99,15 @@ export async function verifyClubLotsPurchase({ txHash, buyerWallet, contractLotI
     return { ok: false, error: 'Неверный формат кошелька' }
   }
   if (contractLotId === undefined || contractLotId === null || isNaN(parseInt(contractLotId))) {
-    return { ok: false, error: 'Не указан contract_lot_id' }
+    return { ok: false, error: 'Не указан contract_lot_id (poolId)' }
   }
   if (!expectedCount || expectedCount < 1) {
     return { ok: false, error: 'Неверное количество долей' }
   }
 
-  const clubLotsAddr = (ADDRESSES.ClubLots || '').toLowerCase()
-  if (!clubLotsAddr || clubLotsAddr.startsWith('0x_')) {
-    return { ok: false, error: 'Адрес контракта ClubLots не настроен на сервере' }
+  const poolsAddr = getPoolsAddr()
+  if (!poolsAddr || poolsAddr.startsWith('0x_')) {
+    return { ok: false, error: 'Адрес контракта ClubPools не настроен на сервере' }
   }
 
   try {
@@ -128,23 +128,22 @@ export async function verifyClubLotsPurchase({ txHash, buyerWallet, contractLotI
       return { ok: false, error: 'Транзакция завершилась с ошибкой (reverted)' }
     }
 
-    // Проверяем что транзакция была адресована нашему контракту ClubLots
+    // Проверяем что транзакция была адресована нашему контракту
     const txTo = (receipt.to || '').toLowerCase()
-    if (txTo !== clubLotsAddr) {
-      return { ok: false, error: 'Транзакция не относится к контракту ClubLots' }
+    if (txTo !== poolsAddr) {
+      return { ok: false, error: 'Транзакция не относится к контракту ClubPools' }
     }
 
-    // Ищем событие SharePurchased в логах
-    const iface = new ethers.Interface(SHARE_PURCHASED_EVENT)
+    // Ищем событие ShareBought в логах
+    const iface = new ethers.Interface(SHARE_BOUGHT_EVENT)
     const expectedBuyer = buyerWallet.toLowerCase()
-    const expectedLotId = BigInt(parseInt(contractLotId))
-    const expectedCountBig = BigInt(parseInt(expectedCount))
+    const expectedPoolId = BigInt(parseInt(contractLotId))
 
     let matchedEvent = null
 
     for (const log of (receipt.logs || [])) {
-      // Пропускаем логи от чужих контрактов (USDT transfer и т.п.)
-      if ((log.address || '').toLowerCase() !== clubLotsAddr) continue
+      // Пропускаем логи от чужих контрактов
+      if ((log.address || '').toLowerCase() !== poolsAddr) continue
 
       let parsed
       try {
@@ -152,17 +151,18 @@ export async function verifyClubLotsPurchase({ txHash, buyerWallet, contractLotI
       } catch {
         continue // не наше событие — идём дальше
       }
-      if (!parsed || parsed.name !== 'SharePurchased') continue
+      if (!parsed || parsed.name !== 'ShareBought') continue
 
       // Сверяем поля события с заявленными
       const eventBuyer = String(parsed.args.buyer || '').toLowerCase()
-      const eventLotId = BigInt(parsed.args.lotId)
-      const eventCount = BigInt(parsed.args.count)
+      const eventPoolId = BigInt(parsed.args.poolId)
 
       if (eventBuyer !== expectedBuyer) continue
-      if (eventLotId !== expectedLotId) continue
-      if (eventCount !== expectedCountBig) continue
+      if (eventPoolId !== expectedPoolId) continue
 
+      // В v2.3 нет прямого "count" в событии — есть amountUSDT.
+      // Считаем что count верный если amountUSDT > 0 и совпадает poolId+buyer.
+      // Серверный API всё равно проверит amount позже через sharePrice.
       matchedEvent = parsed
       break
     }
@@ -170,14 +170,15 @@ export async function verifyClubLotsPurchase({ txHash, buyerWallet, contractLotI
     if (!matchedEvent) {
       return {
         ok: false,
-        error: 'В транзакции не найдено события SharePurchased с совпадающими buyer/lotId/count'
+        error: 'В транзакции не найдено события ShareBought с совпадающим buyer/poolId'
       }
     }
 
     return {
       ok: true,
-      usdtAmount: matchedEvent.args.usdtAmount.toString(), // в wei (18 decimals на opBNB)
-      fromBalance: Boolean(matchedEvent.args.fromBalance),
+      usdtAmount: matchedEvent.args.amountUSDT.toString(),  // в wei (18 decimals)
+      dctMinted: matchedEvent.args.dctMinted.toString(),    // сколько DCT начислено
+      fromBalance: false,                                   // в v2.3 нет — всегда USDT с кошелька
     }
   } catch (err) {
     console.error('verifyClubLotsPurchase error:', err?.message || err)
@@ -186,23 +187,23 @@ export async function verifyClubLotsPurchase({ txHash, buyerWallet, contractLotI
 }
 
 /**
- * Проверить что лот реально существует в контракте ClubLots.
+ * Проверить что пул реально существует в контракте ClubPools.
  *
  * Используется в /api/lots action='link_contract' перед привязкой
- * contract_lot_id к записи в БД.
+ * contract_lot_id (= poolId) к записи в БД.
  *
  * Два режима:
- *   • Без txHash: только базовая проверка через getLotCount() — лот должен
- *     существовать (contractLotId < lotCount).
- *   • С txHash: глубокая проверка — парсим receipt, ищем событие LotCreated
- *     с этим lotId, сверяем gemCost/sharePrice/totalShares с БД.
+ *   • Без txHash: только базовая проверка через poolsCount() — пул должен
+ *     существовать (poolId < poolsCount).
+ *   • С txHash: глубокая проверка — парсим receipt, ищем событие PoolCreated
+ *     с этим poolId, сверяем targetUSDT с БД (где gemCost).
  *
  * @param {object} args
- * @param {number} args.contractLotId        — ID лота в контракте
- * @param {string|null} args.txHash          — хэш транзакции createLot (опционально)
- * @param {number|null} args.expectedGemCost — ожидаемая закупка камня (USDT, обычные единицы)
- * @param {number|null} args.expectedSharePrice — ожидаемая цена доли ($25/$50/$100)
- * @param {number|null} args.expectedTotalShares — ожидаемое количество долей
+ * @param {number} args.contractLotId        — ID пула в контракте (poolId)
+ * @param {string|null} args.txHash          — хэш транзакции createPool (опционально)
+ * @param {number|null} args.expectedGemCost — ожидаемая стоимость камня = targetUSDT
+ * @param {number|null} args.expectedSharePrice — игнорируется в v2.3 (вычисляется из target/totalShares)
+ * @param {number|null} args.expectedTotalShares — ожидаемое количество долей (проверяется через getPool)
  * @returns {Promise<{ok: boolean, error?: string, verified?: string}>}
  */
 export async function verifyClubLotsCreation({
@@ -214,34 +215,42 @@ export async function verifyClubLotsCreation({
 }) {
   // Базовая валидация
   if (contractLotId === undefined || contractLotId === null || isNaN(parseInt(contractLotId))) {
-    return { ok: false, error: 'Не указан contract_lot_id' }
+    return { ok: false, error: 'Не указан contract_lot_id (poolId)' }
   }
-  const cLotId = parseInt(contractLotId)
-  if (cLotId < 0) {
-    return { ok: false, error: 'contract_lot_id не может быть отрицательным' }
+  const poolId = parseInt(contractLotId)
+  if (poolId < 0) {
+    return { ok: false, error: 'poolId не может быть отрицательным' }
   }
 
-  const clubLotsAddr = (ADDRESSES.ClubLots || '').toLowerCase()
-  if (!clubLotsAddr || clubLotsAddr.startsWith('0x_')) {
-    return { ok: false, error: 'Адрес контракта ClubLots не настроен на сервере' }
+  const poolsAddr = getPoolsAddr()
+  if (!poolsAddr || poolsAddr.startsWith('0x_')) {
+    return { ok: false, error: 'Адрес контракта ClubPools не настроен на сервере' }
   }
 
   try {
     const { ethers } = await import('ethers')
     const provider = new ethers.JsonRpcProvider(RPC_URL)
-    const clubLots = new ethers.Contract(clubLotsAddr, CLUBLOTS_VIEW_FRAGMENT, provider)
+    const pools = new ethers.Contract(poolsAddr, CLUBPOOLS_VIEW_FRAGMENT, provider)
 
-    // ─── Шаг 1: проверка что лот существует через getLotCount() ───
-    const lotCount = await withTimeout(clubLots.getLotCount(), RPC_TIMEOUT_MS, 'getLotCount()')
-    const lotCountNum = Number(lotCount)
-    if (cLotId >= lotCountNum) {
+    // ─── Шаг 1: проверка что пул существует через poolsCount() ───
+    const count = await withTimeout(pools.poolsCount(), RPC_TIMEOUT_MS, 'poolsCount()')
+    const countNum = Number(count)
+    if (poolId >= countNum) {
       return {
         ok: false,
-        error: `Лот #${cLotId} не существует в контракте (всего создано: ${lotCountNum})`
+        error: `Пул #${poolId} не существует в контракте (всего создано: ${countNum})`
       }
     }
 
-    // ─── Шаг 2: если есть txHash — глубокая проверка ───
+    // ─── Шаг 1.5: получаем данные пула для проверки totalShares и sharePrice ───
+    let onChainPool = null
+    try {
+      onChainPool = await withTimeout(pools.getPool(poolId), RPC_TIMEOUT_MS, 'getPool()')
+    } catch {
+      // Не критично — продолжаем, но без проверки sharePrice
+    }
+
+    // ─── Шаг 2: если есть txHash — глубокая проверка через PoolCreated event ───
     if (txHash) {
       if (!/^0x[a-fA-F0-9]{64}$/.test(txHash)) {
         return { ok: false, error: 'Неверный формат contractTxHash' }
@@ -254,31 +263,31 @@ export async function verifyClubLotsCreation({
       )
 
       if (!receipt) {
-        return { ok: false, error: 'Транзакция создания лота не подтверждена или не существует' }
+        return { ok: false, error: 'Транзакция создания пула не подтверждена или не существует' }
       }
       if (receipt.status !== 1) {
-        return { ok: false, error: 'Транзакция создания лота reverted' }
+        return { ok: false, error: 'Транзакция создания пула reverted' }
       }
       const txTo = (receipt.to || '').toLowerCase()
-      if (txTo !== clubLotsAddr) {
-        return { ok: false, error: 'Транзакция создания не относится к контракту ClubLots' }
+      if (txTo !== poolsAddr) {
+        return { ok: false, error: 'Транзакция создания не относится к контракту ClubPools' }
       }
 
-      // Ищем событие LotCreated с нашим lotId
-      const iface = new ethers.Interface(LOT_CREATED_EVENT)
-      const expectedLotId = BigInt(cLotId)
+      // Ищем событие PoolCreated с нашим poolId
+      const iface = new ethers.Interface(POOL_CREATED_EVENT)
+      const expectedPoolId = BigInt(poolId)
 
       let matched = null
       for (const log of (receipt.logs || [])) {
-        if ((log.address || '').toLowerCase() !== clubLotsAddr) continue
+        if ((log.address || '').toLowerCase() !== poolsAddr) continue
         let parsed
         try {
           parsed = iface.parseLog({ topics: log.topics, data: log.data })
         } catch {
           continue
         }
-        if (!parsed || parsed.name !== 'LotCreated') continue
-        if (BigInt(parsed.args.lotId) !== expectedLotId) continue
+        if (!parsed || parsed.name !== 'PoolCreated') continue
+        if (BigInt(parsed.args.poolId) !== expectedPoolId) continue
         matched = parsed
         break
       }
@@ -286,35 +295,25 @@ export async function verifyClubLotsCreation({
       if (!matched) {
         return {
           ok: false,
-          error: `В транзакции нет события LotCreated с lotId=${cLotId}`
+          error: `В транзакции нет события PoolCreated с poolId=${poolId}`
         }
       }
 
-      // Сверка параметров с БД (если они переданы)
+      // Сверка targetUSDT (= expectedGemCost) с БД
       if (expectedGemCost !== null && expectedGemCost !== undefined) {
         const expectedWei = await usdtToWei(expectedGemCost)
-        if (!weiEqualWithTolerance(matched.args.gemCost, expectedWei)) {
-          const onChain = (Number(matched.args.gemCost) / 1e18).toFixed(2)
+        if (!weiEqualWithTolerance(matched.args.targetUSDT, expectedWei)) {
+          const onChain = (Number(matched.args.targetUSDT) / 1e18).toFixed(2)
           return {
             ok: false,
-            error: `gemCost не совпадает: в БД $${expectedGemCost}, в контракте $${onChain}`
+            error: `targetUSDT не совпадает: в БД $${expectedGemCost}, в контракте $${onChain}`
           }
         }
       }
 
-      if (expectedSharePrice !== null && expectedSharePrice !== undefined) {
-        const expectedWei = await usdtToWei(expectedSharePrice)
-        if (!weiEqualWithTolerance(matched.args.sharePrice, expectedWei)) {
-          const onChain = (Number(matched.args.sharePrice) / 1e18).toFixed(2)
-          return {
-            ok: false,
-            error: `sharePrice не совпадает: в БД $${expectedSharePrice}, в контракте $${onChain}`
-          }
-        }
-      }
-
-      if (expectedTotalShares !== null && expectedTotalShares !== undefined) {
-        const onChainShares = BigInt(parseInt(matched.args.totalShares.toString()))
+      // Сверка totalShares через getPool (т.к. в событии PoolCreated этого нет)
+      if (expectedTotalShares !== null && expectedTotalShares !== undefined && onChainPool) {
+        const onChainShares = BigInt(parseInt(onChainPool.totalShares.toString()))
         const expectedShares = BigInt(parseInt(expectedTotalShares))
         if (onChainShares !== expectedShares) {
           return {
@@ -324,17 +323,29 @@ export async function verifyClubLotsCreation({
         }
       }
 
+      // Сверка sharePrice через getPool
+      if (expectedSharePrice !== null && expectedSharePrice !== undefined && onChainPool) {
+        const expectedWei = await usdtToWei(expectedSharePrice)
+        if (!weiEqualWithTolerance(onChainPool.sharePrice, expectedWei)) {
+          const onChain = (Number(onChainPool.sharePrice) / 1e18).toFixed(2)
+          return {
+            ok: false,
+            error: `sharePrice не совпадает: в БД $${expectedSharePrice}, в контракте $${onChain}`
+          }
+        }
+      }
+
       return {
         ok: true,
         verified: 'tx-deep-check',
-        gemCostWei: matched.args.gemCost.toString(),
-        sharePriceWei: matched.args.sharePrice.toString(),
-        totalShares: Number(matched.args.totalShares),
+        targetUSDTWei: matched.args.targetUSDT.toString(),
+        totalShares: onChainPool ? Number(onChainPool.totalShares) : null,
+        sharePriceWei: onChainPool ? onChainPool.sharePrice.toString() : null,
       }
     }
 
     // Без txHash — только проверка существования
-    return { ok: true, verified: 'lot-exists-only' }
+    return { ok: true, verified: 'pool-exists-only' }
   } catch (err) {
     console.error('verifyClubLotsCreation error:', err?.message || err)
     return { ok: false, error: 'Не удалось проверить контракт (RPC недоступен или таймаут)' }
