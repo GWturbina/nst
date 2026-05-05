@@ -1,6 +1,6 @@
 {
   "contractName": "ClubMarketing",
-  "address": "0x092209b7dB90d34A9803F226e27744D86c11129F",
+  "address": "0x559291b6fAD0cb11C4630553B92139500bf202e4",
   "network": "opBNB",
   "chainId": 204,
   "abi": [
@@ -123,6 +123,25 @@
         }
       ],
       "name": "AddressesUpdated",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "payer",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "name": "AdsDirectDeposit",
       "type": "event"
     },
     {
@@ -514,19 +533,6 @@
     },
     {
       "inputs": [],
-      "name": "SHARE_ADS",
-      "outputs": [
-        {
-          "internalType": "uint256",
-          "name": "",
-          "type": "uint256"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
       "name": "SHARE_AUTHOR",
       "outputs": [
         {
@@ -588,6 +594,19 @@
         }
       ],
       "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "name": "addToAds",
+      "outputs": [],
+      "stateMutability": "nonpayable",
       "type": "function"
     },
     {
