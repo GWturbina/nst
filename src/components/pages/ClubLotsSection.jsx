@@ -1,22 +1,23 @@
 'use client'
 /**
- * ClubLotsSection.jsx — Клубные лоты
+ * ClubLotsSection.jsx — Клубные лоты (пулы v2.3)
  * Секция внутри DiamondClubPage
  * 
- * Функции партнёра:
- *   - Просмотр активных лотов с прогресс-баром
- *   - Покупка долей (USDT через блокчейн)
- *   - Покупка из баланса маркетинга
- *   - Мои доли и статус
- *   - Вывод реферальных
- *   - Компенсация через 6 мес
- *   - История завершённых лотов
+ * АДАПТАЦИЯ под v2.3:
+ * - Импорт изменён: clubLotsContracts → clubV23
+ * - buyShareFromBalance заменён на двухшаговую логику (claim + buyShare)
+ *   потому что в v2.3 нет прямой покупки из marketing-баланса
+ * - claimEarnings → claimMarketing
+ * - claimCompensation → claimDrainedPool
+ * 
+ * Данные о лотах по-прежнему хранятся в Supabase, контракт только
+ * для on-chain транзакций (покупка доли, забрать маркетинг).
  */
 import { useState, useEffect, useCallback } from 'react'
 import useGameStore from '@/lib/store'
 import { shortAddress } from '@/lib/web3'
 import { safeCall } from '@/lib/contracts'
-import * as CL from '@/lib/clubLotsContracts'
+import * as Club from '@/lib/clubV23'
 import { authFetch } from '@/lib/authClient'
 import HelpButton from '@/components/ui/HelpButton'
 import DiamondLotVisual from '@/components/ui/DiamondLotVisual'
@@ -37,26 +38,25 @@ export default function ClubLotsSection() {
   const [mktBalance, setMktBalance] = useState('0')
   const [loading, setLoading] = useState(true)
   const [txPending, setTxPending] = useState(false)
-  const [tab, setTab] = useState('active') // active / my / history
+  const [tab, setTab] = useState('active')
   const [buyModal, setBuyModal] = useState(null)
   const [buyCount, setBuyCount] = useState(1)
   const [useBalance, setUseBalance] = useState(false)
-  const [visualLot, setVisualLot] = useState(null) // Лот для визуализации бриллианта
+  const [visualLot, setVisualLot] = useState(null)
 
   // ═══ Загрузка данных ═══
   const reload = useCallback(async () => {
     setLoading(true)
     try {
-      // Из Supabase
       const res = await fetch(`/api/lots?status=all&wallet=${wallet || ''}`)
       const data = await res.json()
       if (data.ok) {
         setLots(data.lots || [])
         setMyShares(data.myShares || {})
       }
-      // Баланс маркетинга (из контракта)
+      // Баланс маркетинга (из ClubMarketing)
       if (wallet) {
-        const bal = await CL.getMarketingBalance(wallet).catch(() => '0')
+        const bal = await Club.getMarketingBalance(wallet).catch(() => '0')
         setMktBalance(bal)
       }
     } catch {}
@@ -70,7 +70,6 @@ export default function ClubLotsSection() {
     if (!buyModal || !wallet) return
     setTxPending(true)
 
-    // FIX BUG-5: Используем contract_lot_id для блокчейна, fallback на Supabase id
     const contractLotId = buyModal.contract_lot_id
     if (contractLotId === null || contractLotId === undefined) {
       addNotification('❌ Лот ещё не привязан к контракту. Обратитесь к администратору.')
@@ -78,19 +77,27 @@ export default function ClubLotsSection() {
       return
     }
 
-    const result = await safeCall(async () => {
-      if (useBalance) {
-        return await CL.buyShareFromBalance(contractLotId, buyCount)
-      } else {
-        return await CL.buyShare(contractLotId, buyCount)
+    // ═══ ИЗМЕНЕНИЕ v2.3: оплата из marketing-баланса теперь двухшаговая ═══
+    // Шаг 1 (если useBalance): claim маркетинга → USDT приходит на кошелёк
+    // Шаг 2: buyShare → списывает USDT и покупает долю
+    if (useBalance) {
+      addNotification('⏳ Шаг 1/2: Получение маркетинговых...')
+      const claimRes = await safeCall(() => Club.claimMarketing())
+      if (!claimRes.ok) {
+        addNotification(`❌ Ошибка получения маркетинга: ${claimRes.error}`)
+        setTxPending(false)
+        return
       }
-    })
+      addNotification('✅ Маркетинг получен. Шаг 2/2: Покупка доли...')
+    }
+
+    // Покупка доли (всегда через buyShare)
+    const result = await safeCall(() => Club.buyShare(contractLotId, buyCount))
 
     if (result.ok) {
-      // FIX: Извлекаем txHash из receipt (ethers v6: receipt.hash)
       const txHash = result.data?.hash || result.data?.transactionHash || ''
 
-      // FIX ISSUE-7: Записать в Supabase С обработкой ошибок
+      // Запись в Supabase
       let supabaseOk = false
       try {
         const res = await authFetch('/api/lots', {
@@ -111,7 +118,6 @@ export default function ClubLotsSection() {
       if (supabaseOk) {
         addNotification(`✅ Куплено ${buyCount} доля(ей) в лоте «${buyModal.title}»!`)
       } else {
-        // Блокчейн-транзакция прошла, но запись в БД не удалась
         addNotification(`⚠️ Доля куплена (tx: ${txHash.slice(0, 10)}...), но запись не сохранилась. Обратитесь к администратору с хэшем транзакции.`)
       }
 
@@ -124,12 +130,12 @@ export default function ClubLotsSection() {
     setTxPending(false)
   }
 
-  // ═══ Вывод реферальных ═══
+  // ═══ Забрать маркетинг (claimEarnings → claimMarketing) ═══
   const handleClaimEarnings = async () => {
     setTxPending(true)
-    const result = await safeCall(() => CL.claimEarnings())
+    const result = await safeCall(() => Club.claimMarketing())
     if (result.ok) {
-      addNotification('✅ Реферальные выведены!')
+      addNotification('✅ Маркетинг получен!')
       reload()
     } else {
       addNotification(`❌ ${result.error}`)
@@ -137,10 +143,17 @@ export default function ClubLotsSection() {
     setTxPending(false)
   }
 
-  // ═══ Компенсация ═══
+  // ═══ Компенсация (через claimDrainedPool) ═══
   const handleClaimCompensation = async (lotId) => {
     setTxPending(true)
-    const result = await safeCall(() => CL.claimCompensation(lotId))
+    const lot = lots.find(l => l.id === lotId)
+    const contractPoolId = lot?.contract_lot_id
+    if (contractPoolId === null || contractPoolId === undefined) {
+      addNotification('❌ Лот не привязан к контракту')
+      setTxPending(false)
+      return
+    }
+    const result = await safeCall(() => Club.claimDrainedPool(contractPoolId))
     if (result.ok) {
       addNotification('✅ Компенсация получена!')
       reload()
@@ -179,7 +192,7 @@ export default function ClubLotsSection() {
         <div className="p-3 rounded-2xl border border-gold-400/20" style={{ background: 'rgba(212,168,67,0.06)' }}>
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-[11px] text-slate-400">Баланс реферальных</div>
+              <div className="text-[11px] text-slate-400">Баланс маркетинга</div>
               <div className="text-lg font-black text-gold-400">${parseFloat(mktBalance).toFixed(2)} <span className="text-[10px] text-slate-500">USDT</span></div>
             </div>
             <button onClick={handleClaimEarnings} disabled={txPending}
@@ -188,7 +201,7 @@ export default function ClubLotsSection() {
             </button>
           </div>
           <div className="text-[10px] text-slate-500 mt-1">
-            Или используйте для покупки долей — не нужно выводить
+            Можно использовать для покупки доли — выведется автоматически и купит
           </div>
         </div>
       )}
@@ -213,7 +226,6 @@ export default function ClubLotsSection() {
 
       {/* Список лотов */}
       {visualLot ? (
-        /* ═══ ВИЗУАЛИЗАЦИЯ БРИЛЛИАНТА ═══ */
         <div>
           <button onClick={() => setVisualLot(null)}
             className="mb-2 px-3 py-1.5 rounded-xl text-[11px] font-bold text-slate-400 border border-white/8 hover:bg-white/5">
@@ -222,14 +234,12 @@ export default function ClubLotsSection() {
           <DiamondLotVisual
             lot={visualLot}
             soldIds={(() => {
-              // Генерируем sold ID из количества проданных (пока нет поштучных данных)
               const sold = visualLot.sold_shares || 0
               return Array.from({ length: sold }, (_, i) => i + 1)
             })()}
             myIds={(() => {
               const my = myShares[visualLot.id] || 0
               const sold = visualLot.sold_shares || 0
-              // Мои доли — последние из проданных
               return Array.from({ length: my }, (_, i) => sold - my + i + 1)
             })()}
             onBuy={async (facetId) => {
@@ -247,7 +257,6 @@ export default function ClubLotsSection() {
           <div className="text-xs text-slate-500">
             {tab === 'active' ? 'Нет активных лотов' : tab === 'my' ? 'Вы ещё не участвуете' : 'Нет завершённых лотов'}
           </div>
-          {/* Демо-визуализация */}
           <button onClick={() => setVisualLot({
             id: 'demo', title: 'ДЕМО — Бриллиант 1.5 ct', description: 'Превью визуализации долевого участия. Нажимайте на грани!',
             total_shares: 100, sold_shares: 14, share_price: 10, status: 'active',
@@ -307,15 +316,23 @@ export default function ClubLotsSection() {
               </div>
             </div>
 
-            {/* Оплата из баланса */}
+            {/* Оплата из баланса (двухшаговая) */}
             {parseFloat(mktBalance) >= buyModal.share_price && (
               <label className="flex items-center gap-2 mb-3 cursor-pointer">
                 <input type="checkbox" checked={useBalance} onChange={e => setUseBalance(e.target.checked)}
                   className="w-4 h-4 accent-yellow-500" />
                 <span className="text-[11px] text-slate-300">
-                  Оплатить из баланса реферальных (${parseFloat(mktBalance).toFixed(2)})
+                  Сначала забрать маркетинг (${parseFloat(mktBalance).toFixed(2)}) — потом купить
                 </span>
               </label>
+            )}
+
+            {useBalance && (
+              <div className="p-2 mb-3 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                <div className="text-[10px] text-blue-300">
+                  💡 Будет 2 транзакции: получить маркетинг, потом купить долю
+                </div>
+              </div>
             )}
 
             {/* Кнопки */}
@@ -335,7 +352,7 @@ export default function ClubLotsSection() {
 }
 
 // ═══════════════════════════════════════════════════
-// КАРТОЧКА ЛОТА
+// КАРТОЧКА ЛОТА (без изменений — UI данные из Supabase)
 // ═══════════════════════════════════════════════════
 function LotCard({ lot, myShareCount, wallet, onBuy, onVisual, onClaimComp, txPending }) {
   const pctSold = lot.total_shares > 0
@@ -345,7 +362,6 @@ function LotCard({ lot, myShareCount, wallet, onBuy, onVisual, onClaimComp, txPe
   const statusInfo = STATUS_MAP[lot.status] || STATUS_MAP.active
   const isWinner = lot.winner_wallet && wallet && lot.winner_wallet.toLowerCase() === wallet.toLowerCase()
 
-  // Таймер до разморозки
   const unlockDate = lot.unlock_at ? new Date(lot.unlock_at) : null
   const now = new Date()
   const daysLeft = unlockDate ? Math.max(0, Math.ceil((unlockDate - now) / 86400000)) : null
@@ -353,7 +369,6 @@ function LotCard({ lot, myShareCount, wallet, onBuy, onVisual, onClaimComp, txPe
 
   return (
     <div className="p-4 rounded-2xl border" style={{ background: 'rgba(21,21,48,0.8)', borderColor: 'rgba(212,168,67,0.15)' }}>
-      {/* Header */}
       <div className="flex items-start justify-between mb-2">
         <div className="flex-1">
           <div className="flex items-center gap-2">
@@ -367,7 +382,6 @@ function LotCard({ lot, myShareCount, wallet, onBuy, onVisual, onClaimComp, txPe
         <div className={`text-[10px] font-bold ${statusInfo.color}`}>{statusInfo.label}</div>
       </div>
 
-      {/* Specs */}
       <div className="flex gap-2 mb-3 flex-wrap">
         {lot.carats && <span className="px-2 py-0.5 rounded-lg bg-white/5 text-[10px] text-slate-300">{lot.carats}ct</span>}
         {lot.shape && <span className="px-2 py-0.5 rounded-lg bg-white/5 text-[10px] text-slate-300">{lot.shape}</span>}
@@ -376,7 +390,6 @@ function LotCard({ lot, myShareCount, wallet, onBuy, onVisual, onClaimComp, txPe
         {lot.has_cert && <span className="px-2 py-0.5 rounded-lg bg-emerald-500/15 text-[10px] text-emerald-400">📜 Серт.</span>}
       </div>
 
-      {/* Prices */}
       <div className="grid grid-cols-3 gap-2 mb-3">
         <div className="text-center p-2 rounded-xl bg-white/3">
           <div className="text-[10px] text-slate-500">Камень</div>
@@ -392,7 +405,6 @@ function LotCard({ lot, myShareCount, wallet, onBuy, onVisual, onClaimComp, txPe
         </div>
       </div>
 
-      {/* Progress bar */}
       <div className="mb-2">
         <div className="flex justify-between text-[10px] mb-1">
           <span className="text-slate-400">Продано: {lot.sold_shares}/{lot.total_shares}</span>
@@ -409,7 +421,6 @@ function LotCard({ lot, myShareCount, wallet, onBuy, onVisual, onClaimComp, txPe
         </div>
       </div>
 
-      {/* My shares */}
       {myShareCount > 0 && (
         <div className="p-2 rounded-xl bg-gold-400/8 border border-gold-400/15 mb-2">
           <div className="flex items-center justify-between">
@@ -421,7 +432,6 @@ function LotCard({ lot, myShareCount, wallet, onBuy, onVisual, onClaimComp, txPe
         </div>
       )}
 
-      {/* Winner info */}
       {lot.status === 'completed' && lot.winner_wallet && (
         <div className="p-2 rounded-xl bg-emerald-500/8 border border-emerald-500/15 mb-2">
           <div className="text-[11px] text-emerald-400 font-bold">
@@ -435,7 +445,6 @@ function LotCard({ lot, myShareCount, wallet, onBuy, onVisual, onClaimComp, txPe
         </div>
       )}
 
-      {/* Actions */}
       <div className="flex gap-2 mt-2">
         {lot.status === 'active' && available > 0 && wallet && (
           <button onClick={onBuy} disabled={txPending}
@@ -444,7 +453,6 @@ function LotCard({ lot, myShareCount, wallet, onBuy, onVisual, onClaimComp, txPe
           </button>
         )}
 
-        {/* Кнопка визуализации бриллианта */}
         {wallet && (
           <button onClick={onVisual}
             className="py-2.5 px-3 rounded-xl text-[11px] font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/15 transition-all">
@@ -466,7 +474,6 @@ function LotCard({ lot, myShareCount, wallet, onBuy, onVisual, onClaimComp, txPe
         )}
       </div>
 
-      {/* Min level */}
       {lot.min_gw_level > 1 && (
         <div className="text-[9px] text-slate-600 mt-2 text-center">
           Минимальный уровень GlobalWay: {lot.min_gw_level}
