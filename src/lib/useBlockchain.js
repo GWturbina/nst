@@ -3,7 +3,8 @@ import { useEffect, useCallback } from 'react'
 import useGameStore from './store'
 import web3 from './web3'
 import * as C from './contracts'
-import { getDCTTokenInfo, getDCTUserInfo } from './dctContracts'
+// АДАПТАЦИЯ под v2.3: импорт из clubV23 вместо старого dctContracts
+import { getDCTUserInfo } from './clubV23'
 import { loadTapState } from './tapService'
 
 let _refreshInterval = null
@@ -46,31 +47,19 @@ async function refreshDataForAddress(address) {
       } catch {}
     }
 
-    // DCT token info
+    // DCT user info (v2.3: ClubDCT)
+    // Стартовая цена DCT в v2.3: $0.50 (1 USDT = 2 DCT).
+    // Для конкретного пула фактическая цена считается через ClubPools.getCurrentDCTPrice(poolId),
+    // но единой "цены DCT" нет — она зависит от treasury конкретного пула.
+    // Здесь используем стартовую как референс для UI.
     try {
       const dctUser = await getDCTUserInfo(address)
       if (dctUser) {
         store.updateDCT({
           total: dctUser.total,
-          locked: dctUser.locked,
-          free: dctUser.free,
-          price: dctUser.valueUSDT && dctUser.total > 0
-            ? (parseFloat(dctUser.valueUSDT) / parseFloat(dctUser.total)).toFixed(6)
-            : '0',
-        })
-      }
-    } catch {}
-
-    // DCT price (if no user balance)
-    try {
-      const tokenInfo = await getDCTTokenInfo()
-      if (tokenInfo) {
-        const current = store
-        store.updateDCT({
-          total: current.dct || 0,
-          locked: current.dctLocked || 0,
-          free: current.dctFree || 0,
-          price: tokenInfo.price,
+          locked: dctUser.locked,    // = frozen в v2.3
+          free: dctUser.free,        // = unlocked в v2.3
+          price: '0.50',             // стартовая цена DCT в Diamond Club v2.3
         })
       }
     } catch {}
