@@ -1027,127 +1027,6 @@ h1, h2, h3, h4 {
   </div>
 </section>
 
-<!-- ===== SECTION: THREE WAYS TO EARN ===== -->
-<style>
-.earn-section {
-  background: linear-gradient(180deg, rgba(13,20,36,0.5), rgba(8,12,24,0.8));
-}
-.earn-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 24px;
-  max-width: 1200px;
-  margin: 32px auto 0;
-}
-.earn-card {
-  position: relative;
-  padding: 36px 28px;
-  background: linear-gradient(180deg, rgba(20,28,46,0.85), rgba(13,20,36,0.6));
-  border: 1px solid rgba(165,216,248,0.12);
-  border-radius: 24px;
-  transition: all 0.4s cubic-bezier(.3,.9,.3,1);
-  overflow: hidden;
-}
-.earn-card::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, var(--ice-3), transparent);
-  opacity: 0;
-  transition: opacity 0.4s;
-}
-.earn-card:hover {
-  border-color: var(--ice-3);
-  transform: translateY(-6px);
-  box-shadow: 0 24px 60px -20px rgba(165,216,248,0.18);
-}
-.earn-card:hover::before { opacity: 1; }
-.earn-icon {
-  font-size: 48px;
-  margin-bottom: 20px;
-  display: inline-block;
-  filter: drop-shadow(0 6px 16px rgba(165,216,248,0.25));
-}
-.earn-card h3 {
-  font-size: 22px;
-  margin-bottom: 12px;
-  color: var(--ice-3);
-  font-family: 'Cormorant Garamond', serif;
-}
-.earn-card p {
-  font-size: 15px;
-  line-height: 1.6;
-  color: var(--text-dim);
-  margin-bottom: 18px;
-  min-height: 76px;
-}
-.earn-highlight {
-  display: inline-block;
-  padding: 10px 18px;
-  background: rgba(165,216,248,0.08);
-  border: 1px solid rgba(165,216,248,0.2);
-  border-radius: 100px;
-  color: var(--ice-2);
-  font-size: 13px;
-  font-weight: 700;
-  font-family: 'Manrope', sans-serif;
-}
-.earn-level-badge {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  padding: 6px 12px;
-  background: rgba(255,215,0,0.08);
-  border: 1px solid rgba(255,215,0,0.25);
-  border-radius: 100px;
-  color: #ffd700;
-  font-size: 10px;
-  font-weight: 800;
-  font-family: 'Manrope', sans-serif;
-  letter-spacing: 0.5px;
-}
-@media (max-width: 960px) {
-  .earn-grid { grid-template-columns: 1fr; gap: 18px; }
-  .earn-card p { min-height: 0; }
-}
-</style>
-
-<section class="section earn-section" id="earn">
-  <div class="section-eyebrow" data-i18n="earn.eyebrow">Три пути к доходу</div>
-  <h2 data-i18n="earn.title_html" data-i18n-html>Как зарабатывать <span class="ice-text">в клубе</span></h2>
-  <p class="section-lead" data-i18n="earn.lead">Три независимых способа. Можно использовать один — можно все три. Каждый работает сам по себе и приносит свой доход.</p>
-
-  <div class="earn-grid">
-    <!-- Способ 1: Купи долю -->
-    <div class="earn-card">
-      <span class="earn-level-badge" data-i18n="earn.way1_level">от 7+ уровня</span>
-      <div class="earn-icon">💎</div>
-      <h3 data-i18n="earn.way1_title">Купи долю</h3>
-      <p data-i18n="earn.way1_desc">Вкладываешь от $50 в долю реального бриллианта. Получаешь токен DCT с заморозкой 1 год. Цена токена растёт после каждой продажи камня.</p>
-      <span class="earn-highlight" data-i18n="earn.way1_highlight">+12% USDT гарантия · до +420% за год</span>
-    </div>
-
-    <!-- Способ 2: Тапай GST -->
-    <div class="earn-card">
-      <span class="earn-level-badge" data-i18n="earn.way2_level">с 1+ уровня</span>
-      <div class="earn-icon">⛏</div>
-      <h3 data-i18n="earn.way2_title">Тапай GST</h3>
-      <p data-i18n="earn.way2_desc">Бесплатно тапай в шахте — копи токены GST. Конвертируй в купон скидки и плати на 1–5% меньше при покупке камня в магазине клуба.</p>
-      <span class="earn-highlight" data-i18n="earn.way2_highlight">скидка до −5% · без вложений</span>
-    </div>
-
-    <!-- Способ 3: Приглашай -->
-    <div class="earn-card">
-      <span class="earn-level-badge" data-i18n="earn.way3_level">с 1+ уровня</span>
-      <div class="earn-icon">🤝</div>
-      <h3 data-i18n="earn.way3_title">Приглашай партнёров</h3>
-      <p data-i18n="earn.way3_desc">С каждой покупки твоего реферала получаешь процент. Глубина — 9 уровней вглубь команды. Реклама GWAD строит сетку за тебя автоматически.</p>
-      <span class="earn-highlight" data-i18n="earn.way3_highlight">9% маркетинг · 9 уровней</span>
-    </div>
-  </div>
-</section>
-
 <!-- ===== SECTION: 5 STEPS ===== -->
 <style>
 .steps-wrap { max-width: 1200px; margin: 0 auto; }
@@ -1766,130 +1645,6 @@ h1, h2, h3, h4 {
 @media (max-width: 960px) {
   .lot-grid { grid-template-columns: 1fr; gap: 40px; }
 }
-
-/* === Кнопка "Все активные лоты" === */
-.btn-show-all-lots {
-  display: block;
-  width: 100%;
-  margin-top: 12px;
-  padding: 14px 24px;
-  border: 1px solid rgba(165,216,248,0.25);
-  background: rgba(165,216,248,0.06);
-  color: var(--ice-2);
-  font-size: 14px;
-  font-weight: 600;
-  font-family: 'Manrope', sans-serif;
-  border-radius: 100px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.btn-show-all-lots:hover {
-  background: rgba(165,216,248,0.12);
-  border-color: var(--ice-3);
-}
-
-/* === Динамические цвета прогресс-бара === */
-.progress-fill.green  { background: linear-gradient(90deg, #34d399, #10b981); box-shadow: 0 0 12px rgba(16,185,129,0.5); }
-.progress-fill.yellow { background: linear-gradient(90deg, #fbbf24, #f59e0b); box-shadow: 0 0 12px rgba(245,158,11,0.5); }
-.progress-fill.red    { background: linear-gradient(90deg, #f87171, #ef4444); box-shadow: 0 0 14px rgba(239,68,68,0.6); animation: pulseRed 1.5s ease-in-out infinite; }
-@keyframes pulseRed { 0%,100% { opacity: 1; } 50% { opacity: 0.65; } }
-
-/* === Модалка "Все лоты" === */
-.lots-modal-overlay {
-  display: none;
-  position: fixed; inset: 0; z-index: 9999;
-  background: rgba(8,12,24,0.92);
-  backdrop-filter: blur(8px);
-  align-items: flex-start; justify-content: center;
-  padding: 32px 16px; overflow-y: auto;
-}
-.lots-modal-overlay.open { display: flex; }
-.lots-modal {
-  width: 100%; max-width: 720px;
-  background: linear-gradient(180deg, rgba(20,28,46,0.98), rgba(13,20,36,0.98));
-  border: 1px solid rgba(165,216,248,0.18);
-  border-radius: 24px;
-  padding: 28px;
-  position: relative;
-}
-.lots-modal-header {
-  display: flex; justify-content: space-between; align-items: center;
-  margin-bottom: 20px; gap: 16px;
-}
-.lots-modal-title {
-  font-family: 'Cormorant Garamond', serif;
-  font-size: clamp(22px, 3vw, 28px);
-  color: var(--ice-3);
-  margin: 0;
-}
-.lots-modal-close {
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.12);
-  color: var(--text);
-  font-size: 18px; font-weight: 700;
-  width: 36px; height: 36px;
-  border-radius: 50%;
-  cursor: pointer;
-}
-.lots-modal-close:hover { background: rgba(255,255,255,0.12); }
-.lots-list { display: flex; flex-direction: column; gap: 12px; }
-.lot-card {
-  display: grid;
-  grid-template-columns: 64px 1fr auto;
-  gap: 14px;
-  align-items: center;
-  padding: 16px;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.07);
-  border-radius: 16px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.lot-card:hover {
-  background: rgba(165,216,248,0.06);
-  border-color: var(--ice-3);
-  transform: translateY(-2px);
-}
-.lot-card-img {
-  width: 64px; height: 64px;
-  border-radius: 12px; object-fit: cover;
-  background: rgba(255,255,255,0.05);
-}
-.lot-card-info { min-width: 0; }
-.lot-card-title {
-  font-size: 14px; font-weight: 700;
-  color: var(--text); margin: 0 0 4px;
-}
-.lot-card-meta {
-  font-size: 11px;
-  color: var(--text-dim);
-  margin-bottom: 8px;
-}
-.lot-card-progress {
-  height: 6px;
-  background: rgba(255,255,255,0.05);
-  border-radius: 100px; overflow: hidden;
-}
-.lot-card-progress-fill {
-  height: 100%;
-  border-radius: 100px;
-  transition: width 0.6s cubic-bezier(.3,.9,.3,1);
-}
-.lot-card-status {
-  font-size: 11px; font-weight: 700;
-  text-align: right; min-width: 80px;
-}
-.lots-modal-empty {
-  text-align: center;
-  padding: 40px 20px;
-  color: var(--text-dim);
-  font-size: 14px;
-}
-@media (max-width: 540px) {
-  .lots-modal { padding: 20px; border-radius: 18px; }
-  .lot-card { padding: 12px; gap: 10px; grid-template-columns: 48px 1fr auto; }
-  .lot-card-img { width: 48px; height: 48px; }
-}
 </style>
 
 <section class="section lot-section" id="lot">
@@ -1899,18 +1654,18 @@ h1, h2, h3, h4 {
       <img class="lot-diamond" src="/icons/logo.png" alt="Natural diamond 2.20ct Round Brilliant" data-i18n-attr="alt:lot.title_html" style="object-fit:contain;" />
       <div class="lot-label">
         <div class="grade-row">
-          <div><span data-i18n="lot.spec_weight_label">Вес</span><span id="lot-weight">2.20 ct</span></div>
-          <div><span data-i18n="lot.spec_clarity_label">Чистота</span><span id="lot-clarity">VVS2</span></div>
-          <div><span data-i18n="lot.spec_color_label">Цвет</span><span id="lot-color">H</span></div>
+          <div><span data-i18n="lot.spec_weight_label">Вес</span>2.20 ct</div>
+          <div><span data-i18n="lot.spec_clarity_label">Чистота</span>VVS2</div>
+          <div><span data-i18n="lot.spec_color_label">Цвет</span>H</div>
         </div>
       </div>
     </div>
 
     <div class="lot-title-block">
       <div class="section-eyebrow" style="padding:0; text-align:left;" data-i18n="lot.eyebrow">Скоро старт</div>
-      <div class="lot-brand" id="lot-brand" data-i18n="lot.brand">Natural Diamond · GIA Certified</div>
-      <h2 id="lot-title" data-i18n="lot.title_html" data-i18n-html>Round Brilliant<br><span class="ice-text">2.20 карата</span></h2>
-      <p id="lot-description" style="color:var(--text-dim); font-size:16px; line-height:1.6; margin-bottom:8px;" data-i18n="lot.description">
+      <div class="lot-brand" data-i18n="lot.brand">Natural Diamond · GIA Certified</div>
+      <h2 data-i18n="lot.title_html" data-i18n-html>Round Brilliant<br><span class="ice-text">2.20 карата</span></h2>
+      <p style="color:var(--text-dim); font-size:16px; line-height:1.6; margin-bottom:8px;" data-i18n="lot.description">
         Сертифицированный природный бриллиант от нашего партнёрского алмазного дома. Отобран экспертами клуба.
       </p>
       <p style="color:var(--text-dim); font-size:13px; font-family:'Manrope',sans-serif; font-style:italic;" data-i18n="lot.description_small">
@@ -1919,27 +1674,27 @@ h1, h2, h3, h4 {
 
       <div class="lot-specs">
         <div class="spec-item">
-          <span class="label" data-i18n="lot.spec_purchase_label">Закупка бриллианта</span>
-          <span class="value ice" id="lot-purchase-price">$5 600</span>
+          <span class="label" data-i18n="lot.spec_purchase_label">Закупочная цена</span>
+          <span class="value ice">$5 600</span>
         </div>
         <div class="spec-item">
-          <span class="label" data-i18n="lot.spec_market_label">Рыночная цена бриллианта</span>
-          <span class="value" id="lot-market-price">$12 000–15 000</span>
+          <span class="label" data-i18n="lot.spec_market_label">Рыночная цена</span>
+          <span class="value">$12 000–15 000</span>
         </div>
         <div class="spec-item">
           <span class="label" data-i18n="lot.spec_shares_label">Количество долей</span>
-          <span class="value" id="lot-shares-total">100</span>
+          <span class="value">100</span>
         </div>
         <div class="spec-item">
           <span class="label" data-i18n="lot.spec_discount_label">Скидка к рынку</span>
-          <span class="value ice" id="lot-discount">−55%</span>
+          <span class="value ice">−55%</span>
         </div>
       </div>
 
       <div class="price-row">
-        <span class="main" id="lot-share-price">$66</span>
+        <span class="main">$66</span>
         <span class="per" data-i18n="lot.price_per_label">за одну долю</span>
-        <span class="market" id="lot-market-line"><span data-i18n="lot.price_market_label">~$150 на рынке</span></span>
+        <span class="market" data-i18n="lot.price_market_label">~$150 на рынке</span>
       </div>
 
       <!-- Состояние A: до старта сбора (показывается пока LOT_STATE='before-start') -->
@@ -1973,9 +1728,6 @@ h1, h2, h3, h4 {
       </div>
 
       <a href="https://gws.ink/cabinet" data-cta="cabinet" class="btn btn-primary btn-large" data-i18n="lot.cta_reserve">Забронировать долю →</a>
-      <button id="lot-show-all-btn" class="btn-show-all-lots" style="display:none;">
-        <span data-i18n="lot.cta_all">Все активные лоты</span> <span id="lot-all-count">(0)</span> →
-      </button>
     </div>
   </div>
 </section>
@@ -2561,135 +2313,6 @@ h1, h2, h3, h4 {
     <p class="levels-footnote" data-i18n="levels.footnote_html" data-i18n-html>
       <strong>Просто старая добрая партнёрская механика.</strong> Только теперь её строит не ты — а реклама. Сетка собирается автоматически, клиенты закрепляются навсегда, проценты капают со всех 9 уровней. Ты владеешь построенной машиной.
     </p>
-  </div>
-</section>
-
-<!-- ===== SECTION: ACCESS LADDER (1+/4+/7+/9+) ===== -->
-<style>
-.access-section {
-  background: linear-gradient(180deg, rgba(8,12,24,0.85), rgba(13,20,36,0.5));
-}
-.access-ladder {
-  max-width: 980px;
-  margin: 32px auto 0;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  position: relative;
-}
-.access-ladder::before {
-  content: '';
-  position: absolute;
-  left: 56px;
-  top: 30px;
-  bottom: 30px;
-  width: 2px;
-  background: linear-gradient(180deg, transparent, var(--ice-3), transparent);
-  opacity: 0.4;
-  z-index: 0;
-}
-.access-step {
-  display: grid;
-  grid-template-columns: 112px 1fr;
-  gap: 24px;
-  align-items: center;
-  padding: 20px 24px;
-  background: linear-gradient(180deg, rgba(20,28,46,0.7), rgba(13,20,36,0.5));
-  border: 1px solid rgba(165,216,248,0.1);
-  border-radius: 20px;
-  position: relative;
-  z-index: 1;
-  transition: all 0.3s;
-}
-.access-step:hover {
-  border-color: var(--ice-3);
-  transform: translateX(8px);
-}
-.access-level-circle {
-  width: 80px; height: 80px;
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  background: radial-gradient(circle, rgba(165,216,248,0.15), rgba(165,216,248,0.03));
-  border: 2px solid var(--ice-3);
-  font-family: 'Cormorant Garamond', serif;
-  font-size: 30px;
-  font-weight: 700;
-  color: var(--ice-3);
-  flex-shrink: 0;
-  box-shadow: 0 0 28px rgba(165,216,248,0.18);
-}
-.access-content h4 {
-  font-size: 19px;
-  margin: 0 0 6px;
-  color: var(--text);
-  font-family: 'Cormorant Garamond', serif;
-}
-.access-content p {
-  font-size: 14px;
-  color: var(--text-dim);
-  line-height: 1.55;
-  margin: 0;
-}
-.access-content .access-tag {
-  display: inline-block;
-  margin-top: 8px;
-  padding: 4px 10px;
-  background: rgba(255,215,0,0.08);
-  border: 1px solid rgba(255,215,0,0.2);
-  border-radius: 100px;
-  color: #ffd700;
-  font-size: 11px;
-  font-weight: 700;
-  font-family: 'Manrope', sans-serif;
-}
-@media (max-width: 720px) {
-  .access-step { grid-template-columns: 64px 1fr; gap: 16px; padding: 16px; }
-  .access-level-circle { width: 56px; height: 56px; font-size: 22px; }
-  .access-ladder::before { left: 40px; }
-}
-</style>
-
-<section class="section access-section" id="access">
-  <div class="section-eyebrow" data-i18n="access.eyebrow">Лестница доступов</div>
-  <h2 data-i18n="access.title_html" data-i18n-html>Чем выше уровень в <span class="ice-text">GlobalWay</span> — тем больше возможностей в клубе</h2>
-  <p class="section-lead" data-i18n="access.lead">Партнёрские уровни 1, 4, 7, 9 открывают новые функции в Diamond Club. Никаких спецдоступов «на час» — только честная прогрессия.</p>
-
-  <div class="access-ladder">
-    <div class="access-step">
-      <div class="access-level-circle">1+</div>
-      <div class="access-content">
-        <h4 data-i18n="access.l1_title">Покупка готового камня</h4>
-        <p data-i18n="access.l1_desc">Любой партнёр клуба может купить готовый бриллиант в магазине по цене 50% от рыночной. Если есть GST с тапалки — дополнительная скидка до −5%.</p>
-        <span class="access-tag" data-i18n="access.l1_tag">ClubMarket · 50% от рынка</span>
-      </div>
-    </div>
-
-    <div class="access-step">
-      <div class="access-level-circle">4+</div>
-      <div class="access-content">
-        <h4 data-i18n="access.l4_title">Перепродажа своих товаров</h4>
-        <p data-i18n="access.l4_desc">Купил у клуба, отдал в ювелирку — выставляешь готовое изделие на витрину клуба. Зарабатываешь на разнице.</p>
-        <span class="access-tag" data-i18n="access.l4_tag">ClubMarket · Resale</span>
-      </div>
-    </div>
-
-    <div class="access-step">
-      <div class="access-level-circle">7+</div>
-      <div class="access-content">
-        <h4 data-i18n="access.l7_title">Покупка долей в пулах</h4>
-        <p data-i18n="access.l7_desc">Главное преимущество клуба. Покупаешь долю в пуле по закупочной цене (35% от рынка) — получаешь токен DCT с гарантией +12% и потенциалом до +420% за год.</p>
-        <span class="access-tag" data-i18n="access.l7_tag">ClubPools · 35% от рынка · DCT токен</span>
-      </div>
-    </div>
-
-    <div class="access-step">
-      <div class="access-level-circle">9+</div>
-      <div class="access-content">
-        <h4 data-i18n="access.l9_title">Стать директором клуба</h4>
-        <p data-i18n="access.l9_desc">Голосуешь по стратегическим решениям клуба: одобрение крупных закупок, изменение условий пулов, аварийные меры. Голос директора имеет вес 60% при голосовании.</p>
-        <span class="access-tag" data-i18n="access.l9_tag">ClubDirectors · голосования 60%</span>
-      </div>
-    </div>
   </div>
 </section>
 
@@ -3396,214 +3019,6 @@ document.querySelectorAll('a[href^="#"]').forEach(a => {
     }
   });
 });
-</script>
-
-<!-- ═══════════════════════════════════════════════════════ -->
-<!-- ДИНАМИЧЕСКИЙ БЛОК ЛОТОВ                                 -->
-<!-- ═══════════════════════════════════════════════════════ -->
-
-<!-- Модалка "Все активные лоты" -->
-<div class="lots-modal-overlay" id="lots-modal" role="dialog" aria-modal="true">
-  <div class="lots-modal">
-    <div class="lots-modal-header">
-      <h3 class="lots-modal-title" data-i18n="lot.modal_title">Активные лоты клуба</h3>
-      <button class="lots-modal-close" id="lots-modal-close" aria-label="Закрыть">✕</button>
-    </div>
-    <div class="lots-list" id="lots-list">
-      <!-- сюда JS вставит карточки -->
-    </div>
-  </div>
-</div>
-
-<script>
-// ═══════════════════════════════════════════════════════
-// Динамический блок лота — тянет данные из /api/lots
-// ═══════════════════════════════════════════════════════
-(function() {
-  // API находится на основном домене gws.ink
-  const API_BASE = 'https://gws.ink';
-
-  // Форматирование USD ($1 234)
-  const fmt = (n) => {
-    const v = Math.round(parseFloat(n) || 0);
-    return '$' + v.toLocaleString('en-US').replace(/,/g, ' ');
-  };
-
-  // Цвет прогресс-бара по % проданных
-  const progressColor = (sold, total) => {
-    if (!total) return 'green';
-    const free = (total - sold) / total;
-    if (free < 0.10) return 'red';     // осталось <10% — красный
-    if (free < 0.50) return 'yellow';  // <50% — жёлтый
-    return 'green';                     // >50% — зелёный
-  };
-
-  // Главный лот на странице (рандомный из активных)
-  const setMainLot = (lot) => {
-    if (!lot) return;
-
-    // Камень
-    const set = (id, val) => { const el = document.getElementById(id); if (el && val !== undefined) el.textContent = val; };
-
-    if (lot.carats)  set('lot-weight',  parseFloat(lot.carats).toFixed(2) + ' ct');
-    if (lot.clarity) set('lot-clarity', lot.clarity);
-    if (lot.color)   set('lot-color',   lot.color);
-
-    // Цены
-    const purchase = parseFloat(lot.gem_cost || 0);
-    const market   = Math.round(purchase / 0.35);
-    const total    = parseInt(lot.total_shares || 100);
-    const sharePr  = Math.round(parseFloat(lot.share_price || 0));
-    const marketPerShare = Math.round(market / total);
-    const discount = market > 0 ? Math.round((1 - sharePr / marketPerShare) * 100) : 0;
-
-    set('lot-purchase-price', fmt(purchase));
-    set('lot-market-price',   fmt(market));
-    set('lot-shares-total',   total);
-    set('lot-discount',       '−' + discount + '%');
-    set('lot-share-price',    fmt(sharePr));
-
-    // "~$X на рынке" — внутри лейбла
-    const marketLine = document.getElementById('lot-market-line');
-    if (marketLine) marketLine.textContent = '~' + fmt(marketPerShare) + ' на рынке';
-
-    // Title
-    if (lot.title) {
-      const titleEl = document.getElementById('lot-title');
-      if (titleEl) {
-        titleEl.removeAttribute('data-i18n');
-        titleEl.textContent = lot.title;
-      }
-    }
-    if (lot.description) {
-      const descEl = document.getElementById('lot-description');
-      if (descEl) {
-        descEl.removeAttribute('data-i18n');
-        descEl.textContent = lot.description;
-      }
-    }
-    if (lot.photo_url) {
-      const img = document.querySelector('.lot-diamond');
-      if (img) { img.src = lot.photo_url; img.style.objectFit = 'cover'; }
-    }
-
-    // Прогресс — переключаем на состояние "идёт сбор"
-    const before = document.getElementById('timer-before-start');
-    const collecting = document.getElementById('timer-collecting');
-    if (before) before.style.display = 'none';
-    if (collecting) collecting.style.display = '';
-
-    const sold = parseInt(lot.sold_shares || 0);
-    const fillEl = document.getElementById('lot-progress-fill');
-    const soldEl = document.getElementById('lot-sold');
-    const totalEl = document.getElementById('lot-total');
-    if (soldEl)  soldEl.textContent  = sold;
-    if (totalEl) totalEl.textContent = total;
-    if (fillEl) {
-      const pct = total > 0 ? Math.min(100, (sold / total) * 100) : 0;
-      fillEl.style.width = pct.toFixed(1) + '%';
-      fillEl.classList.remove('green', 'yellow', 'red');
-      fillEl.classList.add(progressColor(sold, total));
-    }
-  };
-
-  // Сортировка: сначала те, где меньше всего осталось мест (создаёт срочность)
-  const sortByUrgency = (lots) => {
-    return [...lots].sort((a, b) => {
-      const aFree = (a.total_shares || 0) - (a.sold_shares || 0) - (a.reserved_shares || 0);
-      const bFree = (b.total_shares || 0) - (b.sold_shares || 0) - (b.reserved_shares || 0);
-      const aRatio = (a.total_shares || 1) > 0 ? aFree / a.total_shares : 1;
-      const bRatio = (b.total_shares || 1) > 0 ? bFree / b.total_shares : 1;
-      return aRatio - bRatio;
-    });
-  };
-
-  // Карточка одного лота для модалки
-  const lotCard = (lot) => {
-    const total = parseInt(lot.total_shares || 0);
-    const sold  = parseInt(lot.sold_shares || 0);
-    const free  = Math.max(0, total - sold);
-    const pct   = total > 0 ? (sold / total) * 100 : 0;
-    const color = progressColor(sold, total);
-    const carats = parseFloat(lot.carats || 0).toFixed(2);
-    const sharePr = Math.round(parseFloat(lot.share_price || 0));
-    const photo = lot.photo_url || '/icons/logo.png';
-    const statusText = free === 0 ? 'РАСКУПЛЕН'
-      : free < total * 0.10 ? `Осталось ${free}!`
-      : `${sold}/${total}`;
-
-    return `
-      <a href="https://gws.ink/cabinet" class="lot-card" data-lot-id="${lot.id}">
-        <img class="lot-card-img" src="${photo}" alt="${lot.title || ''}" onerror="this.src='/icons/logo.png'" />
-        <div class="lot-card-info">
-          <h4 class="lot-card-title">${lot.title || 'Лот #' + lot.id}</h4>
-          <div class="lot-card-meta">${carats}ct${lot.clarity ? ' · ' + lot.clarity : ''}${lot.color ? ' · ' + lot.color : ''} · ${fmt(sharePr)} за долю</div>
-          <div class="lot-card-progress"><div class="lot-card-progress-fill ${color}" style="width:${pct.toFixed(1)}%"></div></div>
-        </div>
-        <div class="lot-card-status" style="color: var(--${color === 'red' ? 'ice-3' : 'text-dim'});">${statusText}</div>
-      </a>
-    `;
-  };
-
-  // Открыть модалку со всеми лотами
-  const openLotsModal = (lots) => {
-    const list = document.getElementById('lots-list');
-    if (!list) return;
-    if (!lots || lots.length === 0) {
-      list.innerHTML = '<div class="lots-modal-empty">Нет активных лотов</div>';
-    } else {
-      list.innerHTML = sortByUrgency(lots).map(lotCard).join('');
-    }
-    document.getElementById('lots-modal').classList.add('open');
-    document.body.style.overflow = 'hidden';
-  };
-
-  const closeLotsModal = () => {
-    const m = document.getElementById('lots-modal');
-    if (m) m.classList.remove('open');
-    document.body.style.overflow = '';
-  };
-
-  // Привязка событий модалки
-  document.getElementById('lots-modal-close')?.addEventListener('click', closeLotsModal);
-  document.getElementById('lots-modal')?.addEventListener('click', (e) => {
-    if (e.target.id === 'lots-modal') closeLotsModal();
-  });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeLotsModal();
-  });
-
-  // ═══ Загрузка лотов ═══
-  fetch(API_BASE + '/api/lots?status=active', { mode: 'cors' })
-    .then(r => r.json())
-    .then(data => {
-      if (!data.ok) throw new Error('not ok');
-      const lots = (data.lots || []).filter(l => l.status === 'active');
-
-      if (lots.length === 0) {
-        // Нет активных лотов — оставляем дефолтное "Скоро старт"
-        return;
-      }
-
-      // Главный лот — рандомный
-      const mainLot = lots[Math.floor(Math.random() * lots.length)];
-      setMainLot(mainLot);
-
-      // Если лотов больше одного — показать кнопку "Все лоты"
-      if (lots.length > 1) {
-        const btn = document.getElementById('lot-show-all-btn');
-        const cnt = document.getElementById('lot-all-count');
-        if (cnt) cnt.textContent = '(' + lots.length + ')';
-        if (btn) {
-          btn.style.display = 'block';
-          btn.addEventListener('click', () => openLotsModal(lots));
-        }
-      }
-    })
-    .catch(() => {
-      // Если API недоступен — оставляем дефолтное содержимое HTML
-    });
-})();
 </script>
 
 </body>
