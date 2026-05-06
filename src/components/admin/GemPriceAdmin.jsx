@@ -182,12 +182,12 @@ export default function GemPriceAdmin() {
         <div key={tier} className="p-3 rounded-2xl glass">
           <div className="text-[12px] font-bold text-white mb-2">{TIER_LABELS[tier]}</div>
 
-          <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-1.5 items-center">
+          <div className="grid grid-cols-[42px_1fr_1fr_22px] gap-1 items-center">
             {/* Header */}
-            <div className="text-[9px] font-bold text-slate-500 px-1">Карат</div>
-            <div className="text-[9px] font-bold text-slate-500 px-1 text-center">Без серт. ($)</div>
-            <div className="text-[9px] font-bold text-slate-500 px-1 text-center">С серт. ($)</div>
-            <div className="w-6"></div>
+            <div className="text-[9px] font-bold text-slate-500">Кар.</div>
+            <div className="text-[9px] font-bold text-slate-500 text-center">Без серт.</div>
+            <div className="text-[9px] font-bold text-slate-500 text-center">С серт.</div>
+            <div></div>
 
             {/* Rows */}
             {allCarats.map(c => (
@@ -232,21 +232,25 @@ export default function GemPriceAdmin() {
 // Строка таблицы
 // ═══════════════════════════════════════════════════════
 function Row({ carat, noCertValue, certValue, onChange, onRemove }) {
+  // inputMode='numeric' даёт цифровую клавиатуру на мобильных без стрелок-spinner'ов
+  const inputCls = "w-full p-1 rounded-lg bg-white/5 border border-white/10 text-[11px] text-white text-center outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
   return (
     <>
-      <div className="text-[11px] font-bold text-gold-400 px-1 py-1.5">💎 {carat} ct</div>
+      <div className="text-[10px] font-bold text-gold-400">{carat}</div>
       <input
-        type="number" min="0" value={noCertValue || ''}
-        onChange={e => onChange('noCert', e.target.value)}
-        className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-[11px] text-white text-center outline-none"
+        type="text" inputMode="numeric" pattern="[0-9]*"
+        value={noCertValue || ''}
+        onChange={e => onChange('noCert', e.target.value.replace(/\D/g, ''))}
+        className={inputCls}
       />
       <input
-        type="number" min="0" value={certValue || ''}
-        onChange={e => onChange('cert', e.target.value)}
-        className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-[11px] text-white text-center outline-none"
+        type="text" inputMode="numeric" pattern="[0-9]*"
+        value={certValue || ''}
+        onChange={e => onChange('cert', e.target.value.replace(/\D/g, ''))}
+        className={inputCls}
       />
       <button onClick={onRemove}
-        className="w-6 h-6 rounded-lg text-[10px] text-red-400 hover:bg-red-500/15">
+        className="w-5 h-5 rounded text-[11px] text-red-400 hover:bg-red-500/15 leading-none">
         ✕
       </button>
     </>
