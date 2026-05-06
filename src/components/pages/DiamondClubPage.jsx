@@ -1,6 +1,6 @@
 'use client'
 /**
- * Diamond Club v2.3 — главная страница
+ * Diamond Club v2.4 — главная страница
  * 
  * Изменения от v10.2:
  * - Убраны секции: Boost (UserBoost), Insurance (InsuranceFund), Old Gems (GemVaultV2)
@@ -80,7 +80,7 @@ export default function DiamondClubTab() {
           {section === 'dashboard' && <DashboardSection />}
           {section === 'lots' && <ClubLotsSection />}
           {section === 'purchases' && <MyPurchasesSection />}
-          {section === 'gems' && <GemsSection onGoToDCT={() => setTab('exchange')} />}
+          {section === 'gems' && <GemConfigurator />}
           {section === 'gallery' && <GemGallery />}
           {section === 'showcase' && <ShowcaseNew />}
           {section === 'p2p' && <P2PSection />}
@@ -185,41 +185,6 @@ function DashboardSection() {
             <div className="text-[11px] font-black text-emerald-400">{data.activeItemCount}</div>
             <div className="text-[9px] text-slate-500">Камней в продаже</div>
           </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ═════════════════════════════════════════════════════════
-// GEMS — упрощённая секция, перенаправляет в Галерею/Магазин
-// ═════════════════════════════════════════════════════════
-function GemsSection({ onGoToDCT }) {
-  return (
-    <div className="px-3 mt-2 space-y-2">
-      <div className="p-4 rounded-2xl glass text-center">
-        <div className="text-3xl mb-2">💎</div>
-        <div className="text-sm font-bold text-gold-400 mb-1">Камни клуба</div>
-        <div className="text-[11px] text-slate-400 mb-3">
-          В новой системе камни — это активы пулов. Ты получаешь долю в пуле, который покупает камень.
-          Когда камень продаётся — прибыль делится между всеми участниками пула.
-        </div>
-        <div className="flex flex-col gap-2 mt-3">
-          <button onClick={onGoToDCT}
-            className="px-4 py-2 rounded-xl text-[11px] font-bold bg-gold-400/15 text-gold-400 border border-gold-400/30">
-            ♦️ Перейти к DCT и Пулам
-          </button>
-        </div>
-      </div>
-
-      <div className="p-3 rounded-2xl glass">
-        <div className="text-[12px] font-bold text-blue-400 mb-2">📚 Как это работает</div>
-        <div className="text-[10px] text-slate-400 space-y-2">
-          <div>1. Партнёры собираются в пул и складывают USDT.</div>
-          <div>2. Когда сумма набрана — клуб покупает камень у завода.</div>
-          <div>3. Камень выставляется на продажу в Магазине.</div>
-          <div>4. После продажи — прибыль делится между участниками пула.</div>
-          <div>5. Можно выкупить долю DCT за USDT (redeem) в любой момент.</div>
         </div>
       </div>
     </div>
