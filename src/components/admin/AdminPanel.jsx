@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import useGameStore from '@/lib/store'
 import OrdersAdmin, { StaffAdmin } from '@/components/admin/OrdersAdmin'
-import PriceAdmin from '@/components/admin/PriceAdmin'
+import GemPriceAdmin from '@/components/admin/GemPriceAdmin'
 import LotsAdmin from '@/components/admin/LotsAdmin'
 import FractionalLotsAdmin from '@/components/admin/FractionalLotsAdmin'
 import ShowcaseAdmin from '@/components/admin/ShowcaseAdmin'
@@ -125,7 +125,7 @@ export default function AdminPanel() {
         {activeSection === 'staff' && <StaffAdmin />}
 
         {/* ЦЕНЫ */}
-        {activeSection === 'prices' && <PriceAdmin />}
+        {activeSection === 'prices' && <GemPriceAdmin />}
 
         {/* БУСТ — пороги UserBoost */}
         {activeSection === 'boost' && <BoostConfigAdmin />}
