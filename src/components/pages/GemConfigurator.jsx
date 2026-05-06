@@ -1,27 +1,43 @@
 'use client'
+/**
+ * GemConfigurator (v2) — Конфигуратор бриллиантов под универсальную модель цен
+ *
+ * МОДЕЛЬ:
+ *  Цены в Supabase (dc_prices) — это БАЗА (35% от рынка) = закупочная цена клуба.
+ *  Из неё считаются 4 цены для покупателя:
+ *    1. Закупка клуба (35%)         — справочно
+ *    2. На рынке (100% = база÷0.35) — справочно, для сравнения
+ *    3. Купить себе (50% от рынка)  — через ClubMarket, уровень 1+
+ *    4. Со скидкой -5% за GST       — то же, с NSS-купоном
+ *    5. Заказать долю/актив (база÷0.85) — через ClubPools, уровень 7+
+ *       (партнёр платит +15% контрактных накруток: 5% реклама + 10% маркетинг)
+ *
+ * Источник цен — ТОЛЬКО Supabase (контракт FractionalGem удалён в v2.4).
+ */
 import { useState, useEffect, useCallback } from 'react'
-import { ethers } from 'ethers'
 import useGameStore from '@/lib/store'
 import {
   SHAPES, CLARITIES, WHITE_COLORS, FANCY_COLORS, FANCY_INTENSITIES, REGIONS,
   CARAT_RANGE, formatUSD, gemSpecString
 } from '@/lib/gemCatalog'
 import * as Orders from '@/lib/dcOrders'
-import ADDRESSES from '@/contracts/addresses'
 import ShapeSVG from '@/components/ui/DiamondShapes'
 import HelpButton from '@/components/ui/HelpButton'
 
-const READ_RPC = process.env.NEXT_PUBLIC_RPC_URL || 'https://opbnb-mainnet-rpc.bnbchain.org'
-const readProvider = new ethers.JsonRpcProvider(READ_RPC)
-const PRICE_ABI = [
-  'function getPriceInfo(uint256 c, bool cert) view returns (uint256 cost, uint256 club, uint256 ws, uint256 mkt)',
-  'function getRegisteredCarats() view returns (uint256[])',
-]
-const fmt6 = (v) => parseFloat(ethers.formatUnits(v, 6))
+// ═══════════════════════════════════════════════════════
+// Коэффициенты влияния чистоты и цвета на цену
+// (применяются к базовой цене из Supabase)
+// ═══════════════════════════════════════════════════════
+const CLARITY_COEFF = { IF: 1.05, VVS1: 1.03, VVS2: 1.02, VS1: 1.01, VS2: 1.00 }
+const COLOR_COEFF   = { D: 1.05, E: 1.04, F: 1.03, G: 1.02, H: 1.01, I: 1.00 }
+
+// Premium tier — наценка к Standard ценам в превью (если в Supabase нет premium)
+const PREMIUM_FALLBACK_MULT = 1.08
 
 export default function GemConfigurator() {
-  const { wallet, t, addNotification, setTxPending, txPending, dct } = useGameStore()
+  const { wallet, t, addNotification, setTxPending, txPending } = useGameStore()
 
+  // Селекторы конфигурации
   const [gemType, setGemType] = useState('white')
   const [shape, setShape] = useState('round')
   const [clarity, setClarity] = useState('VS1')
@@ -31,191 +47,135 @@ export default function GemConfigurator() {
   const [carats, setCarats] = useState(1.0)
   const [hasCert, setHasCert] = useState(true)
   const [region, setRegion] = useState('cis')
-  const [fractions, setFractions] = useState(1)
-  const [totalFractions, setTotalFractions] = useState(10)
-  const [buyMode, setBuyMode] = useState(1)
+  const [qualityTier, setQualityTier] = useState('standard') // standard | premium
+
+  // Цены из Supabase
+  const [supabasePrices, setSupabasePrices] = useState(null)
+
+  // Заказ и подтверждение
   const [confirmOrder, setConfirmOrder] = useState(null)
   const [myOrders, setMyOrders] = useState([])
   const [showOrders, setShowOrders] = useState(false)
   const [ordersLoading, setOrdersLoading] = useState(false)
-  const [qualityTier, setQualityTier] = useState('standard') // 'standard' | 'premium'
 
-  // Фиксированные клубные цены (из API/defaults)
-  const [fixedPrices, setFixedPrices] = useState(null)
-
-  // Цены из контракта
-  const [contractPrices, setContractPrices] = useState({})
-  const [availableCarats, setAvailableCarats] = useState([])
-  const [pricesLoading, setPricesLoading] = useState(true)
-
-  // Загрузка фиксированных цен с сервера
+  // ═══ Загрузка цен из Supabase ═══
   useEffect(() => {
     fetch('/api/prices').then(r => r.json()).then(d => {
-      if (d.ok) setFixedPrices(d.prices)
+      if (d.ok) setSupabasePrices(d.prices)
     }).catch(() => {})
   }, [])
 
-  const loadPrices = useCallback(async () => {
-    setPricesLoading(true)
-    try {
-      const addr = ADDRESSES.FractionalGem
-      if (!addr) { setPricesLoading(false); return }
-      const c = new ethers.Contract(addr, PRICE_ABI, readProvider)
-      const caratList = await c.getRegisteredCarats()
-      const prices = {}; const available = []
-      for (const ct of caratList) {
-        try {
-          const noCert = await c.getPriceInfo(ct, false)
-          const withCert = await c.getPriceInfo(ct, true)
-          const key = Number(ct); available.push(key)
-          prices[key] = {
-            noCert: { cost: fmt6(noCert.cost), club: fmt6(noCert.club), market: fmt6(noCert.mkt) },
-            cert: { cost: fmt6(withCert.cost), club: fmt6(withCert.club), market: fmt6(withCert.mkt) },
-          }
-        } catch {}
-      }
-      available.sort((a, b) => a - b)
-      setContractPrices(prices); setAvailableCarats(available)
-    } catch {}
-    setPricesLoading(false)
-  }, [])
-
-  useEffect(() => { loadPrices() }, [loadPrices])
-
+  // ═══ Загрузка моих заказов ═══
   const loadOrders = useCallback(async () => {
-    if (!wallet) return; setOrdersLoading(true)
-    const orders = await Orders.getMyOrders(wallet)
-    setMyOrders(orders); setOrdersLoading(false)
+    if (!wallet) return
+    setOrdersLoading(true)
+    try {
+      const orders = await Orders.getMyOrders(wallet)
+      setMyOrders(orders || [])
+    } catch {}
+    setOrdersLoading(false)
   }, [wallet])
 
   useEffect(() => { loadOrders() }, [loadOrders])
 
-  // Расчёт цены: контракт FractionalGem (source of truth) → Supabase fallback
-  const PREMIUM_MULT = 1.08 // премиум тир = +8%
-  const tierMult = qualityTier === 'premium' ? PREMIUM_MULT : 1
+  // ═══════════════════════════════════════════════════════
+  // РАСЧЁТ БАЗОВОЙ ЦЕНЫ (35% = закупка клуба)
+  // ═══════════════════════════════════════════════════════
+  const calcBase = (ct, cert, tier) => {
+    if (!supabasePrices) return 0
 
-  const calcPrice = (ct, cert) => {
-    // 1) Контракт FractionalGem — источник истины
-    if (availableCarats.length > 0) {
-      const x100 = Math.round(ct * 100)
+    let tierPrices = supabasePrices[tier === 'premium' ? 'club_premium' : 'club_standard']
+    let useFallbackMult = false
 
-      // Точное совпадение
-      if (contractPrices[x100]) {
-        const p = cert ? contractPrices[x100].cert : contractPrices[x100].noCert
-        return { cost: 0, club: Math.round(p.club * tierMult), market: Math.round(p.market * tierMult) }
-      }
+    // Если premium нет — используем standard × 1.08
+    if (tier === 'premium' && (!tierPrices || Object.keys(tierPrices).length === 0)) {
+      tierPrices = supabasePrices.club_standard
+      useFallbackMult = true
+    }
+    if (!tierPrices) return 0
 
-      // Найти две ближайшие точки
-      let lower = null, upper = null
-      for (const a of availableCarats) {
-        if (a <= x100) lower = a
-        if (a >= x100 && upper === null) upper = a
-      }
+    const points = Object.keys(tierPrices).map(Number).filter(n => !isNaN(n)).sort((a, b) => a - b)
+    if (points.length === 0) return 0
 
-      if (!lower && upper) {
-        const p = cert ? contractPrices[upper].cert : contractPrices[upper].noCert
-        const perCarat = p.club / (upper / 100)
-        return { cost: 0, club: Math.round(perCarat * ct * tierMult), market: Math.round((p.market / (upper / 100)) * ct * tierMult) }
-      }
-      if (lower && !upper) {
-        const p = cert ? contractPrices[lower].cert : contractPrices[lower].noCert
-        const perCarat = p.club / (lower / 100)
-        return { cost: 0, club: Math.round(perCarat * ct * tierMult), market: Math.round((p.market / (lower / 100)) * ct * tierMult) }
-      }
-      if (lower && upper && lower !== upper) {
-        const pL = cert ? contractPrices[lower].cert : contractPrices[lower].noCert
-        const pU = cert ? contractPrices[upper].cert : contractPrices[upper].noCert
-        const t = (x100 - lower) / (upper - lower)
-        return { cost: 0, club: Math.round((pL.club + (pU.club - pL.club) * t) * tierMult), market: Math.round((pL.market + (pU.market - pL.market) * t) * tierMult) }
-      }
-      if (lower) {
-        const p = cert ? contractPrices[lower].cert : contractPrices[lower].noCert
-        return { cost: 0, club: Math.round(p.club * tierMult), market: Math.round(p.market * tierMult) }
-      }
+    const field = cert ? 'cert' : 'noCert'
+
+    // Точное совпадение
+    const exactKey = ct.toFixed(2)
+    if (tierPrices[exactKey] != null) {
+      const p = tierPrices[exactKey][field] || 0
+      return useFallbackMult ? Math.round(p * PREMIUM_FALLBACK_MULT) : p
     }
 
-    // 2) Fallback: Supabase dc_prices (если контракт пуст)
-    const tierKey = qualityTier === 'premium' ? 'club_premium' : 'club_standard'
-    const tierPrices = fixedPrices?.[tierKey]
-    if (tierPrices) {
-      const fixedPoints = Object.keys(tierPrices).map(Number).sort((a, b) => a - b)
-      if (fixedPoints.length > 0) {
-        const field = cert ? 'cert' : 'noCert'
-        const toRetail = (clubP) => Math.round(clubP / 0.65)
-
-        const ctStr = ct.toFixed(2)
-        if (tierPrices[ctStr]) {
-          const clubP = tierPrices[ctStr][field]
-          return { cost: 0, club: clubP, market: toRetail(clubP) }
-        }
-
-        let lower = null, upper = null
-        for (const p of fixedPoints) {
-          if (p <= ct) lower = p
-          if (p >= ct && upper === null) upper = p
-        }
-
-        if (lower && upper && lower !== upper) {
-          const lP = tierPrices[lower.toFixed(2)]?.[field] || 0
-          const uP = tierPrices[upper.toFixed(2)]?.[field] || 0
-          const ratio = (ct - lower) / (upper - lower)
-          const clubP = Math.round(lP + (uP - lP) * ratio)
-          return { cost: 0, club: clubP, market: toRetail(clubP) }
-        }
-        if (lower && !upper) {
-          const clubP = Math.round((tierPrices[lower.toFixed(2)]?.[field] || 0) / lower * ct)
-          return { cost: 0, club: clubP, market: toRetail(clubP) }
-        }
-        if (!lower && upper) {
-          const clubP = Math.round((tierPrices[upper.toFixed(2)]?.[field] || 0) / upper * ct)
-          return { cost: 0, club: clubP, market: toRetail(clubP) }
-        }
-      }
+    // Поиск двух ближайших точек для интерполяции
+    let lower = null, upper = null
+    for (const p of points) {
+      if (p <= ct) lower = p
+      if (p >= ct && upper === null) upper = p
     }
 
-    return null
+    let result = 0
+    if (lower !== null && upper !== null && lower !== upper) {
+      // Линейная интерполяция между двумя точками
+      const lP = tierPrices[lower.toFixed(2)]?.[field] || 0
+      const uP = tierPrices[upper.toFixed(2)]?.[field] || 0
+      const r = (ct - lower) / (upper - lower)
+      result = Math.round(lP + (uP - lP) * r)
+    } else if (lower !== null) {
+      // Только нижняя точка — экстраполируем по pro-rate
+      const p = tierPrices[lower.toFixed(2)]?.[field] || 0
+      result = Math.round((p / lower) * ct)
+    } else if (upper !== null) {
+      // Только верхняя — экстраполируем
+      const p = tierPrices[upper.toFixed(2)]?.[field] || 0
+      result = Math.round((p / upper) * ct)
+    }
+
+    return useFallbackMult ? Math.round(result * PREMIUM_FALLBACK_MULT) : result
   }
 
-  const currentPrice = calcPrice(carats, hasCert)
-
-  // Коэффициенты чистоты (влияют на цену)
-  const CLARITY_COEFF = { IF: 1.05, VVS1: 1.03, VVS2: 1.02, VS1: 1.01, VS2: 1.00 }
-  // Коэффициенты цвета (влияют на цену)
-  const COLOR_COEFF = { D: 1.05, E: 1.04, F: 1.03, G: 1.02, H: 1.01, I: 1.00 }
-  // Маркетинг 5% (реферальная программа 9 уровней)
-  const MARKETING_MULT = 1.05
-
+  // ═══════════════════════════════════════════════════════
+  // ИТОГОВАЯ БАЗА с учётом чистоты и цвета
+  // ═══════════════════════════════════════════════════════
   const clarityMult = gemType === 'white' ? (CLARITY_COEFF[clarity] || 1.0) : 1.0
-  const colorMult = gemType === 'white' ? (COLOR_COEFF[color] || 1.0) : 1.0
-  const totalMult = clarityMult * colorMult
+  const colorMult   = gemType === 'white' ? (COLOR_COEFF[color] || 1.0)   : 1.0
+  const totalMult   = clarityMult * colorMult
 
-  const price = currentPrice ? {
-    clubPrice: Math.round(currentPrice.club * totalMult),
-    retailPrice: Math.round(currentPrice.market),
-    clubPerCarat: Math.round(currentPrice.club * totalMult / carats),
-    retailPerCarat: Math.round(currentPrice.market / carats),
-    savings: Math.round(currentPrice.market - currentPrice.club * totalMult),
-    discountPct: currentPrice.market > 0 ? Math.round((1 - (currentPrice.club * totalMult) / currentPrice.market) * 100) : 0,
-  } : null
+  const baseRaw = calcBase(carats, hasCert, qualityTier)
+  const base    = Math.round(baseRaw * totalMult)        // 35% — закупка клуба
+  const market  = Math.round(base / 0.35)                // 100% — на рынке
+  const shop    = Math.round(market * 0.50)              // 50% — купить себе
+  const shopGst = Math.round(shop * 0.95)                // -5% за тапалку
+  const share   = Math.round(base / 0.85)                // партнёр платит за долю (+15% накруток)
 
-  const fractionPrice = price ? Math.round(price.clubPrice * fractions / totalFractions) : 0
+  const haveBase = base > 0
 
-  const handleBuy = async (buyFrac = false) => {
-    if (!wallet) return addNotification('❌ ' + t('connectWallet'))
-    if (!price) return addNotification('❌ Цена не найдена')
+  // ═══════════════════════════════════════════════════════
+  // СОЗДАНИЕ ЗАКАЗА
+  // ═══════════════════════════════════════════════════════
+  const openConfirm = (orderType) => {
+    if (!wallet) return addNotification('❌ Подключите кошелёк')
+    if (!haveBase) return addNotification('❌ Цена не определена — проверьте параметры')
+
     const spec = gemSpecString({
       type: gemType, shape, clarity,
       color: gemType === 'white' ? color : undefined,
       fancyColor: gemType === 'fancy' ? fancyColor : undefined,
       intensity: gemType === 'fancy' ? intensity : undefined,
-      carats, hasCert, region
+      carats, hasCert, region,
     })
+
+    // orderType: 'self' = купить себе (50%) | 'share' = заказать актив (база/0.85)
+    const finalPrice = orderType === 'self' ? shop : share
+    const requiredLevel = orderType === 'self' ? 1 : 7
+    const description = orderType === 'self'
+      ? 'Покупка камня себе через магазин клуба (50% от рынка)'
+      : 'Заказ камня как актива через пул (партнёр платит +5% реклама + 10% маркетинг)'
+
     setConfirmOrder({
-      buyFrac, fracCount: buyFrac ? fractions : 0, totalFrac: buyFrac ? totalFractions : 0,
-      specString: spec, retailPrice: price.retailPrice,
-      clubPrice: buyFrac ? fractionPrice : price.clubPrice,
-      savings: buyFrac ? Math.round(price.savings * fractions / totalFractions) : price.savings,
-      discountPct: price.discountPct,
+      orderType, requiredLevel, description,
+      specString: spec,
+      base, market, shop, shopGst, share,
+      finalPrice,
     })
   }
 
@@ -227,23 +187,34 @@ export default function GemConfigurator() {
       color: gemType === 'white' ? color : null,
       fancyColor: gemType === 'fancy' ? fancyColor : null,
       intensity: gemType === 'fancy' ? intensity : null,
-      carats, hasCert, region, buyMode, qualityTier,
-      isFraction: confirmOrder.buyFrac, fractionCount: confirmOrder.fracCount,
-      totalFractions: confirmOrder.totalFrac, retailPrice: confirmOrder.retailPrice,
-      clubPrice: confirmOrder.clubPrice, savings: confirmOrder.savings,
-      discountPct: confirmOrder.discountPct, specString: confirmOrder.specString,
+      carats, hasCert, region,
+      buyMode: confirmOrder.orderType === 'self' ? 0 : 1,  // 0=self, 1=share/asset
+      qualityTier,
+      isFraction: confirmOrder.orderType === 'share',
+      retailPrice: confirmOrder.market,
+      clubPrice: confirmOrder.finalPrice,
+      savings: confirmOrder.market - confirmOrder.finalPrice,
+      discountPct: Math.round((1 - confirmOrder.finalPrice / confirmOrder.market) * 100),
+      specString: confirmOrder.specString,
     })
     setTxPending(false)
     if (result.ok) {
-      addNotification(`✅ 💎 Заказ #${result.order.id} создан! — ${formatUSD(confirmOrder.clubPrice)}`)
-      setConfirmOrder(null); loadOrders()
-    } else addNotification(`❌ ${result.error}`)
+      addNotification(`✅ Заказ #${result.order.id} создан!`)
+      setConfirmOrder(null)
+      loadOrders()
+    } else {
+      addNotification(`❌ ${result.error}`)
+    }
   }
 
+  // helper для подсветки активной кнопки
   const sel = (active) => active
     ? 'bg-gold-400/12 border-gold-400/25 text-gold-400 shadow-lg shadow-gold-400/5'
     : 'bg-white/3 border-transparent text-slate-500 hover:bg-white/5'
 
+  // ═══════════════════════════════════════════════════════
+  // RENDER
+  // ═══════════════════════════════════════════════════════
   return (
     <div className="px-3 mt-2 space-y-2">
 
@@ -252,21 +223,21 @@ export default function GemConfigurator() {
         <HelpButton section="gems" />
       </div>
 
-      {/* ТИП */}
+      {/* ТИП КАМНЯ */}
       <div className="flex gap-1 p-1 rounded-2xl bg-white/5">
         <button onClick={() => setGemType('white')}
           className={`flex-1 py-2.5 rounded-xl text-[11px] font-bold transition-all border ${sel(gemType==='white')}`}>
-          ◇ {t('gcWhiteDiamond')}
+          ◇ {t('gcWhiteDiamond') || 'Белый бриллиант'}
         </button>
         <button onClick={() => setGemType('fancy')}
           className={`flex-1 py-2.5 rounded-xl text-[11px] font-bold transition-all border ${sel(gemType==='fancy')}`}>
-          🌈 {t('gcFancyDiamond')}
+          🌈 {t('gcFancyDiamond') || 'Цветной бриллиант'}
         </button>
       </div>
 
-      {/* РЕГИОН */}
+      {/* РЕГИОН (информационно) */}
       <div className="p-3 rounded-2xl glass">
-        <div className="text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest">{t('gcRegion')}</div>
+        <div className="text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest">{t('gcRegion') || 'Регион покупки'}</div>
         <div className="flex gap-1">
           {REGIONS.map(r => (
             <button key={r.id} onClick={() => setRegion(r.id)}
@@ -279,15 +250,15 @@ export default function GemConfigurator() {
 
       {/* СЕРТИФИКАТ */}
       <div className="p-3 rounded-2xl glass">
-        <div className="text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest">{t('gcCertificate')}</div>
+        <div className="text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest">{t('gcCertificate') || 'Сертификат'}</div>
         <div className="flex gap-1">
           <button onClick={() => setHasCert(true)}
             className={`flex-1 py-2.5 rounded-xl text-[10px] font-bold transition-all border ${sel(hasCert)}`}>
-            ✅ {t('gcWithCert')}
+            ✅ С сертификатом
           </button>
           <button onClick={() => setHasCert(false)}
             className={`flex-1 py-2.5 rounded-xl text-[10px] font-bold transition-all border ${sel(!hasCert)}`}>
-            — {t('gcNoCert')}
+            — Без сертификата
           </button>
         </div>
         <div className="mt-1.5 text-[8px] text-slate-600 text-center">
@@ -295,7 +266,7 @@ export default function GemConfigurator() {
         </div>
       </div>
 
-      {/* УРОВЕНЬ ЧИСТОТЫ */}
+      {/* TIER КАЧЕСТВА */}
       <div className="p-3 rounded-2xl glass">
         <div className="text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest">Ценовая категория</div>
         <div className="flex gap-1">
@@ -310,14 +281,14 @@ export default function GemConfigurator() {
         </div>
         <div className="mt-1.5 text-[8px] text-slate-600 text-center">
           {qualityTier === 'premium'
-            ? 'Премиум — лучшие характеристики, выше цена'
+            ? 'Премиум — лучшие характеристики (Cut/Polish/Symmetry: Excellent), выше цена'
             : 'Стандарт — оптимальное соотношение цена/качество'}
         </div>
       </div>
 
-      {/* ФОРМА — ОРИГИНАЛЬНЫЙ ДИЗАЙН С ИЗОБРАЖЕНИЯМИ */}
+      {/* ФОРМА ОГРАНКИ */}
       <div className="p-3 rounded-2xl glass">
-        <div className="text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest">{t('gcShape')}</div>
+        <div className="text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest">{t('gcShape') || 'Форма огранки'}</div>
         <div className="grid grid-cols-3 gap-1.5">
           {SHAPES.map(s => (
             <button key={s.id} onClick={() => setShape(s.id)}
@@ -345,26 +316,28 @@ export default function GemConfigurator() {
         </div>
       </div>
 
-      {/* ЧИСТОТА */}
-      <div className="p-3 rounded-2xl glass">
-        <div className="text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest">{t('gcClarity')}</div>
-        <div className="flex gap-1">
-          {CLARITIES.map(c => (
-            <button key={c.id} onClick={() => setClarity(c.id)}
-              className={`flex-1 py-2 rounded-xl text-[10px] font-bold transition-all border ${sel(clarity===c.id)}`}>
-              {c.id}
-            </button>
-          ))}
-        </div>
-        <div className="mt-1.5 text-[9px] text-slate-500 text-center">
-          {CLARITIES.find(c => c.id === clarity)?.descRu}
-        </div>
-      </div>
-
-      {/* ЦВЕТ БЕЛЫХ — ОРИГИНАЛЬНЫЙ ДИЗАЙН С ЦВЕТНЫМИ КРУЖОЧКАМИ */}
+      {/* ЧИСТОТА (только для white) */}
       {gemType === 'white' && (
         <div className="p-3 rounded-2xl glass">
-          <div className="text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest">{t('gcColor')}</div>
+          <div className="text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest">{t('gcClarity') || 'Чистота'}</div>
+          <div className="flex gap-1">
+            {CLARITIES.map(c => (
+              <button key={c.id} onClick={() => setClarity(c.id)}
+                className={`flex-1 py-2 rounded-xl text-[10px] font-bold transition-all border ${sel(clarity===c.id)}`}>
+                {c.id}
+              </button>
+            ))}
+          </div>
+          <div className="mt-1.5 text-[9px] text-slate-500 text-center">
+            {CLARITIES.find(c => c.id === clarity)?.descRu}
+          </div>
+        </div>
+      )}
+
+      {/* ЦВЕТ БЕЛЫХ */}
+      {gemType === 'white' && (
+        <div className="p-3 rounded-2xl glass">
+          <div className="text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest">{t('gcColor') || 'Цвет'}</div>
           <div className="flex gap-1">
             {WHITE_COLORS.map((c, i) => {
               const warm = i * 12
@@ -384,11 +357,11 @@ export default function GemConfigurator() {
         </div>
       )}
 
-      {/* ЦВЕТ + ИНТЕНСИВНОСТЬ ЦВЕТНЫХ — ОРИГИНАЛЬНЫЙ ДИЗАЙН */}
+      {/* ЦВЕТ ФАНТАЗИЙНЫХ */}
       {gemType === 'fancy' && (
         <>
           <div className="p-3 rounded-2xl glass">
-            <div className="text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest">{t('gcFancyColor')}</div>
+            <div className="text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest">{t('gcFancyColor') || 'Цвет'}</div>
             <div className="grid grid-cols-4 gap-1.5">
               {FANCY_COLORS.map(fc => (
                 <button key={fc.id} onClick={() => setFancyColor(fc.id)}
@@ -401,28 +374,23 @@ export default function GemConfigurator() {
             </div>
           </div>
           <div className="p-3 rounded-2xl glass">
-            <div className="text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest">{t('gcIntensity')}</div>
-            <div className="flex gap-1">
-              {FANCY_INTENSITIES.map(fi => {
-                const fc = FANCY_COLORS.find(c => c.id === fancyColor)
-                const op = fi.id==='faint'?0.3 : fi.id==='light'?0.5 : fi.id==='fancy'?0.7 : 1
-                return (
-                  <button key={fi.id} onClick={() => setIntensity(fi.id)}
-                    className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-xl text-[8px] font-bold transition-all border ${sel(intensity===fi.id)}`}>
-                    <div className="w-3.5 h-3.5 rounded-full border border-white/10" style={{background:fc?.hex||'#fff', opacity:op}} />
-                    <span>{fi.name}</span>
-                  </button>
-                )
-              })}
+            <div className="text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest">Интенсивность</div>
+            <div className="grid grid-cols-3 gap-1">
+              {FANCY_INTENSITIES.map(fi => (
+                <button key={fi.id} onClick={() => setIntensity(fi.id)}
+                  className={`py-1.5 rounded-xl text-[9px] font-bold transition-all border ${sel(intensity===fi.id)}`}>
+                  {fi.name}
+                </button>
+              ))}
             </div>
           </div>
         </>
       )}
 
-      {/* КАРАТЫ — ПОЛЗУНОК + БЫСТРЫЕ КНОПКИ */}
+      {/* КАРАТЫ */}
       <div className="p-3 rounded-2xl glass">
         <div className="flex items-center justify-between mb-2">
-          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{t('gcCarats')}</div>
+          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{t('gcCarats') || 'Караты'}</div>
           <div className="text-[14px] font-black text-gold-400">{carats.toFixed(2)} ct</div>
         </div>
         <input type="range" min={CARAT_RANGE.min} max={CARAT_RANGE.max} step={CARAT_RANGE.step}
@@ -442,104 +410,66 @@ export default function GemConfigurator() {
         </div>
       </div>
 
-      {/* ═══ ЦЕНА ═══ */}
-      {pricesLoading ? (
+      {/* ═══ БЛОК ЦЕН (новая структура) ═══ */}
+      {!supabasePrices ? (
         <div className="p-4 rounded-2xl glass text-center">
-          <div className="text-[11px] text-slate-500">⏳ Загрузка цен из контракта...</div>
+          <div className="text-[11px] text-slate-500">⏳ Загрузка цен...</div>
         </div>
-      ) : price ? (
-        <div className="p-3 rounded-2xl border border-gold-400/20"
-          style={{background:'linear-gradient(135deg, rgba(255,215,0,0.05), rgba(255,215,0,0.02))'}}>
+      ) : !haveBase ? (
+        <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-center">
+          <div className="text-[11px] text-amber-400">⚠️ Для этой комбинации цена не задана</div>
+          <div className="text-[9px] text-amber-400/70 mt-1">Добавь цену в админке для {carats.toFixed(2)}ct</div>
+        </div>
+      ) : (
+        <div className="space-y-2">
 
-          {/* Конфигурация */}
-          <div className="flex items-center gap-2 mb-3">
-            <ShapeSVG shape={shape} size={36} active={true} />
-            <div className="flex-1">
-              <div className="text-[11px] font-bold text-white">
-                {gemType==='white'
-                  ? `${t(`shape_${shape}`)||SHAPES.find(s=>s.id===shape)?.name} ${color} ${clarity}`
-                  : `${FANCY_COLORS.find(c=>c.id===fancyColor)?.name} ${FANCY_INTENSITIES.find(i=>i.id===intensity)?.name}`
-                }
+          {/* Сводка камня */}
+          <div className="p-3 rounded-2xl border border-gold-400/20"
+            style={{background:'linear-gradient(135deg, rgba(255,215,0,0.05), rgba(255,215,0,0.02))'}}>
+            <div className="flex items-center gap-2 mb-2">
+              <ShapeSVG shape={shape} size={36} active={true} />
+              <div className="flex-1">
+                <div className="text-[11px] font-bold text-white">
+                  {gemType==='white'
+                    ? `${SHAPES.find(s=>s.id===shape)?.name || shape} ${color} ${clarity}`
+                    : `${FANCY_COLORS.find(c=>c.id===fancyColor)?.name} ${FANCY_INTENSITIES.find(i=>i.id===intensity)?.name}`
+                  }
+                </div>
+                <div className="text-[9px] text-slate-500">
+                  {carats.toFixed(2)} ct • {hasCert ? '✅ Сертификат' : 'Без серт.'} • {qualityTier==='premium'?'👑 Премиум':'💎 Стандарт'}
+                </div>
               </div>
-              <div className="text-[9px] text-slate-500">
-                {carats.toFixed(2)} ct • {hasCert ? '✅ Сертификат' : 'Без серт.'} • {REGIONS.find(r=>r.id===region)?.name}
-              </div>
+            </div>
+
+            {/* 4 цены столбиком — наглядно */}
+            <div className="space-y-1.5">
+              <PriceLine label="На рынке (100%)"            value={market}  color="text-slate-500" strike note="справочно" />
+              <PriceLine label="🛒 Купить себе (50%)"        value={shop}    color="text-emerald-400" bold note="через магазин · 1+ уровень" />
+              <PriceLine label="🛒 Со скидкой -5% за GST"    value={shopGst} color="text-emerald-300" note="натапай купон в шахте" />
+              <PriceLine label="📈 Заказать долю/актив"      value={share}   color="text-gold-400" bold note={`база ${formatUSD(base)} + 5% реклама + 10% маркетинг · 7+ уровень`} />
             </div>
           </div>
 
-          {/* 3 цены */}
-          <div className="grid grid-cols-3 gap-1.5 mb-3">
-            <div className="p-2 rounded-xl bg-white/5 text-center">
-              <div className="text-[7px] text-slate-600 mb-0.5">{t('gcRetailPrice') || 'Рыночная'}</div>
-              <div className="text-[12px] font-bold text-slate-400 line-through">
-                {formatUSD(price.retailPrice)}
-              </div>
-              <div className="text-[7px] text-slate-600">{formatUSD(price.retailPerCarat)}/ct</div>
-            </div>
-            <div className="p-2 rounded-xl bg-gold-400/8 border border-gold-400/15 text-center">
-              <div className="text-[7px] text-gold-400/70 mb-0.5">{t('gcClubPrice') || 'Цена клуба'}</div>
-              <div className="text-[15px] font-black text-gold-400">
-                {formatUSD(price.clubPrice)}
-              </div>
-              <div className="text-[7px] text-gold-400/60">{formatUSD(price.clubPerCarat)}/ct</div>
-            </div>
-            <div className="p-2 rounded-xl bg-emerald-500/8 border border-emerald-500/15 text-center">
-              <div className="text-[7px] text-emerald-400/70 mb-0.5">{t('gcSavings') || 'Экономия'}</div>
-              <div className="text-[13px] font-black text-emerald-400">
-                −{formatUSD(price.savings)}
-              </div>
-              <div className="text-[7px] text-emerald-400/60">−{price.discountPct}%</div>
-            </div>
-          </div>
-
-          {/* Режим покупки */}
-          <div className="flex gap-1 mb-2">
-            <button onClick={() => setBuyMode(0)}
-              className={`flex-1 py-2 rounded-xl text-[10px] font-bold border transition-all ${
-                buyMode===0?'bg-blue-500/15 border-blue-500/30 text-blue-400':'border-white/8 text-slate-500'}`}>
-              📦 Покупка (владение)
+          {/* 2 кнопки покупки */}
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={() => openConfirm('self')} disabled={txPending || !wallet}
+              className="py-3 rounded-2xl text-[11px] font-bold bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 disabled:opacity-50">
+              🛒 Купить себе<br/>
+              <span className="text-[14px] font-black">{formatUSD(shop)}</span>
             </button>
-            <button onClick={() => setBuyMode(1)}
-              className={`flex-1 py-2 rounded-xl text-[10px] font-bold border transition-all ${
-                buyMode===1?'bg-emerald-500/15 border-emerald-500/30 text-emerald-400':'border-white/8 text-slate-500'}`}>
-              ⏳ Актив (стейкинг)
-            </button>
-          </div>
-
-          {/* Заказать */}
-          <button onClick={() => handleBuy(false)} disabled={txPending || !wallet}
-            className="w-full py-3 rounded-xl text-[12px] font-bold gold-btn mb-1.5"
-            style={{opacity: (txPending||!wallet) ? 0.5 : 1}}>
-            {txPending ? '⏳...' : `💎 ${t('gcBuyFull') || 'Заказать'} — ${formatUSD(price.clubPrice)}`}
-          </button>
-
-          {/* Купить долями */}
-          <div className="flex gap-1.5 items-center">
-            <div className="flex items-center gap-1 flex-1 p-2 rounded-xl bg-white/5">
-              <input type="number" min={1} max={totalFractions-1} value={fractions}
-                onChange={e => setFractions(Math.min(totalFractions-1, Math.max(1, parseInt(e.target.value)||1)))}
-                className="w-12 bg-transparent text-white text-[11px] font-bold outline-none text-center" />
-              <span className="text-[9px] text-slate-500">/</span>
-              <input type="number" min={2} max={100} value={totalFractions}
-                onChange={e => setTotalFractions(Math.max(2, parseInt(e.target.value)||10))}
-                className="w-12 bg-transparent text-white text-[11px] font-bold outline-none text-center" />
-              <span className="text-[8px] text-slate-500">{t('gcFractions') || 'долей'}</span>
-            </div>
-            <button onClick={() => handleBuy(true)} disabled={txPending||!wallet}
-              className="py-2 px-3 rounded-xl text-[10px] font-bold border border-purple-500/25 bg-purple-500/10 text-purple-400">
-              {formatUSD(fractionPrice)}
+            <button onClick={() => openConfirm('share')} disabled={txPending || !wallet}
+              className="py-3 rounded-2xl text-[11px] font-bold bg-gold-400/12 border border-gold-400/30 text-gold-400 disabled:opacity-50">
+              📈 Заказать актив<br/>
+              <span className="text-[14px] font-black">{formatUSD(share)}</span>
             </button>
           </div>
         </div>
-      ) : availableCarats.length === 0 ? (
-        <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-center">
-          <div className="text-[11px] text-red-400">❌ Цены ещё не загружены в контракт</div>
-        </div>
-      ) : null}
+      )}
 
+      {/* Дисклеймер */}
       <div className="p-2.5 rounded-2xl bg-white/3">
         <div className="text-[9px] text-slate-500 text-center leading-relaxed">
-          {t('gcDisclaimer') || 'Камни заказываются от завода. Сертификаты GIA, IGI, HRD — проверяйте по номеру на сайте лаборатории.'}
+          {t('gcDisclaimer') || 'Камни заказываются от завода. Сертификаты GIA, IGI, HRD — проверяются по номеру на сайте лаборатории.'}
         </div>
       </div>
 
@@ -561,12 +491,15 @@ export default function GemConfigurator() {
                 <div className="flex items-center justify-between">
                   <div>
                     <span className="text-[11px] font-bold text-white">#{o.id}</span>
-                    <span className="text-[9px] text-slate-500 ml-2">{o.carats}ct • {o.has_cert ? '✅' : '—'}</span>
+                    <span className="text-[9px] text-slate-500 ml-2">
+                      {o.carats}ct • {o.has_cert ? '✅' : '—'} • {o.buy_mode === 0 ? '🛒 себе' : '📈 актив'}
+                    </span>
                   </div>
                   <div className="text-right">
                     <div className="text-[11px] font-bold text-gold-400">${parseFloat(o.club_price).toFixed(0)}</div>
-                    <div className={`text-[9px] font-bold ${Orders.STATUS_COLORS[o.status] || 'text-slate-400'}`}>
-                      {Orders.STATUS_LABELS[o.status] || o.status}</div>
+                    <div className={`text-[9px] font-bold ${Orders.STATUS_COLORS?.[o.status] || 'text-slate-400'}`}>
+                      {Orders.STATUS_LABELS?.[o.status] || o.status}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -575,54 +508,84 @@ export default function GemConfigurator() {
         </div>
       )}
 
-      {/* Модалка подтверждения заказа */}
+      {/* МОДАЛКА ПОДТВЕРЖДЕНИЯ */}
       {confirmOrder && (
         <div className="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4" onClick={() => setConfirmOrder(null)}>
-          <div className="w-full max-w-sm p-4 rounded-2xl glass" onClick={e => e.stopPropagation()} style={{background:'var(--bg-card,#1e1e3a)'}}>
+          <div className="w-full max-w-sm p-4 rounded-2xl glass" onClick={e => e.stopPropagation()}
+            style={{background:'var(--bg-card,#1e1e3a)'}}>
+
             <div className="text-center mb-3">
-              <div className="text-3xl mb-2">💎</div>
-              <div className="text-[14px] font-black text-white">Подтверждение заказа</div>
-              <div className="text-[10px] text-slate-500 mt-1">Камень будет подобран или изготовлен под заказ</div>
+              <div className="text-3xl mb-2">{confirmOrder.orderType === 'self' ? '🛒' : '📈'}</div>
+              <div className="text-[14px] font-black text-white">
+                {confirmOrder.orderType === 'self' ? 'Купить себе' : 'Заказать актив'}
+              </div>
+              <div className="text-[10px] text-slate-500 mt-1">
+                Требуется уровень <b className="text-gold-400">{confirmOrder.requiredLevel}+</b> в GlobalWay
+              </div>
             </div>
+
+            <div className="text-[10px] text-slate-400 mb-3 p-2 rounded-xl bg-blue-500/8 border border-blue-500/15">
+              💡 {confirmOrder.description}
+            </div>
+
             <div className="space-y-2 mb-3">
               <div className="flex items-center justify-between p-2 rounded-xl bg-white/5">
                 <span className="text-[10px] text-slate-400">Параметры</span>
-                <span className="text-[10px] font-bold text-white">{confirmOrder.specString}</span>
+                <span className="text-[10px] font-bold text-white text-right">{confirmOrder.specString}</span>
               </div>
               <div className="flex items-center justify-between p-2 rounded-xl bg-white/5">
-                <span className="text-[10px] text-slate-400">Чистота</span>
-                <span className={`text-[11px] font-bold ${qualityTier==='premium'?'text-gold-400':'text-blue-400'}`}>
-                  {qualityTier==='premium'?'👑 Премиум':'💎 Стандарт'}</span>
+                <span className="text-[10px] text-slate-400">На рынке</span>
+                <span className="text-[11px] font-bold text-slate-400 line-through">{formatUSD(confirmOrder.market)}</span>
               </div>
-              <div className="flex items-center justify-between p-2 rounded-xl bg-white/5">
-                <span className="text-[10px] text-slate-400">Рыночная</span>
-                <span className="text-[11px] font-bold text-slate-400 line-through">{formatUSD(confirmOrder.retailPrice)}</span>
-              </div>
-              <div className="flex items-center justify-between p-2 rounded-xl bg-gold-400/8 border border-gold-400/15">
-                <span className="text-[10px] text-gold-400">Цена клуба</span>
-                <span className="text-[14px] font-black text-gold-400">{formatUSD(confirmOrder.clubPrice)}</span>
-              </div>
-              <div className="flex items-center justify-between p-2 rounded-xl bg-emerald-500/8 border border-emerald-500/15">
-                <span className="text-[10px] text-emerald-400">Экономия</span>
-                <span className="text-[12px] font-black text-emerald-400">−{formatUSD(confirmOrder.savings)} (−{confirmOrder.discountPct}%)</span>
-              </div>
-              <div className="flex items-center justify-between p-2 rounded-xl bg-white/5">
-                <span className="text-[10px] text-slate-400">Режим</span>
-                <span className={`text-[11px] font-bold ${buyMode===0?'text-blue-400':'text-emerald-400'}`}>
-                  {buyMode===0?'📦 Покупка':'⏳ Стейкинг'}</span>
+              {confirmOrder.orderType === 'share' && (
+                <div className="flex items-center justify-between p-2 rounded-xl bg-blue-500/8 border border-blue-500/15">
+                  <span className="text-[10px] text-blue-300">Закупка клуба (база)</span>
+                  <span className="text-[11px] font-bold text-blue-300">{formatUSD(confirmOrder.base)}</span>
+                </div>
+              )}
+              <div className={`flex items-center justify-between p-2 rounded-xl border ${
+                confirmOrder.orderType === 'self'
+                  ? 'bg-emerald-500/8 border-emerald-500/20'
+                  : 'bg-gold-400/8 border-gold-400/20'
+              }`}>
+                <span className={`text-[10px] ${confirmOrder.orderType === 'self' ? 'text-emerald-400' : 'text-gold-400'}`}>
+                  Ты платишь
+                </span>
+                <span className={`text-[16px] font-black ${confirmOrder.orderType === 'self' ? 'text-emerald-400' : 'text-gold-400'}`}>
+                  {formatUSD(confirmOrder.finalPrice)}
+                </span>
               </div>
             </div>
-            <div className="p-2 rounded-xl bg-blue-500/8 border border-blue-500/15 mb-3">
-              <div className="text-[9px] text-blue-300 text-center">💡 После оплаты заказ проверяется и отправляется на завод.</div>
-            </div>
+
             <button onClick={executeOrder} disabled={txPending}
-              className="w-full py-3 rounded-xl text-sm font-bold gold-btn" style={{opacity:txPending?0.5:1}}>
-              {txPending ? '⏳ ...' : `💎 Оплатить — ${formatUSD(confirmOrder.clubPrice)}`}</button>
+              className="w-full py-3 rounded-xl text-sm font-bold gold-btn"
+              style={{opacity:txPending?0.5:1}}>
+              {txPending ? '⏳ ...' : `Создать заказ — ${formatUSD(confirmOrder.finalPrice)}`}
+            </button>
             <button onClick={() => setConfirmOrder(null)}
-              className="w-full mt-2 py-2 rounded-xl text-[11px] font-bold text-slate-500 border border-white/8">Отмена</button>
+              className="w-full mt-2 py-2 rounded-xl text-[11px] font-bold text-slate-500 border border-white/8">
+              Отмена
+            </button>
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════
+// Строка цены в блоке цен
+// ═══════════════════════════════════════════════════════
+function PriceLine({ label, value, color, bold, strike, note }) {
+  return (
+    <div className="flex items-start justify-between gap-2 py-1">
+      <div className="flex-1 min-w-0">
+        <div className="text-[10px] text-slate-300">{label}</div>
+        {note && <div className="text-[8px] text-slate-500 leading-tight mt-0.5">{note}</div>}
+      </div>
+      <div className={`${color} ${bold ? 'font-black text-[13px]' : 'font-bold text-[11px]'} ${strike ? 'line-through' : ''} whitespace-nowrap`}>
+        {formatUSD(value)}
+      </div>
     </div>
   )
 }
