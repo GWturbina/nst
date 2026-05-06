@@ -1,327 +1,320 @@
 'use client'
-import { useState, useEffect } from 'react'
+/**
+ * GemPriceAdmin — Управление ценами бриллиантов (v2)
+ *
+ * МОДЕЛЬ ЦЕНООБРАЗОВАНИЯ:
+ *  Цена в этой админке = БАЗОВАЯ цена (35% от рынка) = закупочная цена клуба у завода.
+ *  Из неё конфигуратор автоматически считает 3 цены для покупателя:
+ *   • Купить себе целиком (через ClubMarket)        : ~50% от рынка   = база × 1.4286
+ *   • Купить себе со скидкой -5% (тапалка)           : ~47.5% от рынка = база × 1.357
+ *   • Заказать долю / купить как актив (через пул)  : 35% от рынка    = база
+ *     (партнёр платит база / 0.85, потому что в контракте +5% реклама +10% маркетинг)
+ *
+ * 4 столбца: Standard (без серт / с серт) и Premium (без серт / с серт).
+ * Premium — для камней лучшей огранки (Cut/Polish/Symmetry: Excellent),
+ * наценка ~10% к Standard.
+ *
+ * Сохраняется в Supabase таблицу dc_prices через POST /api/prices.
+ * Конфигуратор тянет цены через GET /api/prices.
+ */
+import { useState, useEffect, useCallback } from 'react'
 import useGameStore from '@/lib/store'
-import {
-  CLARITIES, WHITE_COLORS, FANCY_COLORS, FANCY_INTENSITIES, SHAPES, REGIONS,
-  getWhiteCost, getWhiteCostCert, getFancyCost, getFancyCostCert,
-  getFancyIntMult, getShapeMultipliers, getRegionMarkups,
-  getClubDiscount, getNstBonusMax, getNstPerPercent,
-  saveWhiteCost, saveWhiteCostCert, saveFancyCost, saveFancyCostCert,
-  saveFancyIntMult, saveShapeMultipliers, saveRegionMarkups,
-  saveClubDiscount, saveNstBonusMax, saveNstPerPercent,
-  resetAllPrices, exportAllPrices, importAllPrices, formatUSD
-} from '@/lib/gemCatalog'
+import { authFetch } from '@/lib/authClient'
+import { formatUSD } from '@/lib/gemCatalog'
+
+const TIER_KEYS = ['club_standard', 'club_premium']
+const TIER_LABELS = {
+  club_standard: '💎 Стандарт',
+  club_premium: '👑 Премиум',
+}
+
+// Дефолтные караты (можно добавлять/удалять)
+const DEFAULT_CARATS = ['0.30', '0.50', '1.00', '1.50', '2.00', '2.50', '3.00']
 
 export default function GemPriceAdmin() {
-  const { addNotification } = useGameStore()
-  const [tab, setTab] = useState('white_no')
-  const [wNo, setWNo] = useState({})
-  const [wCert, setWCert] = useState({})
-  const [fNo, setFNo] = useState({})
-  const [fCert, setFCert] = useState({})
-  const [fInt, setFInt] = useState({})
-  const [shapeMult, setShapeMult] = useState({})
-  const [regionMk, setRegionMk] = useState({})
-  const [clubDisc, setClubDisc] = useState(30)
-  const [nstMax, setNstMax] = useState(3)
-  const [nstPer, setNstPer] = useState(1000)
+  const { wallet, addNotification } = useGameStore()
+  const [prices, setPrices] = useState({ club_standard: {}, club_premium: {} })
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
+  const [newCarat, setNewCarat] = useState('')
 
-  useEffect(() => {
-    setWNo(getWhiteCost()); setWCert(getWhiteCostCert())
-    setFNo(getFancyCost()); setFCert(getFancyCostCert())
-    setFInt(getFancyIntMult()); setShapeMult(getShapeMultipliers())
-    setRegionMk(getRegionMarkups())
-    setClubDisc(getClubDiscount()); setNstMax(getNstBonusMax()); setNstPer(getNstPerPercent())
-  }, [])
-
-  const handleSave = () => {
-    saveWhiteCost(wNo); saveWhiteCostCert(wCert)
-    saveFancyCost(fNo); saveFancyCostCert(fCert)
-    saveFancyIntMult(fInt); saveShapeMultipliers(shapeMult)
-    saveRegionMarkups(regionMk)
-    saveClubDiscount(clubDisc); saveNstBonusMax(nstMax); saveNstPerPercent(nstPer)
-    setDirty(false)
-    addNotification('✅ 💰 Все цены сохранены')
-  }
-
-  const handleReset = () => {
-    if (!confirm('Сбросить ВСЕ цены к дефолтным?')) return
-    resetAllPrices()
-    setWNo(getWhiteCost()); setWCert(getWhiteCostCert())
-    setFNo(getFancyCost()); setFCert(getFancyCostCert())
-    setFInt(getFancyIntMult()); setShapeMult(getShapeMultipliers())
-    setRegionMk(getRegionMarkups())
-    setClubDisc(getClubDiscount()); setNstMax(getNstBonusMax()); setNstPer(getNstPerPercent())
-    setDirty(false)
-    addNotification('🔄 Цены сброшены')
-  }
-
-  const handleExport = () => {
-    const blob = new Blob([JSON.stringify(exportAllPrices(), null, 2)], {type:'application/json'})
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob)
-    a.download = `diamond-prices-${Date.now()}.json`; a.click()
-    addNotification('📥 Экспортировано')
-  }
-
-  const handleImport = (e) => {
-    const f = e.target.files?.[0]; if (!f) return
-    const r = new FileReader()
-    r.onload = (ev) => {
-      try {
-        importAllPrices(JSON.parse(ev.target.result))
-        setWNo(getWhiteCost()); setWCert(getWhiteCostCert())
-        setFNo(getFancyCost()); setFCert(getFancyCostCert())
-        setFInt(getFancyIntMult()); setShapeMult(getShapeMultipliers())
-        setRegionMk(getRegionMarkups())
-        setClubDisc(getClubDiscount()); setNstMax(getNstBonusMax()); setNstPer(getNstPerPercent())
-        addNotification('📤 Импортировано')
-      } catch (err) { addNotification('❌ ' + err.message) }
+  // ═══ Загрузка цен из Supabase ═══
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/prices')
+      const data = await res.json()
+      if (data.ok && data.prices) {
+        setPrices({
+          club_standard: data.prices.club_standard || {},
+          club_premium: data.prices.club_premium || {},
+        })
+      }
+    } catch {
+      addNotification('❌ Ошибка загрузки цен')
     }
-    r.readAsText(f)
+    setLoading(false)
+  }, [addNotification])
+
+  useEffect(() => { load() }, [load])
+
+  // ═══ Получить отсортированный список каратов (объединяя обе категории) ═══
+  const allCarats = (() => {
+    const set = new Set([
+      ...Object.keys(prices.club_standard || {}),
+      ...Object.keys(prices.club_premium || {}),
+    ])
+    if (set.size === 0) DEFAULT_CARATS.forEach(c => set.add(c))
+    return [...set].map(c => parseFloat(c)).sort((a, b) => a - b).map(c => c.toFixed(2))
+  })()
+
+  // ═══ Изменить ячейку ═══
+  const updateCell = (tier, carat, field, value) => {
+    const v = parseInt(value) || 0
+    setPrices(p => ({
+      ...p,
+      [tier]: {
+        ...(p[tier] || {}),
+        [carat]: {
+          noCert: p[tier]?.[carat]?.noCert || 0,
+          cert: p[tier]?.[carat]?.cert || 0,
+          [field]: v,
+        },
+      },
+    }))
+    setDirty(true)
   }
 
-  // Обновление ячейки матрицы
-  const upd = (matrix, setMatrix, clarity, idx, val) => {
-    const m = {...matrix}; m[clarity] = [...(m[clarity]||[])]; m[clarity][idx] = parseInt(val)||0
-    setMatrix(m); setDirty(true)
+  // ═══ Добавить карат ═══
+  const addCarat = () => {
+    const c = parseFloat(newCarat)
+    if (isNaN(c) || c <= 0 || c > 50) {
+      addNotification('❌ Карат: число от 0.01 до 50')
+      return
+    }
+    const key = c.toFixed(2)
+    if (allCarats.includes(key)) {
+      addNotification('⚠️ Такой карат уже есть')
+      return
+    }
+    setPrices(p => ({
+      club_standard: { ...p.club_standard, [key]: { noCert: 0, cert: 0 } },
+      club_premium: { ...p.club_premium, [key]: { noCert: 0, cert: 0 } },
+    }))
+    setDirty(true)
+    setNewCarat('')
   }
 
-  // Матрица белых (компонент)
-  const WhiteMatrix = ({data, setData, label}) => (
-    <div className="p-3 rounded-2xl glass">
-      <div className="text-[10px] font-bold text-slate-400 mb-2">{label} — $ за 1 карат (Round)</div>
-      <div className="overflow-x-auto -mx-1">
-        <table className="w-full text-center" style={{minWidth:'500px'}}>
-          <thead>
-            <tr>
-              <th className="text-[8px] text-slate-500 p-1 sticky left-0 bg-[#0d1520] z-10"></th>
-              {WHITE_COLORS.map(c => <th key={c.id} className="text-[9px] font-bold text-white/70 p-1">{c.id}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {CLARITIES.map(cl => (
-              <tr key={cl.id}>
-                <td className="text-[9px] font-bold text-gold-400 p-1 sticky left-0 bg-[#0d1520] z-10">{cl.id}</td>
-                {WHITE_COLORS.map((c, idx) => (
-                  <td key={c.id} className="p-0.5">
-                    <input type="number" value={data[cl.id]?.[idx]||''}
-                      onChange={e => upd(data, setData, cl.id, idx, e.target.value)}
-                      className="w-full p-1 rounded-lg bg-white/5 border border-white/8 text-[9px] text-white text-center outline-none focus:border-gold-400/30"
-                      style={{minWidth:'48px'}} />
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+  // ═══ Удалить карат ═══
+  const removeCarat = (carat) => {
+    if (!confirm(`Удалить карат ${carat} из обеих категорий?`)) return
+    setPrices(p => {
+      const std = { ...p.club_standard }; delete std[carat]
+      const prm = { ...p.club_premium }; delete prm[carat]
+      return { club_standard: std, club_premium: prm }
+    })
+    setDirty(true)
+  }
+
+  // ═══ Сохранить в Supabase ═══
+  const handleSave = async () => {
+    if (!wallet) { addNotification('❌ Кошелёк не подключён'); return }
+    setSaving(true)
+    try {
+      // Сохраняем обе категории отдельными запросами
+      for (const tier of TIER_KEYS) {
+        const res = await authFetch('/api/prices', {
+          method: 'POST',
+          body: { adminWallet: wallet, key: tier, data: prices[tier] || {} },
+        })
+        const json = await res.json()
+        if (!json.ok) {
+          addNotification(`❌ ${tier}: ${json.error}`)
+          setSaving(false)
+          return
+        }
+      }
+      addNotification('✅ Цены сохранены')
+      setDirty(false)
+    } catch (e) {
+      addNotification(`❌ ${e.message || 'Ошибка сохранения'}`)
+    }
+    setSaving(false)
+  }
+
+  if (loading) return (
+    <div className="px-3 mt-2 text-center py-8">
+      <div className="text-2xl animate-spin">💰</div>
     </div>
   )
 
-  const TABS = [
-    {id:'white_no',  label:'◇ Белые (без серт.)'},
-    {id:'white_cert', label:'✅ Белые (с серт.)'},
-    {id:'fancy',     label:'🌈 Цветные'},
-    {id:'regions',   label:'🌐 Регионы'},
-    {id:'shapes',    label:'✂️ Формы'},
-    {id:'club',      label:'🎁 Скидки'},
-    {id:'backup',    label:'📦 Бэкап'},
-  ]
+  return (
+    <div className="px-3 mt-2 space-y-3">
+      {/* Заголовок */}
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="text-[14px] font-black text-gold-400">💰 Цены бриллиантов</div>
+          <div className="text-[10px] text-slate-500">Базовая цена = закупка клуба (35% от рынка)</div>
+        </div>
+        {dirty && (
+          <button onClick={handleSave} disabled={saving}
+            className="px-3 py-2 rounded-xl text-[11px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 animate-pulse disabled:opacity-50">
+            {saving ? '⏳' : '💾 Сохранить'}
+          </button>
+        )}
+      </div>
+
+      {/* Подсказка */}
+      <div className="p-3 rounded-2xl bg-blue-500/8 border border-blue-500/20">
+        <div className="text-[10px] text-slate-300 leading-relaxed">
+          В этой таблице — <b className="text-blue-300">базовые цены</b> (35% от рынка),
+          по которым клуб закупает камни у завода.<br/>
+          Из них автоматически считается:<br/>
+          • <b>Купить себе</b> = ×1.4286 (50% от рынка) — доступно с уровня 1+<br/>
+          • <b>Купить со скидкой -5%</b> (тапалка) = ×1.357 (47.5% от рынка)<br/>
+          • <b>Заказать долю/актив</b> = база ÷ 0.85 (партнёр платит +15% контрактных накруток) — доступно с уровня 7+
+        </div>
+      </div>
+
+      {/* Таблицы для каждой категории */}
+      {TIER_KEYS.map(tier => (
+        <div key={tier} className="p-3 rounded-2xl glass">
+          <div className="text-[12px] font-bold text-white mb-2">{TIER_LABELS[tier]}</div>
+
+          <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-1.5 items-center">
+            {/* Header */}
+            <div className="text-[9px] font-bold text-slate-500 px-1">Карат</div>
+            <div className="text-[9px] font-bold text-slate-500 px-1 text-center">Без серт. ($)</div>
+            <div className="text-[9px] font-bold text-slate-500 px-1 text-center">С серт. ($)</div>
+            <div className="w-6"></div>
+
+            {/* Rows */}
+            {allCarats.map(c => (
+              <Row key={c} carat={c}
+                noCertValue={prices[tier]?.[c]?.noCert ?? 0}
+                certValue={prices[tier]?.[c]?.cert ?? 0}
+                onChange={(field, v) => updateCell(tier, c, field, v)}
+                onRemove={() => removeCarat(c)}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+
+      {/* Добавить карат */}
+      <div className="p-3 rounded-2xl glass">
+        <div className="text-[11px] font-bold text-slate-300 mb-2">➕ Добавить карат</div>
+        <div className="flex gap-2">
+          <input
+            type="number" step="0.01" min="0.01" max="50"
+            value={newCarat} onChange={e => setNewCarat(e.target.value)}
+            placeholder="например 0.75"
+            className="flex-1 p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white outline-none"
+          />
+          <button onClick={addCarat}
+            className="px-4 py-2 rounded-xl text-[11px] font-bold bg-gold-400/15 text-gold-400 border border-gold-400/25">
+            Добавить
+          </button>
+        </div>
+        <div className="text-[9px] text-slate-500 mt-1.5">
+          Между каратами цена интерполируется автоматически. Например, если есть 1.00 ($1000) и 1.50 ($1600), то для 1.20 будет $1240.
+        </div>
+      </div>
+
+      {/* Превью расчёта */}
+      <PriceCalcPreview prices={prices} />
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════
+// Строка таблицы
+// ═══════════════════════════════════════════════════════
+function Row({ carat, noCertValue, certValue, onChange, onRemove }) {
+  return (
+    <>
+      <div className="text-[11px] font-bold text-gold-400 px-1 py-1.5">💎 {carat} ct</div>
+      <input
+        type="number" min="0" value={noCertValue || ''}
+        onChange={e => onChange('noCert', e.target.value)}
+        className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-[11px] text-white text-center outline-none"
+      />
+      <input
+        type="number" min="0" value={certValue || ''}
+        onChange={e => onChange('cert', e.target.value)}
+        className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-[11px] text-white text-center outline-none"
+      />
+      <button onClick={onRemove}
+        className="w-6 h-6 rounded-lg text-[10px] text-red-400 hover:bg-red-500/15">
+        ✕
+      </button>
+    </>
+  )
+}
+
+// ═══════════════════════════════════════════════════════
+// Превью расчёта — показывает как формируются 4 цены
+// ═══════════════════════════════════════════════════════
+function PriceCalcPreview({ prices }) {
+  const [carat, setCarat] = useState('1.00')
+  const [tier, setTier] = useState('club_standard')
+  const [hasCert, setHasCert] = useState(true)
+
+  const base = prices[tier]?.[carat]?.[hasCert ? 'cert' : 'noCert'] || 0
+  const market = base / 0.35
+  const shopPrice = market * 0.5
+  const shopWithDiscount = shopPrice * 0.95
+  const sharePrice = base / 0.85
 
   return (
-    <div className="px-3 mt-2 space-y-2">
-      <div className="flex items-center justify-between">
-        <div className="text-[14px] font-black text-gold-400">💰 Управление ценами</div>
-        <div className="flex gap-1">
-          {dirty && <button onClick={handleSave}
-            className="px-3 py-1.5 rounded-xl text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 animate-pulse">
-            💾 Сохранить
-          </button>}
-          <button onClick={handleReset}
-            className="px-3 py-1.5 rounded-xl text-[10px] font-bold bg-red-500/10 text-red-400 border border-red-500/20">🔄</button>
-        </div>
+    <div className="p-3 rounded-2xl bg-purple-500/8 border border-purple-500/20">
+      <div className="text-[12px] font-bold text-purple-300 mb-2">🧮 Превью расчёта</div>
+
+      {/* Селекторы */}
+      <div className="grid grid-cols-3 gap-1.5 mb-3">
+        <select value={tier} onChange={e => setTier(e.target.value)}
+          className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-[10px] text-white outline-none">
+          {TIER_KEYS.map(t => <option key={t} value={t}>{TIER_LABELS[t]}</option>)}
+        </select>
+        <select value={carat} onChange={e => setCarat(e.target.value)}
+          className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-[10px] text-white outline-none">
+          {Object.keys(prices[tier] || {}).sort((a, b) => parseFloat(a) - parseFloat(b))
+            .map(c => <option key={c} value={c}>{c} ct</option>)}
+        </select>
+        <button onClick={() => setHasCert(!hasCert)}
+          className={`p-1.5 rounded-lg text-[10px] font-bold border ${
+            hasCert ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25'
+                    : 'bg-slate-500/15 text-slate-400 border-slate-500/25'
+          }`}>
+          {hasCert ? '✅ С серт.' : '— Без серт.'}
+        </button>
       </div>
 
-      {/* Табы */}
-      <div className="flex gap-1 p-1 rounded-xl bg-white/5 overflow-x-auto scrollbar-hide">
-        {TABS.map(tb => (
-          <button key={tb.id} onClick={() => setTab(tb.id)}
-            className={`px-2 py-1.5 rounded-lg text-[8px] font-bold whitespace-nowrap transition-all ${
-              tab===tb.id ? 'bg-gold-400/12 text-gold-400' : 'text-slate-500'
-            }`}>{tb.label}</button>
-        ))}
-      </div>
-
-      {/* Белые БЕЗ серт */}
-      {tab === 'white_no' && <WhiteMatrix data={wNo} setData={setWNo} label="💲 СЕБЕСТОИМОСТЬ без сертификата" />}
-
-      {/* Белые С серт */}
-      {tab === 'white_cert' && <WhiteMatrix data={wCert} setData={setWCert} label="✅ СЕБЕСТОИМОСТЬ с сертификатом" />}
-
-      {/* Цветные */}
-      {tab === 'fancy' && (
-        <div className="space-y-2">
-          <div className="p-3 rounded-2xl glass">
-            <div className="text-[10px] font-bold text-slate-400 mb-2">💲 Цветные БЕЗ сертификата ($/карат, Light, VS1)</div>
-            <div className="space-y-1.5">
-              {FANCY_COLORS.map(fc => (
-                <div key={fc.id} className="flex items-center gap-2 p-2 rounded-xl bg-white/3">
-                  <div className="w-5 h-5 rounded-full" style={{background:fc.hex}} />
-                  <span className="text-[10px] font-bold text-white flex-1">{fc.name}</span>
-                  <span className="text-[8px] text-slate-500">$</span>
-                  <input type="number" value={fNo[fc.id]||''}
-                    onChange={e => { setFNo({...fNo, [fc.id]: parseInt(e.target.value)||0}); setDirty(true) }}
-                    className="w-20 p-1.5 rounded-lg bg-white/5 border border-white/8 text-[11px] text-white text-right outline-none focus:border-gold-400/30" />
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="p-3 rounded-2xl glass">
-            <div className="text-[10px] font-bold text-slate-400 mb-2">✅ Цветные С сертификатом ($/карат, Light, VS1)</div>
-            <div className="space-y-1.5">
-              {FANCY_COLORS.map(fc => (
-                <div key={fc.id} className="flex items-center gap-2 p-2 rounded-xl bg-white/3">
-                  <div className="w-5 h-5 rounded-full" style={{background:fc.hex}} />
-                  <span className="text-[10px] font-bold text-white flex-1">{fc.name}</span>
-                  <span className="text-[8px] text-slate-500">$</span>
-                  <input type="number" value={fCert[fc.id]||''}
-                    onChange={e => { setFCert({...fCert, [fc.id]: parseInt(e.target.value)||0}); setDirty(true) }}
-                    className="w-20 p-1.5 rounded-lg bg-white/5 border border-white/8 text-[11px] text-white text-right outline-none focus:border-gold-400/30" />
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="p-3 rounded-2xl glass">
-            <div className="text-[10px] font-bold text-slate-400 mb-2">📊 Множители интенсивности</div>
-            <div className="space-y-1.5">
-              {FANCY_INTENSITIES.map(fi => (
-                <div key={fi.id} className="flex items-center gap-2 p-2 rounded-xl bg-white/3">
-                  <span className="text-[10px] font-bold text-white flex-1">{fi.name} ({fi.nameEn})</span>
-                  <span className="text-[8px] text-slate-500">×</span>
-                  <input type="number" step="0.1" value={fInt[fi.id]??''}
-                    onChange={e => { setFInt({...fInt, [fi.id]: parseFloat(e.target.value)||0}); setDirty(true) }}
-                    className="w-16 p-1.5 rounded-lg bg-white/5 border border-white/8 text-[11px] text-white text-center outline-none focus:border-gold-400/30" />
-                </div>
-              ))}
-            </div>
-          </div>
+      {/* Расчёт */}
+      {base > 0 ? (
+        <div className="space-y-1 text-[10px]">
+          <Line label="Закупка клуба (база, 35%)"   value={base}              color="text-blue-300" bold />
+          <Line label="Цена на рынке (100%)"        value={market}            color="text-slate-500" strike />
+          <Line label="🛒 В магазине себе (50%)"     value={shopPrice}         color="text-emerald-400" />
+          <Line label="🛒 Со скидкой -5% за GST"     value={shopWithDiscount}  color="text-emerald-300" />
+          <Line label="📈 Заказать долю/актив (7+)" value={sharePrice}        color="text-gold-400" hint="база ÷ 0.85 = +5% реклама +10% маркетинг" />
         </div>
+      ) : (
+        <div className="text-[10px] text-slate-500 text-center py-2">Введи цены выше — здесь покажется расчёт</div>
       )}
+    </div>
+  )
+}
 
-      {/* РЕГИОНЫ */}
-      {tab === 'regions' && (
-        <div className="p-3 rounded-2xl glass">
-          <div className="text-[10px] font-bold text-slate-400 mb-1">🌐 Наценка по регионам (% сверх себестоимости)</div>
-          <div className="text-[8px] text-slate-600 mb-3">Розничная = Себестоимость × (1 + наценка%)</div>
-          <div className="space-y-2">
-            {REGIONS.map(r => (
-              <div key={r.id} className="p-2.5 rounded-xl bg-white/3">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[11px] font-bold text-white">{r.name}</span>
-                  <span className="text-[13px] font-black text-gold-400">+{regionMk[r.id] || 0}%</span>
-                </div>
-                <input type="range" min={0} max={300} value={regionMk[r.id]||0}
-                  onChange={e => { setRegionMk({...regionMk, [r.id]: parseInt(e.target.value)}); setDirty(true) }}
-                  className="w-full h-2 rounded-full appearance-none cursor-pointer"
-                  style={{background:`linear-gradient(to right, #ffd700 ${(regionMk[r.id]||0)/300*100}%, rgba(255,255,255,0.08) 0%)`}} />
-                <div className="flex justify-between text-[8px] text-slate-600 mt-1">
-                  <span>0%</span>
-                  <span className="text-emerald-400">
-                    Пример: себест. $1000 → розница {formatUSD(1000 * (1 + (regionMk[r.id]||0)/100))}
-                  </span>
-                  <span>300%</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ФОРМЫ */}
-      {tab === 'shapes' && (
-        <div className="p-3 rounded-2xl glass">
-          <div className="text-[10px] font-bold text-slate-400 mb-2">✂️ Коэффициент формы (Round = 1.00)</div>
-          <div className="space-y-1.5">
-            {SHAPES.map(s => (
-              <div key={s.id} className="flex items-center gap-2 p-2 rounded-xl bg-white/3">
-                <span className="text-[10px] font-bold text-white flex-1">{s.name}</span>
-                <span className="text-[8px] text-slate-500">×</span>
-                <input type="number" step="0.01" min="0.1" max="2.0" value={shapeMult[s.id]??''}
-                  onChange={e => { setShapeMult({...shapeMult, [s.id]: parseFloat(e.target.value)||0}); setDirty(true) }}
-                  className="w-16 p-1.5 rounded-lg bg-white/5 border border-white/8 text-[11px] text-white text-center outline-none focus:border-gold-400/30" />
-                <span className="text-[8px] text-slate-500 w-14 text-right">{Math.round((shapeMult[s.id]||0)*100)}%</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* КЛУБНЫЕ СКИДКИ */}
-      {tab === 'club' && (
-        <div className="p-3 rounded-2xl glass space-y-3">
-          <div className="text-[10px] font-bold text-slate-400 mb-2">🎁 Клубные скидки</div>
-
-          <div>
-            <div className="flex justify-between mb-1">
-              <span className="text-[10px] text-white font-bold">Базовая скидка от розницы</span>
-              <span className="text-[13px] font-black text-gold-400">{clubDisc}%</span>
-            </div>
-            <input type="range" min={0} max={60} value={clubDisc}
-              onChange={e => { setClubDisc(parseInt(e.target.value)); setDirty(true) }}
-              className="w-full h-2 rounded-full appearance-none cursor-pointer"
-              style={{background:`linear-gradient(to right, #ffd700 ${clubDisc/60*100}%, rgba(255,255,255,0.08) 0%)`}} />
-            <div className="text-[8px] text-slate-600 mt-1">Клубная = Розничная × {(100 - clubDisc)}%</div>
-          </div>
-
-          <div>
-            <div className="flex justify-between mb-1">
-              <span className="text-[10px] text-white font-bold">Макс. бонус за DCT</span>
-              <span className="text-[13px] font-black text-purple-400">+{nstMax}%</span>
-            </div>
-            <input type="range" min={0} max={15} value={nstMax}
-              onChange={e => { setNstMax(parseInt(e.target.value)); setDirty(true) }}
-              className="w-full h-2 rounded-full appearance-none cursor-pointer"
-              style={{background:`linear-gradient(to right, #a855f7 ${nstMax/15*100}%, rgba(255,255,255,0.08) 0%)`}} />
-          </div>
-
-          <div>
-            <div className="flex justify-between mb-1">
-              <span className="text-[10px] text-white font-bold">DCT на 1% скидки</span>
-              <span className="text-[13px] font-black text-purple-400">{nstPer} DCT</span>
-            </div>
-            <input type="number" value={nstPer}
-              onChange={e => { setNstPer(parseInt(e.target.value)||100); setDirty(true) }}
-              className="w-full p-2 rounded-lg bg-white/5 border border-white/8 text-[11px] text-white outline-none focus:border-gold-400/30" />
-            <div className="text-[8px] text-slate-600 mt-1">Пример: {nstPer * 2} DCT = +2% доп. скидка</div>
-          </div>
-
-          <div className="p-2.5 rounded-xl bg-emerald-500/8 border border-emerald-500/15">
-            <div className="text-[9px] text-emerald-400 font-bold mb-1">Итого для клиента с {nstPer * nstMax} DCT:</div>
-            <div className="text-[10px] text-white">
-              Розничная −{clubDisc}% (базовая) −{nstMax}% (DCT) = <span className="font-bold text-gold-400">−{clubDisc + nstMax}% от розницы</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* БЭКАП */}
-      {tab === 'backup' && (
-        <div className="p-3 rounded-2xl glass space-y-3">
-          <div className="text-[10px] font-bold text-slate-400">📦 Бэкап и восстановление</div>
-          <button onClick={handleExport}
-            className="w-full py-3 rounded-xl text-[11px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">
-            📥 Экспорт всех цен в JSON
-          </button>
-          <label className="w-full py-3 rounded-xl text-[11px] font-bold bg-purple-500/10 text-purple-400 border border-purple-500/20 flex items-center justify-center cursor-pointer">
-            📤 Импорт цен из JSON
-            <input type="file" accept=".json" onChange={handleImport} className="hidden" />
-          </label>
-          <div className="text-[8px] text-slate-600">
-            Экспорт сохраняет: 2 матрицы белых, 2 цены цветных, множители форм и интенсивности, наценки регионов, скидки клуба.
-          </div>
-        </div>
-      )}
+function Line({ label, value, color, bold, strike, hint }) {
+  return (
+    <div className="flex items-center justify-between gap-2 py-0.5">
+      <span className="text-slate-400">{label}</span>
+      <span className={`${color} ${bold ? 'font-black' : 'font-bold'} ${strike ? 'line-through' : ''} whitespace-nowrap`}>
+        {formatUSD(Math.round(value))}
+        {hint && <span className="block text-[8px] text-slate-500 font-normal">{hint}</span>}
+      </span>
     </div>
   )
 }
