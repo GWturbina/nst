@@ -91,8 +91,16 @@ export default function ClubLotsSection() {
       addNotification('✅ Маркетинг получен. Шаг 2/2: Покупка доли...')
     }
 
-    // Покупка доли (всегда через buyShare)
-    const result = await safeCall(() => Club.buyShare(contractLotId, buyCount))
+    // Покупка доли — buyShare ждёт сумму USDT, не количество долей
+    // Считаем: количество × цена_доли = USDT
+    const sharePrice = parseFloat(buyModal.share_price)
+    if (!sharePrice || sharePrice <= 0) {
+      addNotification('❌ Цена доли не задана. Обратитесь к администратору.')
+      setTxPending(false)
+      return
+    }
+    const usdtAmount = buyCount * sharePrice
+    const result = await safeCall(() => Club.buyShare(contractLotId, usdtAmount))
 
     if (result.ok) {
       const txHash = result.data?.hash || result.data?.transactionHash || ''
