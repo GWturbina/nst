@@ -1318,7 +1318,7 @@ h1, h2, h3, h4 {
 <section class="section" id="math">
   <div class="section-head">
     <div class="section-eyebrow" data-i18n="math.eyebrow">Математика без воды</div>
-    <h2 data-i18n="math.title_html" data-i18n-html><span class="ice-text">$100 → $520</span><br>в среднем до за год</h2>
+    <h2 data-i18n="math.title_html" data-i18n-html><span class="ice-text">$100 → $520</span><br>в среднем за год</h2>
     <p class="section-lead" data-i18n="math.lead">Пример расчёта основан на среднем камне стоимостью $4 000 при 6 оборотах актива клубом в течение года. Фактический результат может быть выше или ниже.</p>
   </div>
 
@@ -1337,12 +1337,12 @@ h1, h2, h3, h4 {
         </div>
         <ul class="breakdown-list">
           <li><span class="label" data-i18n="math.breakdown_l1">Backing камня (твои токены DCT)</span><span class="val">85%</span></li>
-          <li><span class="label" data-i18n="math.breakdown_l3">Рекламный пул</span><span class="val">5%</span></li>
-          <li><span class="label" data-i18n="math.breakdown_l2">Партнёрская программа (9 уровней)</span><span class="val">9%</span></li>
-          <li><span class="label" data-i18n="math.breakdown_l3">Автору проекта</span><span class="val">0.2%</span></li>
-          <li><span class="label" data-i18n="math.breakdown_l3">Техническая поддержка</span><span class="val">0.3%</span></li>
-          <li><span class="label" data-i18n="math.breakdown_l4">Токеномика GlobalWay</span><span class="val">0.25%</span></li>
-          <li><span class="label" data-i18n="math.breakdown_l5">Токеномика CardGift</span><span class="val">0.25%</span></li>
+          <li><span class="label" data-i18n="math.breakdown_l2">Рекламный пул</span><span class="val">5%</span></li>
+          <li><span class="label" data-i18n="math.breakdown_l3">Партнёрская программа (9 уровней)</span><span class="val">9%</span></li>
+          <li><span class="label" data-i18n="math.breakdown_l4">Автору проекта</span><span class="val">0.2%</span></li>
+          <li><span class="label" data-i18n="math.breakdown_l5">Техническая поддержка</span><span class="val">0.3%</span></li>
+          <li><span class="label" data-i18n="math.breakdown_l6">Токеномика GlobalWay</span><span class="val">0.25%</span></li>
+          <li><span class="label" data-i18n="math.breakdown_l7">Токеномика CardGift</span><span class="val">0.25%</span></li>
         </ul>
       </div>
     </div>
@@ -2441,69 +2441,7 @@ h1, h2, h3, h4 {
   </div>
 </section>
 
-<!-- ===== SECTION: ROLES ===== -->
-<style>
-.roles-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 24px;
-  max-width: 1200px;
-  margin: 0 auto;
-}
-.role-card {
-  padding: 48px 36px;
-  background: linear-gradient(180deg, rgba(13,26,46,0.9), rgba(10,15,30,0.6));
-  border: 1px solid rgba(165,216,248,0.12);
-  border-radius: 24px;
-  position: relative;
-  overflow: hidden;
-  transition: all 0.5s;
-}
-.role-card::after {
-  content: '';
-  position: absolute;
-  inset: -50% -50% auto auto;
-  width: 200%;
-  height: 200%;
-  background: radial-gradient(circle, rgba(165,216,248,0.08) 0%, transparent 40%);
-  opacity: 0;
-  transition: opacity 0.5s;
-  pointer-events: none;
-}
-.role-card:hover {
-  border-color: var(--ice-3);
-  transform: translateY(-8px);
-  box-shadow: 0 30px 60px -20px rgba(165,216,248,0.25);
-}
-.role-card:hover::after { opacity: 1; }
-.role-emoji { font-size: 48px; margin-bottom: 20px; display: block; }
-.role-card h3 { font-size: 26px; margin-bottom: 12px; color: var(--ice-3); }
-.role-card .tagline {
-  font-family: 'Manrope', sans-serif;
-  font-style: italic;
-  font-size: 17px;
-  color: var(--text-dim);
-  margin-bottom: 24px;
-  min-height: 50px;
-}
-.role-card ul { list-style: none; display: flex; flex-direction: column; gap: 12px; }
-.role-card li {
-  font-size: 14px;
-  color: var(--text);
-  padding-left: 24px;
-  position: relative;
-  line-height: 1.55;
-}
-.role-card li::before {
-  content: '◆';
-  position: absolute;
-  left: 0;
-  color: var(--ice-3);
-  font-size: 10px;
-  top: 4px;
-}
-@media (max-width: 960px) { .roles-grid { grid-template-columns: 1fr; } }
-</style>
+<!-- ===== SECTION: FINAL CTA ===== -->
 
 <section class="section cta-section" id="cta">
   <div class="cta-wrap">
@@ -2590,7 +2528,7 @@ h1, h2, h3, h4 {
       <ul>
         <li><span style="color:var(--muted); cursor:default;" title="В разработке"><span data-i18n="footer.doc_privacy">Privacy Policy</span> <small style="opacity:0.6;" data-i18n="footer.doc_soon">(скоро)</small></span></li>
         <li><span style="color:var(--muted); cursor:default;" title="В разработке"><span data-i18n="footer.doc_terms">Terms of Use</span> <small style="opacity:0.6;" data-i18n="footer.doc_soon">(скоро)</small></span></li>
-        <li><a href="https://opbnb.bscscan.com/address/0x7eeBe30dF390fCE3166aD1Cb55935aa5bEe2871A" target="_blank" rel="noopener noreferrer" data-i18n="footer.doc_contract">Smart Contract</a></li>
+        <li><a href="https://opbnb.bscscan.com/address/0xc3D300e07E063d1dEAA75F5B2fF40652172f5434" target="_blank" rel="noopener noreferrer" data-i18n="footer.doc_contract">Smart Contract</a></li>
         <li><span style="color:var(--muted); cursor:default;" title="В разработке"><span data-i18n="footer.doc_audit">Аудит безопасности</span> <small style="opacity:0.6;" data-i18n="footer.doc_soon">(скоро)</small></span></li>
       </ul>
     </div>
