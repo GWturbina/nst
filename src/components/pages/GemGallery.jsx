@@ -50,7 +50,11 @@ export default function GemGallery() {
   const handleBuyShares = async () => {
     if (!showBuyModal || !buyAmount || parseInt(buyAmount) <= 0) return
     setTxPending(true)
-    const result = await Club.buyShare(showBuyModal, parseInt(buyAmount)).then(
+    // buyShare ждёт сумму USDT, не количество долей
+    const pool = pools.find(p => p.poolId === showBuyModal)
+    const sharePrice = parseFloat(pool?.sharePrice) || 0.5
+    const usdtAmount = parseInt(buyAmount) * sharePrice
+    const result = await Club.buyShare(showBuyModal, usdtAmount).then(
       () => ({ ok: true }),
       (err) => ({ ok: false, error: err?.reason || err?.message || 'Ошибка' })
     )
