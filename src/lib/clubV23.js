@@ -1,142 +1,83 @@
 'use client'
 /**
- * Diamond Club v2.3 — Unified Contract Service Layer
+ * Diamond Club v2.4 — Unified Contract Service Layer
  * ═══════════════════════════════════════════════════════
- * 
- * Заменяет 3 старых helper'а:
- *  - lib/diamondContracts.js (GemVaultV2, DiamondP2P, InsuranceFund, TrustScore, UserBoost, ReferralPool)
- *  - lib/dctContracts.js     (DCTToken, DCTBridge, FractionalGem, DCTExchange, GemFractionDEX, DCTHeritage, GemShowcase)
- *  - lib/clubLotsContracts.js (ClubLots)
- * 
- * Один файл — пять контрактов:
- *  - ClubDirectors  — голосование 60% директоров
- *  - ClubDCT        — токен DCT с заморозкой и эскроу
- *  - ClubMarketing  — распределение 10% по 9 уровням
- *  - ClubPools      — пулы, доли, P2P внутри пулов, redeem
- *  - ClubMarket     — магазин с эскроу, NSS купоны, lazy burn
- * 
- * USDT на opBNB = 18 decimals (не 6!) — поэтому используем formatEther/parseEther.
+ *
+ * ПОЛНАЯ ПЕРЕРАБОТКА (для контрактов v2.4 от 5 мая 2026)
+ *
+ * Что изменилось vs предыдущая версия:
+ *  1. ABI больше не пишется руками — берётся из src/contracts/abi/*.json
+ *     (это настоящие ABI скомпилированные из контрактов).
+ *  2. Модель пулов изменилась: НЕТ "долей как штук" (shares), есть
+ *     "сумма USDT" — партнёр платит amountUSDT и получает DCT по $0.50.
+ *  3. Структуры Pool/Item/Escrow/Proposal — новые. Адаптеры маппят их
+ *     к привычным полям UI чтобы компоненты ломать минимально.
+ *  4. NSS купоны — новая структура DiscountCoupon (требует backend gws.ink).
+ *  5. buyItemWithDCT теперь требует poolId (из какого пула тратить DCT).
+ *
+ * USDT на opBNB = 18 decimals (НЕ 6) — используем formatEther / parseEther.
+ *
+ * Все функции импортируются как:
+ *   import * as Club from '@/lib/clubV23'
  */
 import { ethers } from 'ethers'
 import web3 from './web3'
 import ADDRESSES from '@/contracts/addresses'
 
-// ═══════════════════════════════════════════════════
-// READ PROVIDER (без кошелька)
-// ═══════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// ABI — берём из настоящих JSON файлов
+// ═══════════════════════════════════════════════════════
+import ClubDCTArtifact from '@/contracts/abi/ClubDCT.json'
+import ClubPoolsArtifact from '@/contracts/abi/ClubPools.json'
+import ClubMarketArtifact from '@/contracts/abi/ClubMarket.json'
+import ClubMarketingArtifact from '@/contracts/abi/ClubMarketing.json'
+import ClubDirectorsArtifact from '@/contracts/abi/ClubDirectors.json'
+
+// JSON файлы могут быть массивом ABI или объектом {abi: [...]}
+function unwrapAbi(artifact) {
+  if (Array.isArray(artifact)) return artifact
+  if (artifact?.abi) return artifact.abi
+  return artifact?.default?.abi || artifact?.default || []
+}
+
+const CLUBDCT_ABI       = unwrapAbi(ClubDCTArtifact)
+const CLUBPOOLS_ABI     = unwrapAbi(ClubPoolsArtifact)
+const CLUBMARKET_ABI    = unwrapAbi(ClubMarketArtifact)
+const CLUBMARKETING_ABI = unwrapAbi(ClubMarketingArtifact)
+const CLUBDIRECTORS_ABI = unwrapAbi(ClubDirectorsArtifact)
+
+const USDT_ABI = [
+  'function balanceOf(address) view returns (uint256)',
+  'function approve(address spender, uint256 amount) returns (bool)',
+  'function allowance(address owner, address spender) view returns (uint256)',
+  'function decimals() view returns (uint8)',
+]
+
+// ═══════════════════════════════════════════════════════
+// READ PROVIDER (RPC без кошелька)
+// ═══════════════════════════════════════════════════════
 const READ_RPC = process.env.NEXT_PUBLIC_RPC_URL || 'https://opbnb-mainnet-rpc.bnbchain.org'
 const readProvider = new ethers.JsonRpcProvider(READ_RPC)
 
-// ═══════════════════════════════════════════════════
-// MINIMAL ABIs (только функции которые нужны фронту)
-// ═══════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// УТИЛИТЫ ФОРМАТИРОВАНИЯ (USDT и DCT — оба 18 decimals)
+// ═══════════════════════════════════════════════════════
+const fmt = (v) => {
+  try { return ethers.formatEther(v ?? 0n) } catch { return '0' }
+}
+const parse = (v) => {
+  try { return ethers.parseEther(String(v ?? 0)) } catch { return 0n }
+}
+// Алиасы для совместимости (раньше различались 6/18 decimals)
+const fmt6 = fmt
+const parse6 = parse
 
-const CLUBDCT_ABI = [
-  // ERC20
-  'function balanceOf(address account) view returns (uint256)',
-  'function totalSupply() view returns (uint256)',
-  'function decimals() view returns (uint8)',
-  'function approve(address spender, uint256 amount) returns (bool)',
-  'function allowance(address owner, address spender) view returns (uint256)',
-  'function transfer(address to, uint256 amount) returns (bool)',
-  // Заморозка/разморозка
-  'function getFrozenBalance(address user) view returns (uint256)',
-  'function getUnlockedBalance(address user) view returns (uint256)',
-  'function getHoldingsCount(address user) view returns (uint256)',
-  'function getHoldingsByPool(address user, uint256 poolId) view returns (uint256)',
-  'function getAllHoldings(address user) view returns (tuple(uint256 poolId, uint256 amount, uint64 unlocksAt)[])',
-]
+// Безопасный Number() из BigInt
+const num = (v) => { try { return Number(v ?? 0) } catch { return 0 } }
 
-const CLUBPOOLS_ABI = [
-  // Пулы — структура
-  'function poolsCount() view returns (uint256)',
-  'function getPool(uint256 poolId) view returns (tuple(string name, uint256 targetUSDT, uint256 collectedUSDT, uint256 totalShares, uint256 sharesSold, uint256 sharePrice, uint8 minGWLevel, uint8 status, uint64 createdAt, uint64 deadline, uint256 treasuryUSDT, uint256 totalDCT, uint256 itemId, uint256 saleAmount, uint64 redeemUnlocksAt, address creator))',
-  'function getPoolStatus(uint256 poolId) view returns (uint8)',
-  'function getCurrentDCTPrice(uint256 poolId) view returns (uint256)',
-  'function getUserInvestment(address user, uint256 poolId) view returns (uint256)',
-  'function getReserveBalance() view returns (uint256)',
-  
-  // Покупка доли в пуле
-  'function buyShare(uint256 poolId, uint256 sharesCount)',
-  
-  // P2P — продажа долей пула между партнёрами
-  'function listShareForSale(uint256 poolId, uint256 dctAmount, uint256 priceUSDT)',
-  'function buyShareP2P(uint256 offerId)',
-  'function cancelOffer(uint256 offerId)',
-  
-  // Redeem (выкуп камня партнёром)
-  'function redeem(uint256 poolId, uint256 dctAmount)',
-  'function redeemAtFloor(uint256 poolId)',
-  
-  // Аварийные функции
-  'function claimInactivePool(uint256 poolId)',
-  'function claimDrainedPool(uint256 poolId)',
-  
-  // Whitelist заводов (только multisig)
-  'function approvedFactories(address factory) view returns (bool)',
-  'function addFactory(address factory)',
-  'function revokeFactory(address factory)',
-  
-  // Owner функции
-  'function createPool(string name, uint256 targetUSDT, uint256 totalShares, uint8 minGWLevel, uint64 fundraisingDays)',
-  'function recordGemPurchased(uint256 poolId, uint256 itemId, uint256 cost)',
-  'function recordSale(uint256 poolId, uint256 saleAmount)',
-  'function withdrawForGemPurchase(address to, uint256 amount)',
-]
-
-const CLUBMARKET_ABI = [
-  // Items на витрине
-  'function getItem(uint256 itemId) view returns (tuple(uint256 poolId, address seller, uint256 priceUSDT, string description, string imageURI, uint8 status, uint64 createdAt, address buyer, uint64 boughtAt))',
-  'function getEscrow(uint256 itemId) view returns (tuple(uint256 amountUSDT, uint64 escrowEndsAt, uint8 status, string trackingNumber, uint64 shippedAt, uint64 confirmedAt))',
-  'function getActiveItemCount() view returns (uint256)',
-  
-  // Покупка
-  'function buyItem(uint256 itemId, uint256 dctToBurn)',
-  'function buyItemWithCoupon(uint256 itemId, uint256 dctToBurn, uint16 discountBP, uint64 deadline, bytes signature)',
-  'function buyItemWithDCT(uint256 itemId, uint256 dctAmount)',
-  
-  // Эскроу
-  'function markShipped(uint256 itemId, string trackingNumber)',
-  'function confirmReceived(uint256 itemId)',
-  'function autoReleaseExpired(uint256 itemId)',
-  'function disputeItem(uint256 itemId, string reason)',
-  'function claimStuckEscrow(uint256 itemId)',
-  
-  // Партнёрская продажа (resale)
-  'function listResale(uint256 poolItemId, uint256 priceUSDT, string description, string imageURI)',
-  'function cancelListing(uint256 itemId)',
-  
-  // Owner функции
-  'function listGemFromPool(uint256 poolId, uint256 priceUSDT, string description, string imageURI)',
-  'function listJewelryFromPool(uint256 poolId, uint256 priceUSDT, string description, string imageURI)',
-]
-
-const CLUBMARKETING_ABI = [
-  'function getBalance(address partner) view returns (uint256)',
-  'function getEarningsByLevel(address partner) view returns (uint256[9])',
-  'function getCurrentPhase() view returns (uint8)',
-  'function adsToPhaseSwitch() view returns (uint256)',
-  'function claim()',
-  'function claimInactive()',
-]
-
-const CLUBDIRECTORS_ABI = [
-  'function getDirectors() view returns (address[])',
-  'function getDirectorsCount() view returns (uint256)',
-  'function requiredApprovals() view returns (uint256)',
-  'function getProposal(uint256 proposalId) view returns (tuple(address target, uint8 action, bytes data, uint256 createdAt, uint256 approvalCount, uint8 status, address[] approvers))',
-  'function getAllProposals() view returns (uint256[])',
-]
-
-// ═══════════════════════════════════════════════════
-// УТИЛИТЫ
-// ═══════════════════════════════════════════════════
-
-const fmt = ethers.formatEther          // 18 decimals
-const fmt6 = ethers.formatEther         // opBNB USDT = 18 decimals (alias)
-const parse = ethers.parseEther
-const parse6 = (v) => ethers.parseEther(String(v))   // opBNB USDT = 18 decimals
-
+// ═══════════════════════════════════════════════════════
+// CONTRACT FACTORIES
+// ═══════════════════════════════════════════════════════
 function getContract(name, abi) {
   if (!web3.signer) throw new Error('Кошелёк не подключён')
   const addr = ADDRESSES[name]
@@ -151,35 +92,50 @@ function getReadContract(name, abi) {
 }
 
 function getUSDT() {
-  const abi = [
-    'function balanceOf(address) view returns (uint256)',
-    'function approve(address spender, uint256 amount) returns (bool)',
-    'function allowance(address owner, address spender) view returns (uint256)',
-  ]
-  return new ethers.Contract(ADDRESSES.USDT, abi, web3.signer)
+  return new ethers.Contract(ADDRESSES.USDT, USDT_ABI, web3.signer)
 }
 
-async function ensureUSDTApproval(spender, amount) {
+function getUSDTRead() {
+  return new ethers.Contract(ADDRESSES.USDT, USDT_ABI, readProvider)
+}
+
+// ═══════════════════════════════════════════════════════
+// ALLOWANCE — проверка и approve если нужно
+// ═══════════════════════════════════════════════════════
+async function ensureUSDTApproval(spender, amountWei) {
+  if (!web3.address) throw new Error('Адрес не определён')
   const usdt = getUSDT()
-  const currentAllowance = await usdt.allowance(web3.address, spender)
-  if (currentAllowance < amount) {
-    const tx = await usdt.approve(spender, amount)
+  const current = await usdt.allowance(web3.address, spender)
+  if (current < amountWei) {
+    const tx = await usdt.approve(spender, amountWei)
     await tx.wait()
   }
 }
 
-async function ensureDCTApproval(spender, amount) {
+async function ensureDCTApproval(spender, amountWei) {
+  if (!web3.address) throw new Error('Адрес не определён')
   const dct = getContract('ClubDCT', CLUBDCT_ABI)
-  const currentAllowance = await dct.allowance(web3.address, spender)
-  if (currentAllowance < amount) {
-    const tx = await dct.approve(spender, amount)
+  const current = await dct.allowance(web3.address, spender)
+  if (current < amountWei) {
+    const tx = await dct.approve(spender, amountWei)
     await tx.wait()
   }
 }
 
-// ═══════════════════════════════════════════════════
-// CLUB DCT — токен DCT
-// ═══════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// USDT — баланс кошелька
+// ═══════════════════════════════════════════════════════
+export async function getUSDTBalance(address) {
+  if (!address) return '0'
+  try {
+    const usdt = getUSDTRead()
+    return fmt(await usdt.balanceOf(address))
+  } catch { return '0' }
+}
+
+// ═══════════════════════════════════════════════════════
+// CLUB DCT — токен Diamond Club
+// ═══════════════════════════════════════════════════════
 
 export async function getDCTBalance(address) {
   const c = getReadContract('ClubDCT', CLUBDCT_ABI)
@@ -191,32 +147,59 @@ export async function getDCTUserInfo(address) {
   const c = getReadContract('ClubDCT', CLUBDCT_ABI)
   if (!c || !address) return null
   try {
-    const [total, frozen, unlocked] = await Promise.all([
+    const [total, frozen, unlocked, holdingsCount] = await Promise.all([
       c.balanceOf(address),
       c.getFrozenBalance(address),
       c.getUnlockedBalance(address),
+      c.getHoldingsCount(address),
     ])
     return {
       total: fmt(total),
-      locked: fmt(frozen),       // алиас старого имени
-      free: fmt(unlocked),       // алиас старого имени
+      // Алиасы старых имён для совместимости с компонентами
+      locked: fmt(frozen),
+      free: fmt(unlocked),
+      // Новые правильные имена
       frozen: fmt(frozen),
       unlocked: fmt(unlocked),
+      holdingsCount: num(holdingsCount),
     }
   } catch { return null }
 }
 
+/**
+ * Возвращает все холдинги пользователя (DCT привязанные к пулам).
+ * Адаптер: контракт даёт {amount, poolId, mintedAt, unlocksAt},
+ * UI ожидает {poolId, amount, unlocksAt} — добавляем mintedAt бонусом.
+ */
 export async function getDCTHoldings(address) {
   const c = getReadContract('ClubDCT', CLUBDCT_ABI)
   if (!c || !address) return []
   try {
     const all = await c.getAllHoldings(address)
-    return all.map(h => ({
-      poolId: Number(h.poolId),
-      amount: fmt(h.amount),
-      unlocksAt: Number(h.unlocksAt),
-    }))
-  } catch { return [] }
+    const now = Math.floor(Date.now() / 1000)
+    return all.map(h => {
+      const unlocksAt = num(h.unlocksAt)
+      return {
+        poolId: num(h.poolId),
+        amount: fmt(h.amount),
+        amountWei: h.amount,           // BigInt — пригодится для расчётов
+        mintedAt: num(h.mintedAt),
+        unlocksAt,
+        // Удобные флаги для UI
+        isUnlocked: unlocksAt <= now,
+        secondsToUnlock: Math.max(0, unlocksAt - now),
+      }
+    }).filter(h => h.amount !== '0')   // пустые холдинги (после burn) скрываем
+  } catch (e) {
+    console.error('getDCTHoldings:', e?.message || e)
+    return []
+  }
+}
+
+export async function getDCTHoldingsByPool(address, poolId) {
+  const c = getReadContract('ClubDCT', CLUBDCT_ABI)
+  if (!c || !address) return '0'
+  try { return fmt(await c.getHoldingsByPool(address, poolId)) } catch { return '0' }
 }
 
 export async function getDCTTokenInfo() {
@@ -224,60 +207,112 @@ export async function getDCTTokenInfo() {
   if (!c) return null
   try {
     const supply = await c.totalSupply()
-    return {
-      totalSupply: fmt(supply),
-      // Текущая цена DCT — через ClubPools, не ClubDCT
-      // (цена зависит от treasury конкретного пула)
-    }
+    return { totalSupply: fmt(supply) }
   } catch { return null }
 }
 
-// ═══════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // CLUB POOLS — пулы и доли
-// ═══════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 
 export async function getPoolsCount() {
   const c = getReadContract('ClubPools', CLUBPOOLS_ABI)
   if (!c) return 0
-  try { return Number(await c.poolsCount()) } catch { return 0 }
+  try { return num(await c.poolsCount()) } catch { return 0 }
 }
 
+/**
+ * Получить пул и адаптировать к привычной для UI структуре.
+ *
+ * Контракт возвращает:
+ *   { id, name, targetUSDT, raisedUSDT, treasuryUSDT, totalDCT, status,
+ *     createdAt, unlocksAt, cyclesCompleted, currentItemId, metaUrl }
+ *
+ * UI исторически ждёт ещё и:
+ *   collectedUSDT, sharePrice, minGWLevel, deadline, redeemUnlocksAt,
+ *   itemId, saleAmount, creator, totalShares, sharesSold, progress
+ *
+ * Мы возвращаем оба набора имён — UI не сломается, а новые имена доступны.
+ */
 export async function getPool(poolId) {
   const c = getReadContract('ClubPools', CLUBPOOLS_ABI)
   if (!c) return null
   try {
     const p = await c.getPool(poolId)
+
+    const targetWei  = p.targetUSDT
+    const raisedWei  = p.raisedUSDT
+    const treasWei   = p.treasuryUSDT
+    const dctTotalW  = p.totalDCT
+
+    // Прогресс сбора (0-100)
+    const progress = targetWei > 0n
+      ? Number((raisedWei * 10000n) / targetWei) / 100
+      : 0
+
+    // Текущая цена 1 DCT в пуле (в USDT 18 decimals)
+    // = treasury * 1e18 / totalDCT
+    const dctPriceWei = dctTotalW > 0n
+      ? (treasWei * 10n ** 18n) / dctTotalW
+      : 5n * 10n ** 17n   // дефолт $0.50 пока пул пуст
+    const dctPrice = fmt(dctPriceWei)
+
     return {
-      poolId,
+      // ─── Новые правильные поля ───
+      poolId: num(p.id),
+      id: num(p.id),
       name: p.name,
-      targetUSDT: fmt(p.targetUSDT),
-      collectedUSDT: fmt(p.collectedUSDT),
-      totalShares: Number(p.totalShares),
-      sharesSold: Number(p.sharesSold),
-      sharePrice: fmt(p.sharePrice),
-      minGWLevel: Number(p.minGWLevel),
-      status: Number(p.status),  // 0=Fundraising, 1=Funded, 2=GemBought, 3=Sold, 4=Cancelled, 5=Drained
-      createdAt: Number(p.createdAt),
-      deadline: Number(p.deadline),
-      treasuryUSDT: fmt(p.treasuryUSDT),
-      totalDCT: fmt(p.totalDCT),
-      itemId: Number(p.itemId),
-      saleAmount: fmt(p.saleAmount),
-      redeemUnlocksAt: Number(p.redeemUnlocksAt),
-      creator: p.creator,
+      targetUSDT: fmt(targetWei),
+      targetWei,
+      raisedUSDT: fmt(raisedWei),
+      raisedWei,
+      treasuryUSDT: fmt(treasWei),
+      treasuryWei: treasWei,
+      totalDCT: fmt(dctTotalW),
+      totalDCTWei: dctTotalW,
+      status: num(p.status),  // 0=Open, 1=Funded, 2=InGem, 3=Cycling, 4=Frozen, 5=Unlocked, 6=Cancelled, 7=Drained
+      createdAt: num(p.createdAt),
+      unlocksAt: num(p.unlocksAt),
+      cyclesCompleted: num(p.cyclesCompleted),
+      currentItemId: num(p.currentItemId),
+      metaUrl: p.metaUrl,
+      progress,
+      currentDCTPrice: dctPrice,
+      currentDCTPriceWei: dctPriceWei,
+      // Удобства
+      isOpen: num(p.status) === 0,
+      isInGem: num(p.status) === 2,
+      isUnlocked: num(p.status) === 5 || Date.now()/1000 >= num(p.unlocksAt),
+
+      // ─── Алиасы для старого UI ───
+      collectedUSDT: fmt(raisedWei),
+      sharePrice: '0.5',                  // фикс цена DCT при покупке
+      minGWLevel: 7,                      // глобальная константа
+      deadline: 0,                        // нет дедлайна в новой модели
+      redeemUnlocksAt: num(p.unlocksAt),
+      itemId: num(p.currentItemId),
+      saleAmount: '0',
+      creator: '',
+      totalShares: 0,                     // в новой модели нет
+      sharesSold: 0,
     }
-  } catch { return null }
+  } catch (e) {
+    console.error('getPool:', poolId, e?.message || e)
+    return null
+  }
 }
 
+/**
+ * Все пулы (для витрины). Параллельно читаем чтобы быстрее.
+ * ВНИМАНИЕ: в контракте пулы нумеруются с 1, не с 0.
+ */
 export async function getAllPools() {
   const count = await getPoolsCount()
   if (count === 0) return []
-  const pools = []
-  for (let i = 0; i < count; i++) {
-    const p = await getPool(i)
-    if (p) pools.push(p)
-  }
-  return pools
+  const ids = []
+  for (let i = 1; i <= count; i++) ids.push(i)
+  const results = await Promise.all(ids.map(id => getPool(id)))
+  return results.filter(Boolean)
 }
 
 export async function getCurrentDCTPrice(poolId) {
@@ -298,29 +333,70 @@ export async function getReserveBalance() {
   try { return fmt(await c.getReserveBalance()) } catch { return '0' }
 }
 
-// Покупка доли — основная функция партнёра
-export async function buyShare(poolId, sharesCount) {
+/**
+ * Купить долю в пуле.
+ *
+ * НОВАЯ СИГНАТУРА: amountUSDT — сумма в USDT (число или строка, не wei).
+ * Партнёр получит DCT по фиксированной цене $0.50:
+ *   dctMinted = amountUSDT × 2
+ *
+ * СТАРЫЙ UI передавал sharesCount (1, 2, 3) — это явно не USDT-сумма.
+ * Поэтому делаем умный fallback: если значение < 100 и в Supabase есть
+ * share_price для этого пула — это старый вызов, конвертируем.
+ *
+ * Лучше всего: переделай UI на input "сумма USDT" вместо "количество долей".
+ * Пока что — обратная совместимость.
+ *
+ * @param {number} poolId — ID пула
+ * @param {number|string} amountUSDT — сумма USDT (например 1000 = $1000)
+ */
+export async function buyShare(poolId, amountUSDT) {
+  const c = getContract('ClubPools', CLUBPOOLS_ABI)
+
+  // Защита от случайной передачи sharesCount вместо USDT
+  // В новой модели $1 — минимум, ниже не имеет смысла
+  const value = parseFloat(amountUSDT)
+  if (!value || value <= 0) {
+    throw new Error('Укажите сумму USDT больше 0')
+  }
+  if (value > 0 && value < 1) {
+    throw new Error('Минимальная сумма $1 USDT')
+  }
+
+  const amountWei = parse(value)
+
+  // Approve USDT перед покупкой
+  await ensureUSDTApproval(ADDRESSES.ClubPools, amountWei)
+
+  const tx = await c.buyShare(poolId, amountWei)
+  return await tx.wait()
+}
+
+/**
+ * P2P — выставить ВСЮ свою долю в пуле на продажу
+ * @param {number} poolId
+ * @param {number|string} priceUSDT — желаемая цена за всю долю
+ */
+export async function listShareForSaleP2P(poolId, priceUSDT) {
+  const c = getContract('ClubPools', CLUBPOOLS_ABI)
+  const tx = await c.listShareForSale(poolId, parse(priceUSDT))
+  return await tx.wait()
+}
+
+/**
+ * P2P — купить чужую долю
+ */
+export async function buyShareP2P(offerId) {
   const c = getContract('ClubPools', CLUBPOOLS_ABI)
   const cRead = getReadContract('ClubPools', CLUBPOOLS_ABI)
-  const pool = await cRead.getPool(poolId)
-  const totalCost = pool.sharePrice * BigInt(sharesCount)
-  // approve USDT
-  await ensureUSDTApproval(ADDRESSES.ClubPools, totalCost)
-  const tx = await c.buyShare(poolId, sharesCount)
-  return await tx.wait()
-}
 
-// P2P — выставить долю на продажу
-export async function listShareForSaleP2P(poolId, dctAmount, priceUSDT) {
-  const c = getContract('ClubPools', CLUBPOOLS_ABI)
-  const tx = await c.listShareForSale(poolId, parse(dctAmount), parse6(priceUSDT))
-  return await tx.wait()
-}
+  // Узнаём цену оффера чтобы сделать approve
+  const offer = await cRead.shareOffers(offerId)
+  // shareOffers возвращает: poolId, seller, priceUSDT, dctAmount, status, createdAt
+  const priceWei = offer[2] ?? offer.priceUSDT
+  if (!priceWei || priceWei === 0n) throw new Error('Оффер не существует')
 
-// P2P — купить чью-то долю
-export async function buyShareP2P(offerId, priceUSDT) {
-  const c = getContract('ClubPools', CLUBPOOLS_ABI)
-  await ensureUSDTApproval(ADDRESSES.ClubPools, parse6(priceUSDT))
+  await ensureUSDTApproval(ADDRESSES.ClubPools, priceWei)
   const tx = await c.buyShareP2P(offerId)
   return await tx.wait()
 }
@@ -331,168 +407,418 @@ export async function cancelP2POffer(offerId) {
   return await tx.wait()
 }
 
-// Redeem — выкуп камня партнёром (текущая цена DCT)
+/**
+ * Список всех P2P-офферов (для витрины P2P).
+ */
+export async function getAllP2POffers() {
+  const c = getReadContract('ClubPools', CLUBPOOLS_ABI)
+  if (!c) return []
+  try {
+    const count = num(await c.offersCount())
+    const offers = []
+    for (let i = 1; i <= count; i++) {
+      const o = await c.shareOffers(i)
+      const status = num(o[4])
+      // 0=Open, 1=Sold, 2=Cancelled
+      offers.push({
+        offerId: i,
+        poolId: num(o[0]),
+        seller: o[1],
+        priceUSDT: fmt(o[2]),
+        priceWei: o[2],
+        dctAmount: fmt(o[3]),
+        status,
+        isOpen: status === 0,
+        createdAt: num(o[5]),
+      })
+    }
+    return offers
+  } catch (e) {
+    console.error('getAllP2POffers:', e?.message || e)
+    return []
+  }
+}
+
+/**
+ * Redeem — обмен DCT на USDT по реальной цене пула (после разморозки).
+ * Контракт поддерживает только полный redeem (всё что есть в пуле).
+ */
 export async function redeem(poolId, dctAmount) {
   const c = getContract('ClubPools', CLUBPOOLS_ABI)
-  await ensureDCTApproval(ADDRESSES.ClubPools, parse(dctAmount))
-  const tx = await c.redeem(poolId, parse(dctAmount))
+  const dctWei = parse(dctAmount)
+  // approve не нужен — контракт сам сжигает свои DCT (внутренний burn)
+  const tx = await c.redeem(poolId, dctWei)
   return await tx.wait()
 }
 
-// Redeem at floor — защитная цена $0.56
+/**
+ * Защитный выкуп по $0.56 (если реальная цена пула ниже).
+ */
 export async function redeemAtFloor(poolId) {
   const c = getContract('ClubPools', CLUBPOOLS_ABI)
   const tx = await c.redeemAtFloor(poolId)
   return await tx.wait()
 }
 
-// Claim из stuck-пула (90 дней без активности)
+/**
+ * Аварийная защита Уровень 1 — забрать USDT если пул мёртв 90 дней
+ */
 export async function claimInactivePool(poolId) {
   const c = getContract('ClubPools', CLUBPOOLS_ABI)
   const tx = await c.claimInactivePool(poolId)
   return await tx.wait()
 }
 
-// Claim из drained-контракта (после форс-мажора)
+/**
+ * Аварийная защита Уровень 3 — забрать USDT после Drained
+ */
 export async function claimDrainedPool(poolId) {
   const c = getContract('ClubPools', CLUBPOOLS_ABI)
   const tx = await c.claimDrainedPool(poolId)
   return await tx.wait()
 }
 
-// ═══════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// CLUB POOLS — АДМИН
+// ═══════════════════════════════════════════════════════
+
+/**
+ * Создать пул (новая правильная сигнатура).
+ *
+ * @param {string} name — название пула
+ * @param {number|string} targetUSDT — цель сбора в USDT
+ * @param {string} metaUrl — IPFS/HTTP URL с фотками+метаданными
+ */
+export async function createPool(name, targetUSDT, metaUrl = '') {
+  const c = getContract('ClubPools', CLUBPOOLS_ABI)
+  const tx = await c.createPool(String(name), parse(targetUSDT), String(metaUrl || ''))
+  return await tx.wait()
+}
+
+/**
+ * АЛИАС старого имени для совместимости с LotsAdmin.
+ * Старый вызов: createLotOnChain(targetUSDT, sharePrice, minGwLevel, secret, opts{name, fundraisingDays})
+ *
+ * В новой модели sharePrice/minGwLevel/secret/fundraisingDays игнорируются —
+ * они задаются константами в контракте. Передаём только name + targetUSDT + metaUrl.
+ */
+export async function createLotOnChain(targetUSDT, sharePrice, minGwLevel, secret, opts = {}) {
+  const name = opts.name || `Pool ${Date.now()}`
+  const metaUrl = opts.metaUrl || opts.photoUrl || ''
+  return await createPool(name, targetUSDT, metaUrl)
+}
+
+/**
+ * Записать что камень для пула куплен (после off-chain платежа заводу).
+ * @param {number} poolId
+ * @param {number} itemId — ID камня в ClubMarket (надо получить из listGemFromPool)
+ * @param {number|string} cost — себестоимость в USDT
+ */
+export async function recordGemPurchased(poolId, itemId, cost) {
+  const c = getContract('ClubPools', CLUBPOOLS_ABI)
+  const tx = await c.recordGemPurchased(poolId, itemId, parse(cost))
+  return await tx.wait()
+}
+
+/**
+ * Перевод USDT с контракта на одобренный завод (для off-chain закупки).
+ * Только owner. Адрес должен быть заранее в whitelist (addFactory от multisig).
+ */
+export async function withdrawForGemPurchase(toFactory, amountUSDT) {
+  const c = getContract('ClubPools', CLUBPOOLS_ABI)
+  const tx = await c.withdrawForGemPurchase(toFactory, parse(amountUSDT))
+  return await tx.wait()
+}
+
+export async function isApprovedFactory(addr) {
+  const c = getReadContract('ClubPools', CLUBPOOLS_ABI)
+  if (!c || !addr) return false
+  try { return await c.approvedFactories(addr) } catch { return false }
+}
+
+// ═══════════════════════════════════════════════════════
 // CLUB MARKET — магазин с эскроу
-// ═══════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 
 export async function getActiveItemCount() {
   const c = getReadContract('ClubMarket', CLUBMARKET_ABI)
   if (!c) return 0
-  try { return Number(await c.getActiveItemCount()) } catch { return 0 }
+  try { return num(await c.itemsCount()) } catch { return 0 }
 }
 
+/**
+ * Получить товар по ID. Адаптируем к привычной для UI структуре.
+ *
+ * Контракт даёт:
+ *   { id, itemType, sourcePoolId, sourceCombinedId, seller, cost,
+ *     priceK, status, metaUrl, listedAt }
+ *
+ * UI хочет: poolId, seller, priceUSDT, description, imageURI, status,
+ *           createdAt, buyer, boughtAt
+ *
+ * buyer и boughtAt живут в Escrow — добавим их через доп. запрос если нужны.
+ */
 export async function getMarketItem(itemId) {
   const c = getReadContract('ClubMarket', CLUBMARKET_ABI)
   if (!c) return null
   try {
     const item = await c.getItem(itemId)
     return {
-      itemId,
-      poolId: Number(item.poolId),
+      // Новые правильные поля
+      itemId: num(item.id),
+      id: num(item.id),
+      itemType: num(item.itemType),       // 0=Gem, 1=Jewelry, 2=Resale
+      sourcePoolId: num(item.sourcePoolId),
+      sourceCombinedId: num(item.sourceCombinedId),
       seller: item.seller,
-      priceUSDT: fmt(item.priceUSDT),
-      description: item.description,
-      imageURI: item.imageURI,
-      status: Number(item.status),  // 0=Listed, 1=Sold, 2=Cancelled
-      createdAt: Number(item.createdAt),
-      buyer: item.buyer,
-      boughtAt: Number(item.boughtAt),
+      cost: fmt(item.cost),
+      priceK: fmt(item.priceK),
+      priceWei: item.priceK,
+      status: num(item.status),           // 0=Listed, 1=InEscrow, 2=Sold, 3=Cancelled
+      metaUrl: item.metaUrl,
+      listedAt: num(item.listedAt),
+
+      // Алиасы для старого UI
+      poolId: num(item.sourcePoolId),
+      priceUSDT: fmt(item.priceK),
+      description: item.metaUrl,          // в новой модели всё в metaUrl
+      imageURI: item.metaUrl,
+      createdAt: num(item.listedAt),
+
+      // Удобные флаги
+      isListed: num(item.status) === 0,
+      isInEscrow: num(item.status) === 1,
+      isSold: num(item.status) === 2,
+      isCancelled: num(item.status) === 3,
+      isResale: num(item.itemType) === 2,
     }
-  } catch { return null }
+  } catch (e) {
+    console.error('getMarketItem:', itemId, e?.message || e)
+    return null
+  }
 }
 
+/**
+ * Получить эскроу. Адаптер.
+ *
+ * Контракт даёт: { buyer, amount, lockedAt, deadline, status, trackingNumber, dctBurned }
+ * UI ждёт: { amountUSDT, escrowEndsAt, status, trackingNumber, shippedAt, confirmedAt }
+ *
+ * shippedAt/confirmedAt в контракте НЕ хранятся (нужно читать события).
+ * Для UI оставляем 0 — компоненты должны это понимать.
+ */
 export async function getEscrow(itemId) {
   const c = getReadContract('ClubMarket', CLUBMARKET_ABI)
   if (!c) return null
   try {
     const e = await c.getEscrow(itemId)
+    const hasTracking = e.trackingNumber && e.trackingNumber.length > 0
     return {
-      itemId,
-      amountUSDT: fmt(e.amountUSDT),
-      escrowEndsAt: Number(e.escrowEndsAt),
-      status: Number(e.status),    // 0=None, 1=Pending, 2=Shipped, 3=Confirmed, 4=Disputed, 5=Released
+      // Новые правильные поля
+      buyer: e.buyer,
+      amount: fmt(e.amount),
+      amountWei: e.amount,
+      lockedAt: num(e.lockedAt),
+      deadline: num(e.deadline),
+      status: num(e.status),     // 0=Locked, 1=Disputed, 2=Confirmed, 3=Refunded, 4=Released
       trackingNumber: e.trackingNumber,
-      shippedAt: Number(e.shippedAt),
-      confirmedAt: Number(e.confirmedAt),
+      dctBurned: fmt(e.dctBurned),
+
+      // Алиасы для старого UI
+      itemId,
+      amountUSDT: fmt(e.amount),
+      escrowEndsAt: num(e.deadline),
+      shippedAt: 0,              // нет в контракте — читай событие ItemShipped
+      confirmedAt: 0,            // нет в контракте — читай событие ItemReceived
+
+      // Флаги
+      isShipped: hasTracking,
+      isLocked: num(e.status) === 0,
+      isDisputed: num(e.status) === 1,
+      isConfirmed: num(e.status) === 2,
+      isRefunded: num(e.status) === 3,
+      isReleased: num(e.status) === 4,
     }
-  } catch { return null }
+  } catch (e) {
+    console.error('getEscrow:', itemId, e?.message || e)
+    return null
+  }
 }
 
-// Покупка камня через ClubMarket
-// dctToBurn — сколько DCT партнёр хочет потратить (из своих unlocked)
-export async function buyItem(itemId, dctToBurn = '0') {
+/**
+ * Купить товар без скидки (платим полную цену USDT в эскроу).
+ *
+ * ВНИМАНИЕ: dctToBurn в новых контрактах ОБЯЗАН быть 0.
+ * Для скидки используется buyItemWithCoupon, для оплаты DCT — buyItemWithDCT.
+ */
+export async function buyItem(itemId, _dctToBurnIgnored = 0) {
   const c = getContract('ClubMarket', CLUBMARKET_ABI)
   const cRead = getReadContract('ClubMarket', CLUBMARKET_ABI)
+
   const item = await cRead.getItem(itemId)
-  
-  // Подсчёт сколько USDT нужно после применения DCT
-  // (цена DCT определяется в контракте на момент покупки)
-  // Для простоты — approve полную цену в USDT, контракт спишет нужное
-  await ensureUSDTApproval(ADDRESSES.ClubMarket, item.priceUSDT)
-  
-  // Если есть DCT для сжигания — approve их тоже
-  if (parse(dctToBurn) > 0n) {
-    await ensureDCTApproval(ADDRESSES.ClubMarket, parse(dctToBurn))
+  const priceWei = item.priceK
+
+  await ensureUSDTApproval(ADDRESSES.ClubMarket, priceWei)
+
+  // dctToBurn = 0 обязательно (контракт требует)
+  const tx = await c.buyItem(itemId, 0)
+  return await tx.wait()
+}
+
+/**
+ * Купить с использованием РАЗМОРОЖЕННЫХ DCT.
+ *
+ * Партнёр платит часть товара DCT (по реальной цене пула), остаток USDT.
+ * DCT блокируются в эскроу (не сжигаются сразу) — при confirmReceived
+ * окончательно сжигаются, при stuck/refund возвращаются.
+ *
+ * @param {number} itemId
+ * @param {number|string} dctAmount — сколько DCT использовать
+ * @param {number} poolId — из какого пула DCT (партнёр выбирает на UI)
+ */
+export async function buyItemWithDCT(itemId, dctAmount, poolId) {
+  if (!poolId || poolId <= 0) {
+    throw new Error('Укажите ID пула из которого тратите DCT')
   }
-  
-  const tx = await c.buyItem(itemId, parse(dctToBurn))
-  return await tx.wait()
-}
-
-// Покупка только за DCT (lazy burn — DCT блокируются до confirmReceived)
-export async function buyItemWithDCT(itemId, dctAmount) {
-  const c = getContract('ClubMarket', CLUBMARKET_ABI)
-  await ensureDCTApproval(ADDRESSES.ClubMarket, parse(dctAmount))
-  const tx = await c.buyItemWithDCT(itemId, parse(dctAmount))
-  return await tx.wait()
-}
-
-// Покупка с купоном NSS (со скидкой)
-export async function buyItemWithCoupon(itemId, dctToBurn, discountBP, deadline, signature) {
   const c = getContract('ClubMarket', CLUBMARKET_ABI)
   const cRead = getReadContract('ClubMarket', CLUBMARKET_ABI)
+  const cPools = getReadContract('ClubPools', CLUBPOOLS_ABI)
+
+  const dctWei = parse(dctAmount)
+
+  // Считаем сколько USDT покрывают DCT (по текущей цене пула)
+  // и сколько USDT нужно доплатить
+  const dctPrice = await cPools.getCurrentDCTPrice(poolId)  // USDT_per_DCT_wei
   const item = await cRead.getItem(itemId)
-  
-  // Сумма к оплате со скидкой
-  const discounted = item.priceUSDT - (item.priceUSDT * BigInt(discountBP)) / 10000n
-  await ensureUSDTApproval(ADDRESSES.ClubMarket, discounted)
-  
-  if (parse(dctToBurn) > 0n) {
-    await ensureDCTApproval(ADDRESSES.ClubMarket, parse(dctToBurn))
+  const usdtFromDCT = (dctWei * dctPrice) / (10n ** 18n)
+  const usdtToPay = item.priceK > usdtFromDCT ? item.priceK - usdtFromDCT : 0n
+
+  // Approve USDT-остатка (если > 0)
+  if (usdtToPay > 0n) {
+    await ensureUSDTApproval(ADDRESSES.ClubMarket, usdtToPay)
   }
-  
-  const tx = await c.buyItemWithCoupon(itemId, parse(dctToBurn), discountBP, deadline, signature)
+
+  const tx = await c.buyItemWithDCT(itemId, dctWei, poolId)
   return await tx.wait()
 }
 
-// Продавец отметил отправку
+/**
+ * Купить со скидкой по NSS-купону.
+ *
+ * НОВАЯ СТРУКТУРА КУПОНА (отличается от старой!):
+ *   coupon = { user, nssBurned, discountPct, expiresAt, nonce }
+ *
+ * Подпись делается backend'ом gws.ink над:
+ *   keccak256(abi.encode(user, nssBurned, discountPct, expiresAt, nonce, marketAddress))
+ *   с префиксом "\x19Ethereum Signed Message:\n32"
+ *
+ * @param {number} itemId
+ * @param {Object} coupon — { user, nssBurned, discountPct, expiresAt, nonce }
+ * @param {string} signature — подпись от couponSigner (0x + 130 hex)
+ */
+export async function buyItemWithCoupon(itemId, coupon, signature) {
+  const c = getContract('ClubMarket', CLUBMARKET_ABI)
+  const cRead = getReadContract('ClubMarket', CLUBMARKET_ABI)
+
+  // Валидация купона
+  if (!coupon || !coupon.user || !coupon.discountPct) {
+    throw new Error('Купон неверный')
+  }
+  if (coupon.user.toLowerCase() !== web3.address.toLowerCase()) {
+    throw new Error('Купон не на ваш адрес')
+  }
+  if (coupon.discountPct < 1 || coupon.discountPct > 5) {
+    throw new Error('Скидка должна быть от 1 до 5%')
+  }
+
+  // Считаем сумму к оплате со скидкой
+  const item = await cRead.getItem(itemId)
+  const discountWei = (item.priceK * BigInt(coupon.discountPct)) / 100n
+  const amountToPayWei = item.priceK - discountWei
+
+  await ensureUSDTApproval(ADDRESSES.ClubMarket, amountToPayWei)
+
+  // Структура для контракта: tuple(address, uint256, uint8, uint64, bytes32)
+  const couponStruct = {
+    user: coupon.user,
+    nssBurned: BigInt(coupon.nssBurned || 0),
+    discountPct: Number(coupon.discountPct),
+    expiresAt: BigInt(coupon.expiresAt),
+    nonce: coupon.nonce,
+  }
+
+  const tx = await c.buyItemWithCoupon(itemId, couponStruct, signature)
+  return await tx.wait()
+}
+
+/**
+ * Продавец отметил отправку.
+ * ВНИМАНИЕ: можно вызвать только до истечения 30 дней эскроу.
+ */
 export async function markShipped(itemId, trackingNumber) {
   const c = getContract('ClubMarket', CLUBMARKET_ABI)
-  const tx = await c.markShipped(itemId, trackingNumber)
+  if (!trackingNumber || trackingNumber.length === 0) {
+    throw new Error('Укажите номер отслеживания')
+  }
+  const tx = await c.markShipped(itemId, String(trackingNumber))
   return await tx.wait()
 }
 
-// Покупатель подтверждает получение
+/**
+ * Покупатель подтвердил получение → деньги уходят продавцу.
+ * (Можно вызвать в любой момент после оплаты — НЕ обязательно ждать 30 дней.)
+ */
 export async function confirmReceived(itemId) {
   const c = getContract('ClubMarket', CLUBMARKET_ABI)
   const tx = await c.confirmReceived(itemId)
   return await tx.wait()
 }
 
-// Авто-релиз (после 30 дней)
+/**
+ * Авто-релиз продавцу после 30 дней (если есть трек и нет спора).
+ * Может вызвать любой.
+ */
 export async function autoReleaseExpired(itemId) {
   const c = getContract('ClubMarket', CLUBMARKET_ABI)
   const tx = await c.autoReleaseExpired(itemId)
   return await tx.wait()
 }
 
-// Открыть спор
 export async function disputeItem(itemId, reason) {
   const c = getContract('ClubMarket', CLUBMARKET_ABI)
-  const tx = await c.disputeItem(itemId, reason)
+  const tx = await c.disputeItem(itemId, String(reason || ''))
   return await tx.wait()
 }
 
-// Claim stuck (если продавец/покупатель пропали)
+/**
+ * Оператор разрешает спор.
+ * @param {boolean} toSeller — true: деньги продавцу, false: возврат покупателю
+ */
+export async function resolveDispute(itemId, toSeller) {
+  const c = getContract('ClubMarket', CLUBMARKET_ABI)
+  const tx = await c.resolveDispute(itemId, !!toSeller)
+  return await tx.wait()
+}
+
+/**
+ * Покупатель забирает USDT обратно если 90 дней нет трека.
+ */
 export async function claimStuckEscrow(itemId) {
   const c = getContract('ClubMarket', CLUBMARKET_ABI)
   const tx = await c.claimStuckEscrow(itemId)
   return await tx.wait()
 }
 
-// Партнёрская перепродажа (resale своего камня)
-export async function listResale(poolItemId, priceUSDT, description, imageURI) {
+// ─── ВЫСТАВЛЕНИЕ ТОВАРОВ ───
+
+/**
+ * Партнёр (уровень 4+) выставляет свой товар (Resale).
+ * @param {number|string} priceUSDT — цена
+ * @param {string} metaUrl — URL с описанием+фоткой (всё одной строкой)
+ */
+export async function listResale(priceUSDT, metaUrl) {
   const c = getContract('ClubMarket', CLUBMARKET_ABI)
-  const tx = await c.listResale(poolItemId, parse6(priceUSDT), description, imageURI)
+  const tx = await c.listResale(parse(priceUSDT), String(metaUrl || ''))
   return await tx.wait()
 }
 
@@ -502,38 +828,53 @@ export async function cancelListing(itemId) {
   return await tx.wait()
 }
 
-// Owner — выставить камень из пула на продажу
-export async function listGemFromPool(poolId, priceUSDT, description, imageURI) {
+/**
+ * Owner/Operator выставляет камень из пула.
+ * @param {number} poolId — пул должен быть в InGem
+ * @param {number|string} cost — себестоимость (для recordSale)
+ * @param {number|string} priceK — цена продажи
+ * @param {string} metaUrl
+ */
+export async function listGemFromPool(poolId, cost, priceK, metaUrl) {
   const c = getContract('ClubMarket', CLUBMARKET_ABI)
-  const tx = await c.listGemFromPool(poolId, parse6(priceUSDT), description, imageURI)
+  const tx = await c.listGemFromPool(poolId, parse(cost), parse(priceK), String(metaUrl || ''))
   return await tx.wait()
 }
 
-export async function listJewelryFromPool(poolId, priceUSDT, description, imageURI) {
+export async function listJewelryFromPool(poolId, cost, priceK, metaUrl) {
   const c = getContract('ClubMarket', CLUBMARKET_ABI)
-  const tx = await c.listJewelryFromPool(poolId, parse6(priceUSDT), description, imageURI)
+  const tx = await c.listJewelryFromPool(poolId, parse(cost), parse(priceK), String(metaUrl || ''))
   return await tx.wait()
 }
 
-// Получить все активные items (для витрины)
+/**
+ * Все активные товары на витрине.
+ * Контракт не даёт массива — приходится перебирать по itemsCount и фильтровать.
+ */
 export async function getAllMarketItems() {
   const count = await getActiveItemCount()
   if (count === 0) return []
-  const items = []
-  // ВАЖНО: getActiveItemCount возвращает счётчик ВСЕХ items за всю историю.
-  // Чтобы показать только активные — фильтруем по status.
-  for (let i = 0; i < count; i++) {
-    const item = await getMarketItem(i)
-    if (item && item.status === 0) {
-      items.push(item)
-    }
-  }
-  return items
+  const ids = []
+  for (let i = 1; i <= count; i++) ids.push(i)
+  const items = await Promise.all(ids.map(id => getMarketItem(id)))
+  return items.filter(item => item && item.isListed)
 }
 
-// ═══════════════════════════════════════════════════
+/**
+ * Все товары (включая проданные/отменённые) — для истории.
+ */
+export async function getAllMarketItemsFull() {
+  const count = await getActiveItemCount()
+  if (count === 0) return []
+  const ids = []
+  for (let i = 1; i <= count; i++) ids.push(i)
+  const items = await Promise.all(ids.map(id => getMarketItem(id)))
+  return items.filter(Boolean)
+}
+
+// ═══════════════════════════════════════════════════════
 // CLUB MARKETING — комиссии партнёров
-// ═══════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 
 export async function getMarketingBalance(address) {
   const c = getReadContract('ClubMarketing', CLUBMARKETING_ABI)
@@ -553,22 +894,45 @@ export async function getEarningsByLevel(address) {
 export async function getMarketingPhase() {
   const c = getReadContract('ClubMarketing', CLUBMARKETING_ABI)
   if (!c) return 0
-  try { return Number(await c.getCurrentPhase()) } catch { return 0 }
+  try { return num(await c.getCurrentPhase()) } catch { return 0 }
 }
 
-// Партнёр забирает свои комиссии
+export async function getAdsToPhaseSwitch() {
+  const c = getReadContract('ClubMarketing', CLUBMARKETING_ABI)
+  if (!c) return '0'
+  try { return fmt(await c.adsToPhaseSwitch()) } catch { return '0' }
+}
+
+export async function getTotalLifetimeEarned(address) {
+  const c = getReadContract('ClubMarketing', CLUBMARKETING_ABI)
+  if (!c || !address) return '0'
+  try { return fmt(await c.totalLifetimeEarned(address)) } catch { return '0' }
+}
+
+/**
+ * Партнёр забирает накопленные комиссии маркетинга.
+ */
 export async function claimMarketing() {
   const c = getContract('ClubMarketing', CLUBMARKETING_ABI)
   const tx = await c.claim()
   return await tx.wait()
 }
 
-// Алиас для совместимости
+// Алиас старого имени для совместимости
 export const claimReferralBonus = claimMarketing
 
-// ═══════════════════════════════════════════════════
-// CLUB DIRECTORS — голосование (для админ-панели)
-// ═══════════════════════════════════════════════════
+/**
+ * Аварийный claim если 90 дней нет distribute.
+ */
+export async function claimMarketingInactive() {
+  const c = getContract('ClubMarketing', CLUBMARKETING_ABI)
+  const tx = await c.claimInactive()
+  return await tx.wait()
+}
+
+// ═══════════════════════════════════════════════════════
+// CLUB DIRECTORS — голосование
+// ═══════════════════════════════════════════════════════
 
 export async function getDirectors() {
   const c = getReadContract('ClubDirectors', CLUBDIRECTORS_ABI)
@@ -579,45 +943,81 @@ export async function getDirectors() {
 export async function getDirectorsCount() {
   const c = getReadContract('ClubDirectors', CLUBDIRECTORS_ABI)
   if (!c) return 0
-  try { return Number(await c.getDirectorsCount()) } catch { return 0 }
+  try { return num(await c.getDirectorsCount()) } catch { return 0 }
 }
 
 export async function getRequiredApprovals() {
   const c = getReadContract('ClubDirectors', CLUBDIRECTORS_ABI)
   if (!c) return 0
-  try { return Number(await c.requiredApprovals()) } catch { return 0 }
+  try { return num(await c.requiredApprovals()) } catch { return 0 }
 }
 
-export async function getAllProposals() {
+export async function isDirector(address) {
   const c = getReadContract('ClubDirectors', CLUBDIRECTORS_ABI)
-  if (!c) return []
-  try {
-    const ids = await c.getAllProposals()
-    return ids.map(id => Number(id))
-  } catch { return [] }
+  if (!c || !address) return false
+  try { return await c.isDirector(address) } catch { return false }
 }
 
+/**
+ * Получить предложение и адаптировать структуру.
+ * Контракт: { id, proposer, action, targetContract, data, description,
+ *             createdAt, expiresAt, status, approvalCount, approvers }
+ */
 export async function getProposal(proposalId) {
   const c = getReadContract('ClubDirectors', CLUBDIRECTORS_ABI)
   if (!c) return null
   try {
     const p = await c.getProposal(proposalId)
     return {
-      proposalId,
-      target: p.target,
-      action: Number(p.action),
+      proposalId: num(p.id),
+      id: num(p.id),
+      proposer: p.proposer,
+      action: num(p.action),       // 0=EmergencyWithdraw, 1=CancelEmergency, 2=ForceDrain, 3=ChangeParameter, 4=Custom
+      target: p.targetContract,
+      targetContract: p.targetContract,
       data: p.data,
-      createdAt: Number(p.createdAt),
-      approvalCount: Number(p.approvalCount),
-      status: Number(p.status),
+      description: p.description,
+      createdAt: num(p.createdAt),
+      expiresAt: num(p.expiresAt),
+      status: num(p.status),       // 0=Pending, 1=Approved, 2=Executed, 3=Expired, 4=Cancelled
+      approvalCount: num(p.approvalCount),
       approvers: p.approvers,
     }
   } catch { return null }
 }
 
-// ═══════════════════════════════════════════════════
-// ОБЩИЙ ДАШБОРД (для DiamondClubPage)
-// ═══════════════════════════════════════════════════
+export async function getAllProposals() {
+  const c = getReadContract('ClubDirectors', CLUBDIRECTORS_ABI)
+  if (!c) return []
+  try {
+    const proposals = await c.getAllProposals()
+    return proposals.map(p => ({
+      proposalId: num(p.id),
+      id: num(p.id),
+      proposer: p.proposer,
+      action: num(p.action),
+      target: p.targetContract,
+      targetContract: p.targetContract,
+      data: p.data,
+      description: p.description,
+      createdAt: num(p.createdAt),
+      expiresAt: num(p.expiresAt),
+      status: num(p.status),
+      approvalCount: num(p.approvalCount),
+      approvers: p.approvers,
+    }))
+  } catch { return [] }
+}
+
+export async function approveProposal(proposalId) {
+  const c = getContract('ClubDirectors', CLUBDIRECTORS_ABI)
+  const tx = await c.approveProposal(proposalId)
+  return await tx.wait()
+}
+
+// ═══════════════════════════════════════════════════════
+// DASHBOARD — комплексная загрузка для главной страницы
+// ═══════════════════════════════════════════════════════
 
 export async function loadDashboard(address) {
   if (!address) return null
@@ -629,6 +1029,7 @@ export async function loadDashboard(address) {
       reserveBalance,
       marketingBalance,
       activeItemCount,
+      usdtBalance,
     ] = await Promise.all([
       getDCTUserInfo(address),
       getDCTHoldings(address),
@@ -636,6 +1037,7 @@ export async function loadDashboard(address) {
       getReserveBalance(),
       getMarketingBalance(address),
       getActiveItemCount(),
+      getUSDTBalance(address),
     ])
     return {
       dctInfo,
@@ -644,39 +1046,140 @@ export async function loadDashboard(address) {
       reserveBalance,
       marketingBalance,
       activeItemCount,
+      usdtBalance,
     }
   } catch (e) {
-    console.error('loadDashboard error:', e)
+    console.error('loadDashboard:', e?.message || e)
     return null
   }
 }
 
-// Алиасы для совместимости со старыми компонентами:
+// Алиасы для совместимости со старыми компонентами
 export const loadDiamondClubDashboard = loadDashboard
 export const loadDCTDashboard = loadDashboard
 
-// ═══════════════════════════════════════════════════
-// SAFECALL — обёртка с обработкой ошибок (используется в компонентах)
-// ═══════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// SAFECALL — обёртка с человеческими сообщениями об ошибках
+// ═══════════════════════════════════════════════════════
 
 export async function safeCall(fn) {
   try {
     return { ok: true, data: await fn() }
   } catch (err) {
     const msg = err?.reason || err?.shortMessage || err?.message || 'Неизвестная ошибка'
-    if (msg.includes('user rejected')) return { ok: false, error: 'Транзакция отклонена' }
-    if (msg.includes('insufficient funds')) return { ok: false, error: 'Недостаточно средств (BNB на газ)' }
-    const reason = msg.match(/reason="([^"]+)"/)?.[1] || msg.match(/reverted: (.+)/)?.[1]
-    if (reason) return { ok: false, error: `Контракт: ${reason}` }
-    return { ok: false, error: msg.slice(0, 120) }
+
+    if (msg.includes('user rejected') || msg.includes('User denied')) {
+      return { ok: false, error: 'Транзакция отклонена' }
+    }
+    if (msg.includes('insufficient funds')) {
+      return { ok: false, error: 'Недостаточно BNB на газ' }
+    }
+    if (msg.includes('ERC20: insufficient allowance')) {
+      return { ok: false, error: 'Недостаточно разрешения USDT/DCT' }
+    }
+    if (msg.includes('ERC20: transfer amount exceeds balance')) {
+      return { ok: false, error: 'Недостаточно средств на балансе' }
+    }
+
+    // Извлекаем revert reason из контракта
+    const reason = msg.match(/reason="([^"]+)"/)?.[1]
+                || msg.match(/reverted: (.+?)(?:"|$)/)?.[1]
+                || msg.match(/reverted with reason string '([^']+)'/)?.[1]
+
+    if (reason) {
+      // Переводим коды контрактов на человеческий русский
+      const human = translateContractError(reason)
+      return { ok: false, error: human }
+    }
+
+    return { ok: false, error: msg.slice(0, 150) }
   }
 }
 
-// ═══════════════════════════════════════════════════
-// ЗАГЛУШКИ — функционал отсутствует в v2.3
-// ═══════════════════════════════════════════════════
+/**
+ * Перевод revert reason'ов от контрактов на русский.
+ * Покрывает основные ошибки v2.4.
+ */
+function translateContractError(reason) {
+  const map = {
+    // ClubPools
+    'P:zero amount': 'Сумма не может быть 0',
+    'P:zero target': 'Цель сбора не может быть 0',
+    'P:invalid pool': 'Пул не существует',
+    'P:pool not open': 'Пул закрыт для покупки долей',
+    'P:need level 7+': 'Нужен GlobalWay уровень 7 или выше',
+    'P:still frozen': 'Год заморозки ещё не прошёл',
+    'P:empty pool': 'Пул пуст (нет DCT)',
+    'P:insufficient DCT': 'Недостаточно DCT',
+    'P:only full redeem supported': 'Можно делать только полный redeem',
+    'P:not in gem': 'Пул не находится в статусе InGem',
+    'P:invalid status for gem purchase': 'Неверный статус пула для закупки',
+    'P:still active': 'Пул ещё активен (не прошло 90 дней)',
+    'P:nothing to claim': 'Нечего забирать',
+    'P:drained': 'Контракт деактивирован',
+    'P:not drained': 'Контракт не деактивирован',
+    'P:factory not whitelisted': 'Завод не одобрен multisig',
+    'P:cannot touch reserve fund': 'Нельзя трогать резервный фонд',
+    'P:no DCT in pool': 'Нет DCT в этом пуле',
+    'P:offer not open': 'Предложение неактивно',
+    'P:cannot buy own': 'Нельзя купить свой оффер',
+    'P:seller DCT changed': 'Количество DCT продавца изменилось',
+    'P:real price >= floor': 'Реальная цена не ниже защитной — используйте redeem',
+    'P:insufficient reserve': 'Недостаточно резервного фонда',
+
+    // ClubMarket
+    'M:not listed': 'Товар не на витрине',
+    'M:cannot buy own': 'Нельзя купить свой товар',
+    'M:need level 1+': 'Нужен GlobalWay уровень 1 или выше',
+    'M:need level 4+': 'Нужен уровень 4+ для Resale',
+    'M:not in escrow': 'Товар не в эскроу',
+    'M:not buyer': 'Только покупатель может это сделать',
+    'M:escrow not locked': 'Эскроу уже разблокировано',
+    'M:no tracking, use claimStuck after 90d': 'Трек-номер не указан. Используйте claimStuckEscrow через 90 дней',
+    'M:was shipped': 'Товар уже отправлен',
+    'M:not stuck': 'Эскроу ещё не застряло (90 дней не прошло)',
+    'M:deadline passed, cannot mark shipped': '30 дней прошло — отправку отметить уже нельзя',
+    'M:use buyItemWithCoupon for discount': 'Для скидки используйте buyItemWithCoupon',
+    'M:coupon expired': 'Купон истёк',
+    'M:coupon used': 'Купон уже использован',
+    'M:invalid signature': 'Подпись купона неверна',
+    'M:not your coupon': 'Купон не на ваш адрес',
+    'M:invalid discount': 'Скидка должна быть от 1 до 5%',
+    'M:DCT exceeds item price': 'DCT превышают цену товара',
+    'M:DCT value too small': 'Стоимость DCT слишком мала',
+    'M:pool not in gem': 'Пул не в статусе InGem',
+    'M:contract drained': 'Контракт деактивирован',
+
+    // ClubDCT
+    'DCT:direct transfer disabled, use specific functions': 'Прямой перевод DCT запрещён',
+    'DCT:not enough DCT in pool': 'Недостаточно DCT в этом пуле',
+    'DCT:not enough unlocked DCT in pool': 'Недостаточно разморожённых DCT в этом пуле',
+    'DCT:not enough locked': 'Недостаточно заблокированных DCT',
+    'DCT:zero amount': 'Сумма не может быть 0',
+
+    // ClubMarketing
+    'MK:nothing to claim': 'Нечего забирать',
+    'MK:still active': 'Контракт ещё активен',
+    'MK:contract drained': 'Маркетинг деактивирован',
+  }
+  return map[reason] || `Контракт: ${reason}`
+}
+
+// ═══════════════════════════════════════════════════════
+// АЛИАСЫ для совместимости со старыми именами/импортами
+// ═══════════════════════════════════════════════════════
+
+// Старое имя — используется в LotsAdmin
+export { createLotOnChain as createLot }
+
+// Совсем старое (на случай если где-то использовалось)
+export const buyShareFromBalance = buyShare
+
+// ═══════════════════════════════════════════════════════
+// ЗАГЛУШКИ — функционал удалён в v2.3+, но фронт его ждёт
+// ═══════════════════════════════════════════════════════
 // Эти функции возвращают пустые/безопасные значения чтобы фронт
-// не падал, пока не переделаны компоненты.
+// не падал. Новый UI должен НЕ использовать их.
 
 // TrustScore — удалено
 export async function getUserTrustInfo() {
@@ -688,190 +1191,19 @@ export async function getUserBoostInfo() {
   return { totalBurned: '0', currentBoostBP: 0, totalStakingRateBP: 0 }
 }
 export async function burnNSTForBoost() {
-  throw new Error('Boost-функция удалена в v2.3')
+  throw new Error('Boost-функция удалена в v2.4')
 }
 
-// InsuranceFund — удалено (отдельный инструмент)
+// InsuranceFund — отдельный инструмент, не часть Diamond Club
 export async function getInsuranceFundStats() {
   return { balance: '0', deposited: '0', paidClaims: '0' }
 }
 export async function getInsuranceUserBalance() { return '0' }
 export async function getUserWithdrawRequests() { return [] }
-export async function requestWithdraw() { throw new Error('Insurance удалён в v2.3') }
-export async function executeWithdraw() { throw new Error('Insurance удалён в v2.3') }
-export async function verifyAsset() { throw new Error('Insurance удалён в v2.3') }
-export async function submitClaim() { throw new Error('Insurance удалён в v2.3') }
-
-// DCTHeritage — удалено
-export async function getHeritageInfo() { return null }
-export async function getHeirs() { return { wallets: [], shares: [], labels: [] } }
-export async function checkHeritageApprovals() { return { dctApproved: false, fractionsApproved: false } }
-export async function getHeritageConstants() { return { minInactivity: 0, maxHeirs: 0 } }
-export async function configureHeritage() { throw new Error('Heritage удалён в v2.3') }
-export async function cancelHeritage() { throw new Error('Heritage удалён в v2.3') }
-export async function pingHeritage() { throw new Error('Heritage удалён в v2.3') }
-export async function executeHeritage() { throw new Error('Heritage удалён в v2.3') }
-
-// DCTBridge (gem→DCT claim) — удалено (DCT начисляется сразу в buyShare)
-export async function getClaimableGems() {
-  return { purchaseIds: [], marketValues: [], estimatedDCT: [] }
-}
-export async function claimGemDCT() { throw new Error('Bridge удалён — DCT начисляется автоматически') }
-export async function claimAllGemDCT() { throw new Error('Bridge удалён — DCT начисляется автоматически') }
-export async function getBridgeBackingRate() { return 0 }
-
-// DCTExchange — будет в v2.4
-export async function getExchangeStats() { return null }
-export async function getExchangeBestPrices() { return null }
-export async function getActiveSellOrders() { return [] }
-export async function getActiveBuyOrders() { return [] }
-export async function createSellOrderDCT() { throw new Error('Биржа DCT будет в v2.4') }
-export async function createBuyOrderDCT() { throw new Error('Биржа DCT будет в v2.4') }
-export async function fillSellOrderDCT() { throw new Error('Биржа DCT будет в v2.4') }
-export async function fillBuyOrderDCT() { throw new Error('Биржа DCT будет в v2.4') }
-export async function cancelExchangeOrder() { throw new Error('Биржа DCT будет в v2.4') }
-
-// GemFractionDEX (P2P для долей) — заменено на P2P в ClubPools
-export async function getFractionDEXOrders() { return [] }
-export async function createFractionSellOrder(poolId, fractions, priceDCT) {
-  return await listShareForSaleP2P(poolId, fractions, priceDCT)
-}
-export async function fillFractionSellOrder(offerId) {
-  return await buyShareP2P(offerId, 0)  // priceUSDT берётся из offer'а
-}
-export async function cancelFractionSellOrder(offerId) {
-  return await cancelP2POffer(offerId)
+export async function requestWithdraw() {
+  throw new Error('Insurance удалён в v2.4')
 }
 
-// GemShowcase — заменено на ClubMarket
-export async function getGemShowcaseListings() {
-  return await getAllMarketItems()
-}
-export async function getGemShowcaseCount() {
-  return await getActiveItemCount()
-}
-export async function createGemShowcaseListing(itemId, priceUSDT) {
-  return await listResale(itemId, priceUSDT, '', '')
-}
-export async function buyFromGemShowcase(itemId) {
-  return await buyItem(itemId, '0')
-}
-export async function cancelGemShowcaseListing(itemId) {
-  return await cancelListing(itemId)
-}
-export async function buyWholeGem(itemId) {
-  return await buyItem(itemId, '0')
-}
-
-// FractionalLot (старая логика лотов) — заменено на пулы
-export async function getAllFractionalLots() {
-  return await getAllPools()
-}
-export async function getUserLotInfo(poolId, address) {
-  const inv = await getUserInvestment(address, poolId)
-  return { contributedUSDT: inv, mintedDCT: '0' }
-}
-export async function buyFractions(poolId, count) {
-  return await buyShare(poolId, count)
-}
-export async function getClaimableStaking() { return '0' }
-export async function claimFractionalStaking() {
-  throw new Error('Стейкинг встроен в пулы — используй redeem')
-}
-export async function createFractionalLot() {
-  throw new Error('Используй createPool')
-}
-export async function startLotFundraising() { throw new Error('createPool сразу запускает сбор') }
-export async function fundLotStakingReserve() { throw new Error('Резерв формируется автоматически') }
-export async function addLotCycleProfit() { throw new Error('Прибыль начисляется через recordSale') }
-export async function requestLotJewelry() { throw new Error('Используй listJewelryFromPool') }
-export async function confirmLotSale() { throw new Error('Используй recordSale') }
-export async function voteForLotSale() { throw new Error('Голосование убрано — owner управляет') }
-export async function claimLotSaleProceeds(poolId) { return await redeem(poolId, '0') }
-export async function forceLotForSale() { throw new Error('Используй emergencyDeclare') }
-export async function emergencyLotClaimStaking(poolId) { return await claimDrainedPool(poolId) }
-export async function addFractionalAdmin() { throw new Error('Админы управляются через ClubDirectors') }
-export async function removeFractionalAdmin() { throw new Error('Админы управляются через ClubDirectors') }
-export async function getGemPriceTable() { return [] }
-
-// Старые покупки (gem purchases) — теперь это items в ClubMarket
-export async function getUserGemPurchases(address) {
-  // В новой системе — это items которые человек купил.
-  // Возвращаем пустой массив — фронт должен брать через getMarketItem(itemId)
-  return []
-}
-export async function claimGemStaking() {
-  throw new Error('Стейкинг встроен в пулы')
-}
-export async function convertGemToAsset() {
-  throw new Error('Все покупки сразу являются физическими активами')
-}
-export async function restakeGem() {
-  throw new Error('Restake встроен в пулы автоматически')
-}
-
-// Старый P2P → теперь P2P внутри ClubPools
-export async function getP2PListings() { return [] }
-export async function getP2PStats() { return { trades: 0, volume: '0', commissions: '0' } }
-export async function listOnP2P(vault, purchaseId, priceUSDT) {
-  // Маппинг: vault не используется (в новой системе только один источник — пулы)
-  // purchaseId здесь = poolId
-  throw new Error('Используй listShareForSaleP2P(poolId, dctAmount, priceUSDT)')
-}
-export async function buyFromP2P(listingId) { return await buyShareP2P(listingId, 0) }
-export async function cancelP2PListing(listingId) { return await cancelP2POffer(listingId) }
-
-// Старые ClubLots функции
-export async function buyShareFromBalance(poolId, count) {
-  // В v2.3 нет "balance" в ClubLots — есть marketing balance
-  // Партнёр сначала claim'ит маркетинг, потом покупает за USDT
-  throw new Error('Сначала claim() в ClubMarketing, затем buyShare(poolId, count)')
-}
-export async function claimEarnings() {
-  return await claimMarketing()
-}
-export async function claimCompensation(poolId) {
-  return await claimDrainedPool(poolId)
-}
-/**
- * createPool — owner создаёт новый пул в ClubPools
- * @returns {Promise<{poolId: number, receipt: object}>}
- */
-export async function createPool(name, targetUSDT, totalShares, minGWLevel, fundraisingDays) {
-  const c = getContract('ClubPools', CLUBPOOLS_ABI)
-  const cRead = getReadContract('ClubPools', CLUBPOOLS_ABI)
-  
-  const tx = await c.createPool(
-    name,
-    parse6(String(targetUSDT)),
-    Number(totalShares),
-    Number(minGWLevel),
-    Number(fundraisingDays)
-  )
-  const receipt = await tx.wait()
-  
-  // Получаем poolId — это последний созданный пул
-  const count = await cRead.poolsCount()
-  const newPoolId = Number(count) - 1
-  
-  return { poolId: newPoolId, lotId: newPoolId, receipt }
-}
-
-/**
- * createLotOnChain — алиас для совместимости со старым LotsAdmin.
- * Старая сигнатура: (gemCost, sharePrice, minGWLevel, secret)
- * Новая логика: вычисляем totalShares = gemCost / sharePrice, secret игнорируем.
- * fundraisingDays по умолчанию 90 (можно передать пятым параметром).
- */
-export async function createLotOnChain(gemCost, sharePrice, minGWLevel, _secret, options = {}) {
-  const targetUSDT = parseFloat(gemCost)
-  const sp = parseFloat(sharePrice)
-  if (sp <= 0) throw new Error('Цена доли должна быть > 0')
-  const totalShares = Math.floor(targetUSDT / sp)
-  if (totalShares <= 0) throw new Error('Цена доли > стоимости камня')
-  
-  const name = options.name || `Lot ${Date.now()}`
-  const fundraisingDays = options.fundraisingDays || 90
-  
-  return await createPool(name, targetUSDT, totalShares, minGWLevel, fundraisingDays)
-}
+// GemVaultV2 (старая модель камней) — удалено
+export async function getOldGems() { return [] }
+export async function getOldGemDetails() { return null }
