@@ -452,6 +452,66 @@ export async function PATCH(request) {
       return NextResponse.json({ ok: true })
     }
 
+    // ═══ DELETE — жёсткое удаление лота из БД (только если НЕ привязан к контракту) ═══
+    // Безопасные правила:
+    //   • Лот должен быть НЕ привязан к контракту (contract_lot_id IS NULL)
+    //   • Не должно быть покупок (dc_lot_purchases)
+    //   • Удаляются связанные записи: лог, покупки, сам лот
+    // Если лот уже в контракте — нельзя удалить (используй cancel)
+    if (action === 'delete') {
+      const verified = await verifyWallet(body, 'adminWallet', ADMIN_TTL_SEC)
+      if (!verified) return NextResponse.json({ ok: false, error: 'Неверная подпись или срок истёк (5 мин)' }, { status: 401 })
+
+      const { adminWallet, lotId } = body
+      if (!(await isAdmin(adminWallet))) return NextResponse.json({ ok: false, error: 'Нет прав' }, { status: 403 })
+
+      const lid = parseInt(lotId)
+      if (!lid || lid < 1) {
+        return NextResponse.json({ ok: false, error: 'Неверный lotId' }, { status: 400 })
+      }
+
+      // Получаем лот для проверки contract_lot_id
+      const { data: lot } = await supabase
+        .from('dc_lots')
+        .select('id, contract_lot_id, sold_shares, title')
+        .eq('id', lid)
+        .single()
+
+      if (!lot) {
+        return NextResponse.json({ ok: false, error: 'Лот не найден' }, { status: 404 })
+      }
+
+      // Защита: лот привязан к контракту — нельзя удалять
+      if (lot.contract_lot_id != null) {
+        return NextResponse.json({
+          ok: false,
+          error: 'Лот привязан к контракту — удалить нельзя. Используйте «Отменить».'
+        }, { status: 400 })
+      }
+
+      // Защита: есть покупки — нельзя удалять
+      if (lot.sold_shares && lot.sold_shares > 0) {
+        return NextResponse.json({
+          ok: false,
+          error: 'У лота есть покупки — удалить нельзя. Используйте «Отменить».'
+        }, { status: 400 })
+      }
+
+      // Удаляем связанные записи (если такие таблицы есть — игнорируем ошибки)
+      try { await supabase.from('dc_lot_log').delete().eq('lot_id', lid) } catch {}
+      try { await supabase.from('dc_lot_purchases').delete().eq('lot_id', lid) } catch {}
+
+      // Удаляем сам лот
+      const { error: delErr } = await supabase.from('dc_lots').delete().eq('id', lid)
+      if (delErr) {
+        return NextResponse.json({ ok: false, error: 'Ошибка удаления' }, { status: 500 })
+      }
+
+      // Лог НЕ пишем — лот удалён, log таблица тоже почищена
+      console.log(`[DELETE] Lot #${lid} "${lot.title}" by ${adminWallet}`)
+      return NextResponse.json({ ok: true })
+    }
+
     // ═══ LINK_CONTRACT — админ привязывает контракт (TTL 5 мин) ═══
     // ─── Обновлено 25 апр 2026: серверная on-chain проверка ───
     if (action === 'link_contract') {
