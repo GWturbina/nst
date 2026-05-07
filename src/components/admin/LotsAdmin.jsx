@@ -53,12 +53,18 @@ export default function LotsAdmin() {
       addNotification(`⏳ Создаю пул «${lot.title}» в контракте...`)
 
       // 1. Создать пул в контракте ClubPools (createLotOnChain → createPool)
+      //
+      // ВАЖНО: передаём lot.lot_price (= gem_cost / 0.85), а не gem_cost!
+      // Контракт автоматически делит каждый платёж 85/5/10, поэтому чтобы
+      // в котёл попал gem_cost = $5600 — собрать нужно ВСЕГО $6588.24.
+      // Эта сумма и есть target в контракте.
+      const targetUSDT = lot.lot_price || lot.gem_cost  // fallback если lot_price не задан
       const result = await safeCall(() =>
         Club.createLotOnChain(
-          lot.gem_cost,           // targetUSDT (стоимость камня = цель сбора)
-          lot.share_price,        // sharePriceUSDT
-          lot.min_gw_level || 4,  // minGWLevel
-          0,                      // _secret игнорируется
+          targetUSDT,             // targetUSDT = lot_price (с учётом 15% маркетинг+реклама)
+          lot.share_price,        // декоративная цена доли
+          lot.min_gw_level || 7,
+          0,
           {
             name: lot.title || `Lot ${lot.id}`,
             fundraisingDays: lot.fundraising_days || lot.lock_days || 90,
