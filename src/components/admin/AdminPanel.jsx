@@ -9,6 +9,7 @@ import ShowcaseAdmin from '@/components/admin/ShowcaseAdmin'
 import LevelContentAdmin from '@/components/admin/LevelContentAdmin'
 import BoostConfigAdmin from '@/components/admin/BoostConfigAdmin'
 import FinanceAdmin from '@/components/admin/FinanceAdmin'
+import FactoryAdmin from '@/components/admin/FactoryAdmin'
 
 export default function AdminPanel() {
   const { wallet, isAdmin, ownerWallet, addNotification,
@@ -25,6 +26,7 @@ export default function AdminPanel() {
     { id: 'content', icon: '📢', label: 'Контент' },
     { id: 'lots', icon: '🎟', label: 'Лоты' },
     { id: 'finance', icon: '📊', label: 'Финансы' },
+    { id: 'factory', icon: '🏭', label: 'Завод' },
     { id: 'fractional', icon: '🧩', label: 'Фракции' },
     { id: 'orders', icon: '📋', label: 'Заказы' },
     { id: 'showcase', icon: '🏪', label: 'Витрина' },
@@ -117,6 +119,9 @@ export default function AdminPanel() {
         {/* ФИНАНСЫ — read-only страница со всеми финансами системы с блокчейна */}
         {activeSection === 'finance' && <FinanceAdmin />}
 
+        {/* ЗАВОД — управление whitelist заводов и выводы USDT */}
+        {activeSection === 'factory' && <FactoryAdmin />}
+
         {/* ФРАКЦИИ (on-chain FractionalGem) */}
         {activeSection === 'fractional' && <FractionalLotsAdmin />}
 
@@ -186,6 +191,7 @@ function AdminGuide({ onClose }) {
             <p><b className="text-gold-400">📢 Контент</b> — управление новостями и квестами. Новости отображаются в приложении для всех. Квесты — задания для партнёров с наградами.</p>
             <p><b className="text-gold-400">🎟 Лоты</b> — создание и управление клубными лотами (долевая покупка бриллиантов с розыгрышем).</p>
             <p><b className="text-gold-400">📊 Финансы</b> — просмотр всех денег системы с блокчейна: пулы, маркетинг, фиксированные адреса распределения, мой баланс.</p>
+            <p><b className="text-gold-400">🏭 Завод</b> — управление одобренными заводами (whitelist), вывод USDT на завод, регистрация купленных камней в пулах.</p>
             <p><b className="text-gold-400">🧩 Фракции</b> — создание и управление фракционными лотами в смарт-контракте FractionalGem (on-chain доли, стейкинг, ювелирка, продажа).</p>
             <p><b className="text-gold-400">📋 Заказы</b> — все заказы камней из конфигуратора. Смена статусов, заметки, история.</p>
             <p><b className="text-gold-400">🏪 Витрина</b> — создание корпоративных товаров, модерация, оформление продаж. Те же товары доступны пользователям в КЛУБ → Магазин.</p>
