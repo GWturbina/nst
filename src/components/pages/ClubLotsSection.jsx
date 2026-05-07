@@ -1,60 +1,81 @@
 'use client'
 /**
- * ClubLotsSection.jsx — Клубные лоты (пулы v2.3)
- * Секция внутри DiamondClubPage
- * 
- * АДАПТАЦИЯ под v2.3:
- * - Импорт изменён: clubLotsContracts → clubV23
- * - buyShareFromBalance заменён на двухшаговую логику (claim + buyShare)
- *   потому что в v2.3 нет прямой покупки из marketing-баланса
- * - claimEarnings → claimMarketing
- * - claimCompensation → claimDrainedPool
- * 
- * Данные о лотах по-прежнему хранятся в Supabase, контракт только
- * для on-chain транзакций (покупка доли, забрать маркетинг).
+ * ClubLotsSection.jsx — Клубные пулы (v2.4 USDT-модель)
+ *
+ * НОВАЯ МОДЕЛЬ:
+ *  • Партнёр вкладывает любую сумму USDT (от $1)
+ *  • Получает DCT по фиксированной цене $0.50
+ *  • Никаких "долей по $50" — только сумма USDT и прогресс сбора
+ *
+ * Отображение:
+ *  • Список пулов в виде компактных карточек
+ *  • Клик "Открыть" → большая визуализация (DiamondLotVisual) с формой покупки
+ *  • Прогресс показывается в USDT (raised/target)
+ *  • Моё вложение видно отдельно (золотые грани в визуализации)
+ *
+ * Источник данных:
+ *  • Метаданные (title, photo, description) — из Supabase /api/lots
+ *  • Реальный прогресс (raised, treasury) — из контракта ClubPools.getPool(poolId)
+ *  • Моё вложение — из контракта ClubPools.getUserInvestment(wallet, poolId)
  */
 import { useState, useEffect, useCallback } from 'react'
 import useGameStore from '@/lib/store'
 import { shortAddress } from '@/lib/web3'
 import { safeCall } from '@/lib/contracts'
 import * as Club from '@/lib/clubV23'
-import { authFetch } from '@/lib/authClient'
 import HelpButton from '@/components/ui/HelpButton'
 import DiamondLotVisual from '@/components/ui/DiamondLotVisual'
 
-const STATUS_MAP = {
-  active: { label: '🟢 Активный', color: 'text-emerald-400' },
-  filled: { label: '🔵 Заполнен', color: 'text-blue-400' },
-  revealing: { label: '🔮 Розыгрыш', color: 'text-purple-400' },
-  completed: { label: '🏆 Завершён', color: 'text-gold-400' },
-  unlocked: { label: '🔓 Разморожен', color: 'text-teal-400' },
-  cancelled: { label: '❌ Отменён', color: 'text-red-400' },
+const STATUS_INFO = {
+  0: { label: '🟢 Сбор', color: 'text-emerald-400' },
+  1: { label: '🔵 Собран', color: 'text-blue-400' },
+  2: { label: '🟡 Камень куплен', color: 'text-yellow-400' },
+  3: { label: '🔄 Цикл', color: 'text-purple-400' },
+  4: { label: '❄️ Заморожен', color: 'text-cyan-400' },
+  5: { label: '🔓 Разморожен', color: 'text-teal-400' },
+  6: { label: '❌ Отменён', color: 'text-red-400' },
+  7: { label: '🚨 Drained', color: 'text-red-500' },
 }
 
 export default function ClubLotsSection() {
-  const { wallet, addNotification, t } = useGameStore()
-  const [lots, setLots] = useState([])
-  const [myShares, setMyShares] = useState({})
+  const { wallet, addNotification } = useGameStore()
+
+  const [lots, setLots] = useState([])           // метаданные из Supabase
+  const [pools, setPools] = useState({})          // poolId → данные с контракта
+  const [myInvestments, setMyInvestments] = useState({}) // poolId → USDT
   const [mktBalance, setMktBalance] = useState('0')
+
   const [loading, setLoading] = useState(true)
   const [txPending, setTxPending] = useState(false)
   const [tab, setTab] = useState('active')
-  const [buyModal, setBuyModal] = useState(null)
-  const [buyCount, setBuyCount] = useState(1)
-  const [useBalance, setUseBalance] = useState(false)
-  const [visualLot, setVisualLot] = useState(null)
+  const [openLot, setOpenLot] = useState(null)   // открытый для просмотра лот
 
   // ═══ Загрузка данных ═══
   const reload = useCallback(async () => {
     setLoading(true)
     try {
+      // 1. Метаданные из Supabase
       const res = await fetch(`/api/lots?status=all&wallet=${wallet || ''}`)
       const data = await res.json()
-      if (data.ok) {
-        setLots(data.lots || [])
-        setMyShares(data.myShares || {})
+      const dbLots = data.ok ? (data.lots || []) : []
+      setLots(dbLots)
+
+      // 2. Данные пулов с контракта (только для тех, что привязаны)
+      const poolsData = {}
+      const myInv = {}
+      for (const lot of dbLots) {
+        if (lot.contract_lot_id == null) continue
+        const pool = await Club.getPool(lot.contract_lot_id).catch(() => null)
+        if (pool) poolsData[lot.contract_lot_id] = pool
+        if (wallet) {
+          const inv = await Club.getUserInvestment(wallet, lot.contract_lot_id).catch(() => '0')
+          myInv[lot.contract_lot_id] = parseFloat(inv) || 0
+        }
       }
-      // Баланс маркетинга (из ClubMarketing)
+      setPools(poolsData)
+      setMyInvestments(myInv)
+
+      // 3. Баланс маркетинга
       if (wallet) {
         const bal = await Club.getMarketingBalance(wallet).catch(() => '0')
         setMktBalance(bal)
@@ -65,81 +86,32 @@ export default function ClubLotsSection() {
 
   useEffect(() => { reload() }, [reload])
 
-  // ═══ Покупка доли ═══
-  const handleBuy = async () => {
-    if (!buyModal || !wallet) return
+  // ═══ Покупка доли (вложить N USDT) ═══
+  const handleBuy = async (amountUSDT) => {
+    if (!openLot || !wallet || !amountUSDT) return
+    const contractLotId = openLot.contract_lot_id
+    if (contractLotId == null) {
+      addNotification('❌ Пул ещё не привязан к контракту')
+      return
+    }
+
     setTxPending(true)
 
-    const contractLotId = buyModal.contract_lot_id
-    if (contractLotId === null || contractLotId === undefined) {
-      addNotification('❌ Лот ещё не привязан к контракту. Обратитесь к администратору.')
-      setTxPending(false)
-      return
-    }
-
-    // ═══ ИЗМЕНЕНИЕ v2.3: оплата из marketing-баланса теперь двухшаговая ═══
-    // Шаг 1 (если useBalance): claim маркетинга → USDT приходит на кошелёк
-    // Шаг 2: buyShare → списывает USDT и покупает долю
-    if (useBalance) {
-      addNotification('⏳ Шаг 1/2: Получение маркетинговых...')
-      const claimRes = await safeCall(() => Club.claimMarketing())
-      if (!claimRes.ok) {
-        addNotification(`❌ Ошибка получения маркетинга: ${claimRes.error}`)
-        setTxPending(false)
-        return
-      }
-      addNotification('✅ Маркетинг получен. Шаг 2/2: Покупка доли...')
-    }
-
-    // Покупка доли — buyShare ждёт сумму USDT, не количество долей
-    // Считаем: количество × цена_доли = USDT
-    const sharePrice = parseFloat(buyModal.share_price)
-    if (!sharePrice || sharePrice <= 0) {
-      addNotification('❌ Цена доли не задана. Обратитесь к администратору.')
-      setTxPending(false)
-      return
-    }
-    const usdtAmount = buyCount * sharePrice
-    const result = await safeCall(() => Club.buyShare(contractLotId, usdtAmount))
+    const result = await safeCall(() => Club.buyShare(contractLotId, amountUSDT))
 
     if (result.ok) {
       const txHash = result.data?.hash || result.data?.transactionHash || ''
-
-      // Запись в Supabase
-      let supabaseOk = false
-      try {
-        const res = await authFetch('/api/lots', {
-          method: 'PATCH',
-          body: {
-            action: 'record_purchase',
-            wallet,
-            lotId: buyModal.id,
-            sharesCount: buyCount,
-            usdtAmount: buyModal.share_price * buyCount,
-            txHash,
-          }
-        })
-        const data = await res.json()
-        supabaseOk = data.ok
-      } catch {}
-
-      if (supabaseOk) {
-        addNotification(`✅ Куплено ${buyCount} доля(ей) в лоте «${buyModal.title}»!`)
-      } else {
-        addNotification(`⚠️ Доля куплена (tx: ${txHash.slice(0, 10)}...), но запись не сохранилась. Обратитесь к администратору с хэшем транзакции.`)
-      }
-
-      setBuyModal(null)
-      setBuyCount(1)
-      reload()
+      addNotification(`✅ Вложено $${amountUSDT.toFixed(2)} в пул «${openLot.title}»! Tx: ${txHash.slice(0, 10)}...`)
+      // Перезагружаем данные пула
+      await reload()
     } else {
       addNotification(`❌ ${result.error}`)
     }
     setTxPending(false)
   }
 
-  // ═══ Забрать маркетинг (claimEarnings → claimMarketing) ═══
-  const handleClaimEarnings = async () => {
+  // ═══ Забрать маркетинг ═══
+  const handleClaimMarketing = async () => {
     setTxPending(true)
     const result = await safeCall(() => Club.claimMarketing())
     if (result.ok) {
@@ -151,17 +123,11 @@ export default function ClubLotsSection() {
     setTxPending(false)
   }
 
-  // ═══ Компенсация (через claimDrainedPool) ═══
-  const handleClaimCompensation = async (lotId) => {
+  // ═══ Аварийная компенсация ═══
+  const handleClaimCompensation = async (lot) => {
+    if (lot.contract_lot_id == null) return
     setTxPending(true)
-    const lot = lots.find(l => l.id === lotId)
-    const contractPoolId = lot?.contract_lot_id
-    if (contractPoolId === null || contractPoolId === undefined) {
-      addNotification('❌ Лот не привязан к контракту')
-      setTxPending(false)
-      return
-    }
-    const result = await safeCall(() => Club.claimDrainedPool(contractPoolId))
+    const result = await safeCall(() => Club.claimDrainedPool(lot.contract_lot_id))
     if (result.ok) {
       addNotification('✅ Компенсация получена!')
       reload()
@@ -172,17 +138,67 @@ export default function ClubLotsSection() {
   }
 
   // ═══ Фильтрация ═══
-  const activeLots = lots.filter(l => l.status === 'active')
-  const myLots = lots.filter(l => myShares[l.id] > 0)
-  const historyLots = lots.filter(l => ['completed', 'unlocked', 'cancelled'].includes(l.status))
+  const activeLots = lots.filter(l => {
+    if (l.contract_lot_id == null) return l.status === 'active'  // ещё не задеплоен
+    const pool = pools[l.contract_lot_id]
+    if (!pool) return false
+    return [0, 1, 2, 3].includes(pool.status)  // Open, Funded, InGem, Cycling
+  })
+
+  const myLots = lots.filter(l => {
+    const inv = myInvestments[l.contract_lot_id]
+    return inv && inv > 0
+  })
+
+  const historyLots = lots.filter(l => {
+    if (l.contract_lot_id == null) return ['cancelled', 'completed'].includes(l.status)
+    const pool = pools[l.contract_lot_id]
+    if (!pool) return false
+    return [4, 5, 6, 7].includes(pool.status)  // Frozen, Unlocked, Cancelled, Drained
+  })
 
   const displayLots = tab === 'active' ? activeLots : tab === 'my' ? myLots : historyLots
 
   if (loading) {
     return (
       <div className="px-3 mt-4 text-center py-12">
-        <div className="text-3xl animate-spin">🎟</div>
-        <div className="text-xs text-slate-500 mt-2">Загрузка лотов...</div>
+        <div className="text-3xl animate-spin">💎</div>
+        <div className="text-xs text-slate-500 mt-2">Загрузка пулов...</div>
+      </div>
+    )
+  }
+
+  // ═══ Открытый лот — полная визуализация с покупкой ═══
+  if (openLot) {
+    const pool = pools[openLot.contract_lot_id]
+    const target = pool?.targetUSDT ? parseFloat(pool.targetUSDT) : (openLot.gem_cost || 0)
+    const raised = pool?.raisedUSDT ? parseFloat(pool.raisedUSDT) : 0
+    const mine = myInvestments[openLot.contract_lot_id] || 0
+    const notLinked = openLot.contract_lot_id == null
+
+    return (
+      <div className="px-3 mt-3 space-y-3">
+        <button onClick={() => setOpenLot(null)}
+          className="px-3 py-1.5 rounded-xl text-[11px] font-bold text-slate-400 border border-white/8 hover:bg-white/5">
+          ← Назад к списку
+        </button>
+
+        {notLinked && (
+          <div className="p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-center">
+            <div className="text-[12px] font-bold text-yellow-400">⚠️ Пул ещё не привязан к контракту</div>
+            <div className="text-[10px] text-slate-400 mt-1">Покупка временно недоступна. Обратитесь к администратору.</div>
+          </div>
+        )}
+
+        <DiamondLotVisual
+          lot={openLot}
+          targetUSDT={target}
+          raisedUSDT={raised}
+          myInvestedUSDT={mine}
+          onBuy={notLinked ? null : handleBuy}
+          disabled={txPending || notLinked}
+          minBuyUSDT={1}
+        />
       </div>
     )
   }
@@ -191,25 +207,22 @@ export default function ClubLotsSection() {
     <div className="px-3 mt-3 space-y-3">
 
       <div className="flex items-center justify-between">
-        <div className="text-[14px] font-black text-gold-400">🎟 Клубные лоты</div>
+        <div className="text-[14px] font-black text-gold-400">💎 Клубные пулы</div>
         <HelpButton section="lots" />
       </div>
 
       {/* Баланс маркетинга */}
       {wallet && parseFloat(mktBalance) > 0 && (
-        <div className="p-3 rounded-2xl border border-gold-400/20" style={{ background: 'rgba(212,168,67,0.06)' }}>
+        <div className="p-3 rounded-2xl border" style={{ background: 'rgba(212,168,67,0.06)', borderColor: 'rgba(212,168,67,0.2)' }}>
           <div className="flex items-center justify-between">
             <div>
               <div className="text-[11px] text-slate-400">Баланс маркетинга</div>
               <div className="text-lg font-black text-gold-400">${parseFloat(mktBalance).toFixed(2)} <span className="text-[10px] text-slate-500">USDT</span></div>
             </div>
-            <button onClick={handleClaimEarnings} disabled={txPending}
+            <button onClick={handleClaimMarketing} disabled={txPending}
               className="px-4 py-2 rounded-xl text-[11px] font-bold gold-btn disabled:opacity-50">
               💰 Вывести
             </button>
-          </div>
-          <div className="text-[10px] text-slate-500 mt-1">
-            Можно использовать для покупки доли — выведется автоматически и купит
           </div>
         </div>
       )}
@@ -218,7 +231,7 @@ export default function ClubLotsSection() {
       <div className="flex gap-1">
         {[
           { id: 'active', label: `🟢 Активные (${activeLots.length})` },
-          { id: 'my', label: `🎟 Мои (${myLots.length})` },
+          { id: 'my', label: `💰 Мои (${myLots.length})` },
           { id: 'history', label: `📜 История (${historyLots.length})` },
         ].map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
@@ -233,163 +246,68 @@ export default function ClubLotsSection() {
       </div>
 
       {/* Список лотов */}
-      {visualLot ? (
-        <div>
-          <button onClick={() => setVisualLot(null)}
-            className="mb-2 px-3 py-1.5 rounded-xl text-[11px] font-bold text-slate-400 border border-white/8 hover:bg-white/5">
-            ← Назад к лотам
-          </button>
-          <DiamondLotVisual
-            lot={visualLot}
-            soldIds={(() => {
-              const sold = visualLot.sold_shares || 0
-              return Array.from({ length: sold }, (_, i) => i + 1)
-            })()}
-            myIds={(() => {
-              const my = myShares[visualLot.id] || 0
-              const sold = visualLot.sold_shares || 0
-              return Array.from({ length: my }, (_, i) => sold - my + i + 1)
-            })()}
-            onBuy={async (facetId) => {
-              setBuyModal(visualLot)
-              setBuyCount(1)
-              setUseBalance(false)
-            }}
-            onBuyRandom={() => {}}
-            disabled={txPending}
-          />
-        </div>
-      ) : displayLots.length === 0 ? (
+      {displayLots.length === 0 ? (
         <div className="text-center py-8">
-          <div className="text-2xl mb-2">{tab === 'active' ? '💎' : tab === 'my' ? '🎟' : '📜'}</div>
+          <div className="text-2xl mb-2">{tab === 'active' ? '💎' : tab === 'my' ? '💰' : '📜'}</div>
           <div className="text-xs text-slate-500">
-            {tab === 'active' ? 'Нет активных лотов' : tab === 'my' ? 'Вы ещё не участвуете' : 'Нет завершённых лотов'}
+            {tab === 'active' ? 'Нет активных пулов' : tab === 'my' ? 'Вы ещё не вкладывали' : 'Нет завершённых пулов'}
           </div>
-          <button onClick={() => setVisualLot({
-            id: 'demo', title: 'ДЕМО — Бриллиант 1.5 ct', description: 'Превью визуализации долевого участия. Нажимайте на грани!',
-            total_shares: 100, sold_shares: 14, share_price: 10, status: 'active',
-          })}
-            className="mt-4 px-5 py-2.5 rounded-xl text-[12px] font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/15 transition-all">
-            💎 Посмотреть визуализацию бриллианта
-          </button>
         </div>
       ) : (
         <div className="space-y-3">
-          {displayLots.map(lot => (
-            <LotCard
-              key={lot.id}
-              lot={lot}
-              myShareCount={myShares[lot.id] || 0}
-              wallet={wallet}
-              onBuy={() => { setBuyModal(lot); setBuyCount(1); setUseBalance(false) }}
-              onVisual={() => setVisualLot(lot)}
-              onClaimComp={() => handleClaimCompensation(lot.id)}
-              txPending={txPending}
-            />
-          ))}
-        </div>
-      )}
+          {displayLots.map(lot => {
+            const pool = pools[lot.contract_lot_id]
+            const target = pool?.targetUSDT ? parseFloat(pool.targetUSDT) : (lot.gem_cost || 0)
+            const raised = pool?.raisedUSDT ? parseFloat(pool.raisedUSDT) : 0
+            const mine = myInvestments[lot.contract_lot_id] || 0
 
-      {/* Модал покупки */}
-      {buyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.85)' }}>
-          <div className="max-w-[380px] w-full p-5 rounded-3xl" style={{ background: 'linear-gradient(180deg, #1a1040, #0c0c1e)', border: '1px solid rgba(212,168,67,0.2)' }}>
-            <div className="text-center mb-4">
-              <div className="text-2xl mb-1">🎟</div>
-              <div className="text-base font-black text-white">{buyModal.title}</div>
-              <div className="text-[11px] text-slate-400 mt-1">Цена доли: ${buyModal.share_price}</div>
-            </div>
-
-            {/* Количество */}
-            <div className="mb-3">
-              <div className="text-[11px] text-slate-400 mb-1">Количество долей:</div>
-              <div className="flex items-center gap-2">
-                <button onClick={() => setBuyCount(Math.max(1, buyCount - 1))}
-                  className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 text-white text-lg font-bold">-</button>
-                <input type="number" value={buyCount} onChange={e => setBuyCount(Math.max(1, Math.min(
-                  buyModal.total_shares - buyModal.sold_shares - (buyModal.reserved_shares || 0),
-                  parseInt(e.target.value) || 1
-                )))}
-                  className="flex-1 p-2.5 rounded-xl bg-white/5 border border-white/10 text-lg font-bold text-white outline-none text-center" />
-                <button onClick={() => setBuyCount(Math.min(buyCount + 1, buyModal.total_shares - buyModal.sold_shares - (buyModal.reserved_shares || 0)))}
-                  className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 text-white text-lg font-bold">+</button>
-              </div>
-            </div>
-
-            {/* Итого */}
-            <div className="p-3 rounded-xl bg-white/5 mb-3">
-              <div className="flex justify-between text-[12px]">
-                <span className="text-slate-400">Итого:</span>
-                <span className="text-gold-400 font-black">${(buyModal.share_price * buyCount).toFixed(2)} USDT</span>
-              </div>
-            </div>
-
-            {/* Оплата из баланса (двухшаговая) */}
-            {parseFloat(mktBalance) >= buyModal.share_price && (
-              <label className="flex items-center gap-2 mb-3 cursor-pointer">
-                <input type="checkbox" checked={useBalance} onChange={e => setUseBalance(e.target.checked)}
-                  className="w-4 h-4 accent-yellow-500" />
-                <span className="text-[11px] text-slate-300">
-                  Сначала забрать маркетинг (${parseFloat(mktBalance).toFixed(2)}) — потом купить
-                </span>
-              </label>
-            )}
-
-            {useBalance && (
-              <div className="p-2 mb-3 rounded-xl bg-blue-500/10 border border-blue-500/20">
-                <div className="text-[10px] text-blue-300">
-                  💡 Будет 2 транзакции: получить маркетинг, потом купить долю
-                </div>
-              </div>
-            )}
-
-            {/* Кнопки */}
-            <button onClick={handleBuy} disabled={txPending}
-              className="w-full py-3 rounded-2xl text-sm font-black gold-btn disabled:opacity-50 mb-2">
-              {txPending ? '⏳ Транзакция...' : `🎟 Купить ${buyCount} доля(ей)`}
-            </button>
-            <button onClick={() => setBuyModal(null)}
-              className="w-full py-2 text-[11px] text-slate-500 hover:text-slate-300">
-              Отмена
-            </button>
-          </div>
+            return (
+              <PoolCard
+                key={lot.id}
+                lot={lot}
+                target={target}
+                raised={raised}
+                mine={mine}
+                pool={pool}
+                onOpen={() => setOpenLot(lot)}
+                onClaimComp={() => handleClaimCompensation(lot)}
+                txPending={txPending}
+              />
+            )
+          })}
         </div>
       )}
     </div>
   )
 }
 
-// ═══════════════════════════════════════════════════
-// КАРТОЧКА ЛОТА (без изменений — UI данные из Supabase)
-// ═══════════════════════════════════════════════════
-function LotCard({ lot, myShareCount, wallet, onBuy, onVisual, onClaimComp, txPending }) {
-  const pctSold = lot.total_shares > 0
-    ? Math.round(((lot.sold_shares + (lot.reserved_shares || 0)) / lot.total_shares) * 100)
-    : 0
-  const available = lot.total_shares - lot.sold_shares - (lot.reserved_shares || 0)
-  const statusInfo = STATUS_MAP[lot.status] || STATUS_MAP.active
-  const isWinner = lot.winner_wallet && wallet && lot.winner_wallet.toLowerCase() === wallet.toLowerCase()
+// ═══ КАРТОЧКА ПУЛА (компактная) ═══
+function PoolCard({ lot, target, raised, mine, pool, onOpen, onClaimComp, txPending }) {
+  const progressPct = target > 0 ? Math.min(100, (raised / target) * 100) : 0
+  const minePct = target > 0 ? (mine / target) * 100 : 0
+  const othersPct = Math.max(0, progressPct - minePct)
 
-  const unlockDate = lot.unlock_at ? new Date(lot.unlock_at) : null
-  const now = new Date()
-  const daysLeft = unlockDate ? Math.max(0, Math.ceil((unlockDate - now) / 86400000)) : null
-  const canClaim = lot.status === 'completed' && unlockDate && now >= unlockDate && myShareCount > 0 && !isWinner
+  const status = pool?.status ?? -1
+  const statusInfo = STATUS_INFO[status] || { label: '⏳ Не привязан', color: 'text-yellow-400' }
+  const isUnlocked = status === 5 || (pool?.unlocksAt && Date.now() / 1000 >= pool.unlocksAt)
+  const canClaimComp = status === 7  // Drained
 
   return (
     <div className="p-4 rounded-2xl border" style={{ background: 'rgba(21,21,48,0.8)', borderColor: 'rgba(212,168,67,0.15)' }}>
       <div className="flex items-start justify-between mb-2">
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-lg">💎</span>
-            <span className="text-[14px] font-black text-white">{lot.title}</span>
+            <span className="text-[14px] font-black text-white truncate">{lot.title}</span>
           </div>
           {lot.description && (
-            <div className="text-[10px] text-slate-500 mt-0.5 ml-7">{lot.description}</div>
+            <div className="text-[10px] text-slate-500 mt-0.5 ml-7 line-clamp-2">{lot.description}</div>
           )}
         </div>
-        <div className={`text-[10px] font-bold ${statusInfo.color}`}>{statusInfo.label}</div>
+        <div className={`text-[10px] font-bold ${statusInfo.color} ml-2 shrink-0`}>{statusInfo.label}</div>
       </div>
 
+      {/* Tags */}
       <div className="flex gap-2 mb-3 flex-wrap">
         {lot.carats && <span className="px-2 py-0.5 rounded-lg bg-white/5 text-[10px] text-slate-300">{lot.carats}ct</span>}
         {lot.shape && <span className="px-2 py-0.5 rounded-lg bg-white/5 text-[10px] text-slate-300">{lot.shape}</span>}
@@ -398,95 +316,73 @@ function LotCard({ lot, myShareCount, wallet, onBuy, onVisual, onClaimComp, txPe
         {lot.has_cert && <span className="px-2 py-0.5 rounded-lg bg-emerald-500/15 text-[10px] text-emerald-400">📜 Серт.</span>}
       </div>
 
-      <div className="grid grid-cols-3 gap-2 mb-3">
-        <div className="text-center p-2 rounded-xl bg-white/3">
-          <div className="text-[10px] text-slate-500">Камень</div>
-          <div className="text-[13px] font-black text-white">${parseFloat(lot.gem_cost).toLocaleString()}</div>
+      {/* Стоимость + прогресс */}
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        <div className="p-2 rounded-xl bg-white/3">
+          <div className="text-[10px] text-slate-500">Цель сбора</div>
+          <div className="text-[14px] font-black text-white">${target.toLocaleString()}</div>
         </div>
-        <div className="text-center p-2 rounded-xl bg-white/3">
-          <div className="text-[10px] text-slate-500">Лот</div>
-          <div className="text-[13px] font-black text-gold-400">${parseFloat(lot.lot_price).toLocaleString()}</div>
-        </div>
-        <div className="text-center p-2 rounded-xl bg-white/3">
-          <div className="text-[10px] text-slate-500">1 доля</div>
-          <div className="text-[13px] font-black text-emerald-400">${parseFloat(lot.share_price)}</div>
+        <div className="p-2 rounded-xl bg-white/3">
+          <div className="text-[10px] text-slate-500">Собрано</div>
+          <div className="text-[14px] font-black text-gold-400">${raised.toLocaleString()}</div>
         </div>
       </div>
 
+      {/* Прогресс-бар */}
       <div className="mb-2">
         <div className="flex justify-between text-[10px] mb-1">
-          <span className="text-slate-400">Продано: {lot.sold_shares}/{lot.total_shares}</span>
-          <span className="text-gold-400 font-bold">{pctSold}%</span>
+          <span className="text-slate-400">Прогресс</span>
+          <span className="text-gold-400 font-bold">{progressPct.toFixed(1)}%</span>
         </div>
-        <div className="h-2.5 rounded-full bg-white/5 overflow-hidden">
-          <div className="h-full rounded-full transition-all duration-500"
-            style={{
-              width: `${Math.min(100, pctSold)}%`,
-              background: pctSold >= 100
-                ? 'linear-gradient(90deg, #22c55e, #14b8a6)'
-                : 'linear-gradient(90deg, #d4a843, #e8c96a)',
-            }} />
+        <div className="h-2.5 rounded-full overflow-hidden relative" style={{ background: 'rgba(255,255,255,0.05)' }}>
+          <div className="h-full absolute top-0 left-0" style={{
+            width: `${othersPct}%`,
+            background: '#7c8796',
+          }} />
+          <div className="h-full absolute top-0" style={{
+            left: `${othersPct}%`,
+            width: `${minePct}%`,
+            background: 'linear-gradient(90deg, #ffd700, #d4a843)',
+          }} />
         </div>
       </div>
 
-      {myShareCount > 0 && (
+      {/* Моё вложение */}
+      {mine > 0 && (
         <div className="p-2 rounded-xl bg-gold-400/8 border border-gold-400/15 mb-2">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] text-gold-400 font-bold">
-              🎟 Мои доли: {myShareCount} (${(myShareCount * parseFloat(lot.share_price)).toFixed(0)})
-            </span>
-            {isWinner && <span className="text-[11px] text-emerald-400 font-bold">🏆 Вы получаете камень!</span>}
+          <div className="text-[11px] text-gold-400 font-bold">
+            💰 Моё вложение: ${mine.toLocaleString()} USDT
           </div>
-        </div>
-      )}
-
-      {lot.status === 'completed' && lot.winner_wallet && (
-        <div className="p-2 rounded-xl bg-emerald-500/8 border border-emerald-500/15 mb-2">
-          <div className="text-[11px] text-emerald-400 font-bold">
-            🏆 Получатель: {shortAddress(lot.winner_wallet)}
-          </div>
-          {daysLeft !== null && daysLeft > 0 && !isWinner && (
-            <div className="text-[10px] text-slate-400 mt-0.5">
-              ❄️ Заморозка: {daysLeft} дн. до разморозки
+          {pool?.unlocksAt && (
+            <div className="text-[9px] text-slate-500 mt-0.5">
+              {isUnlocked
+                ? '🔓 Можно делать redeem'
+                : `❄️ Разморозка: ${new Date(pool.unlocksAt * 1000).toLocaleDateString('ru-RU')}`}
             </div>
           )}
         </div>
       )}
 
-      <div className="flex gap-2 mt-2">
-        {lot.status === 'active' && available > 0 && wallet && (
-          <button onClick={onBuy} disabled={txPending}
-            className="flex-1 py-2.5 rounded-xl text-[12px] font-black gold-btn disabled:opacity-50">
-            🎟 Купить долю (${parseFloat(lot.share_price)})
-          </button>
-        )}
-
-        {wallet && (
-          <button onClick={onVisual}
-            className="py-2.5 px-3 rounded-xl text-[11px] font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/15 transition-all">
-            💎
-          </button>
-        )}
-
-        {canClaim && (
-          <button onClick={onClaimComp} disabled={txPending}
-            className="flex-1 py-2.5 rounded-xl text-[12px] font-black bg-teal-500/20 border border-teal-500/30 text-teal-400 disabled:opacity-50">
-            🔓 Получить компенсацию
-          </button>
-        )}
-
-        {lot.status === 'active' && available === 0 && (
-          <div className="flex-1 py-2.5 rounded-xl text-[12px] font-bold text-center text-slate-500 bg-white/3">
-            Все доли проданы
-          </div>
-        )}
-      </div>
-
-      {lot.min_gw_level > 1 && (
-        <div className="text-[9px] text-slate-600 mt-2 text-center">
-          Минимальный уровень GlobalWay: {lot.min_gw_level}
+      {/* Не привязан */}
+      {lot.contract_lot_id == null && (
+        <div className="p-2 mb-2 rounded-xl bg-yellow-500/8 border border-yellow-500/15">
+          <div className="text-[10px] text-yellow-400">⚠️ Пул ещё не привязан к контракту</div>
         </div>
       )}
+
+      {/* Кнопки */}
+      <div className="flex gap-2 mt-2">
+        <button onClick={onOpen} disabled={txPending}
+          className="flex-1 py-2.5 rounded-xl text-[12px] font-black gold-btn disabled:opacity-50">
+          💎 Открыть пул
+        </button>
+        {canClaimComp && mine > 0 && (
+          <button onClick={onClaimComp} disabled={txPending}
+            className="py-2.5 px-3 rounded-xl text-[11px] font-bold text-teal-400 bg-teal-500/15 border border-teal-500/25 disabled:opacity-50">
+            🔓 Компенсация
+          </button>
+        )}
+      </div>
     </div>
   )
 }
