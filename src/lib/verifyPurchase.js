@@ -1,16 +1,20 @@
 /**
- * verifyPurchase.js — Серверная проверка транзакций ClubPools v2.3 в блокчейне
+ * verifyPurchase.js — Серверная проверка транзакций ClubPools v2.4 в блокчейне
  *
- * АДАПТАЦИЯ под v2.3 (5 мая 2026):
- *   • ADDRESSES.ClubLots → ADDRESSES.ClubPools
- *   • Событие SharePurchased → ShareBought (новые поля)
- *   • Событие LotCreated → PoolCreated (другая структура)
- *   • Функция getLotCount() → poolsCount()
- *   • Параметр fromBalance больше не существует (в v2.3 покупка только за USDT)
+ * АДАПТАЦИЯ под v2.4 (контракты задеплоены 5 мая 2026):
+ *   • События ShareBought и PoolCreated — те же, проверки работают
+ *   • Структура Pool в getPool() полностью изменилась — мы её больше НЕ
+ *     используем, поскольку всё что нужно (targetUSDT) проверяется через
+ *     event PoolCreated.targetUSDT
+ *   • Удалены проверки expectedSharePrice/expectedTotalShares — этих
+ *     полей в новой модели нет (партнёр платит USDT, получает DCT по $0.50,
+ *     никаких "штук-долей" нет на уровне контракта)
+ *   • Пулы нумеруются с 1 (не с 0) — поправлена проверка границ
+ *   • CLUBPOOLS_VIEW_FRAGMENT убран — getPool больше не нужен
  *
  * Содержит две функции:
- *   • verifyClubLotsPurchase — проверка покупки долей (теперь через ShareBought)
- *   • verifyClubLotsCreation — проверка создания пула (теперь через PoolCreated)
+ *   • verifyClubLotsPurchase — проверка покупки доли (через ShareBought)
+ *   • verifyClubLotsCreation — проверка создания пула (через PoolCreated)
  *
  * Имена функций оставлены прежними чтобы не ломать /api/lots/route.js
  */
@@ -25,7 +29,7 @@ const RPC_TIMEOUT_MS = 8000
 const WEI_TOLERANCE = 10n ** 12n
 
 // ═══════════════════════════════════════════════════
-// СОБЫТИЯ ClubPools v2.3
+// СОБЫТИЯ ClubPools v2.4
 // ═══════════════════════════════════════════════════
 // event ShareBought(uint256 indexed poolId, address indexed buyer, uint256 amountUSDT, uint256 dctMinted)
 const SHARE_BOUGHT_EVENT = [
@@ -37,9 +41,9 @@ const POOL_CREATED_EVENT = [
   'event PoolCreated(uint256 indexed poolId, string name, uint256 targetUSDT, uint256 dctAmount)'
 ]
 
-const CLUBPOOLS_VIEW_FRAGMENT = [
+// Минимальный фрагмент для poolsCount (одна view-функция)
+const CLUBPOOLS_COUNT_FRAGMENT = [
   'function poolsCount() external view returns (uint256)',
-  'function getPool(uint256 poolId) external view returns (tuple(string name, uint256 targetUSDT, uint256 collectedUSDT, uint256 totalShares, uint256 sharesSold, uint256 sharePrice, uint8 minGWLevel, uint8 status, uint64 createdAt, uint64 deadline, uint256 treasuryUSDT, uint256 totalDCT, uint256 itemId, uint256 saleAmount, uint64 redeemUnlocksAt, address creator))',
 ]
 
 /**
@@ -194,32 +198,36 @@ export async function verifyClubLotsPurchase({ txHash, buyerWallet, contractLotI
  *
  * Два режима:
  *   • Без txHash: только базовая проверка через poolsCount() — пул должен
- *     существовать (poolId < poolsCount).
+ *     существовать (1 ≤ poolId ≤ poolsCount).
  *   • С txHash: глубокая проверка — парсим receipt, ищем событие PoolCreated
- *     с этим poolId, сверяем targetUSDT с БД (где gemCost).
+ *     с этим poolId, сверяем targetUSDT с БД (gemCost из dc_lots).
+ *
+ * ВАЖНО: в v2.4 контракт НЕ хранит totalShares и sharePrice — этих полей
+ * в новой модели нет. Соответствующие проверки убраны. UI всё ещё показывает
+ * "доли как штуки", но это чисто Supabase-метаданные для удобства.
  *
  * @param {object} args
- * @param {number} args.contractLotId        — ID пула в контракте (poolId)
+ * @param {number} args.contractLotId        — ID пула в контракте (poolId, начинается с 1)
  * @param {string|null} args.txHash          — хэш транзакции createPool (опционально)
  * @param {number|null} args.expectedGemCost — ожидаемая стоимость камня = targetUSDT
- * @param {number|null} args.expectedSharePrice — игнорируется в v2.3 (вычисляется из target/totalShares)
- * @param {number|null} args.expectedTotalShares — ожидаемое количество долей (проверяется через getPool)
- * @returns {Promise<{ok: boolean, error?: string, verified?: string}>}
+ * @param {*} args.expectedSharePrice        — игнорируется (совместимость с API)
+ * @param {*} args.expectedTotalShares       — игнорируется (совместимость с API)
+ * @returns {Promise<{ok: boolean, error?: string, verified?: string, targetUSDTWei?: string}>}
  */
 export async function verifyClubLotsCreation({
   contractLotId,
   txHash = null,
   expectedGemCost = null,
-  expectedSharePrice = null,
-  expectedTotalShares = null,
+  expectedSharePrice = null,  // не используется в v2.4 — оставлено для совместимости
+  expectedTotalShares = null, // не используется в v2.4 — оставлено для совместимости
 }) {
   // Базовая валидация
   if (contractLotId === undefined || contractLotId === null || isNaN(parseInt(contractLotId))) {
     return { ok: false, error: 'Не указан contract_lot_id (poolId)' }
   }
   const poolId = parseInt(contractLotId)
-  if (poolId < 0) {
-    return { ok: false, error: 'poolId не может быть отрицательным' }
+  if (poolId < 1) {
+    return { ok: false, error: 'poolId должен быть ≥ 1 (нумерация пулов начинается с 1)' }
   }
 
   const poolsAddr = getPoolsAddr()
@@ -230,24 +238,17 @@ export async function verifyClubLotsCreation({
   try {
     const { ethers } = await import('ethers')
     const provider = new ethers.JsonRpcProvider(RPC_URL)
-    const pools = new ethers.Contract(poolsAddr, CLUBPOOLS_VIEW_FRAGMENT, provider)
+    const pools = new ethers.Contract(poolsAddr, CLUBPOOLS_COUNT_FRAGMENT, provider)
 
     // ─── Шаг 1: проверка что пул существует через poolsCount() ───
+    // Пулы нумеруются с 1, поэтому валидный диапазон: 1 ≤ poolId ≤ poolsCount
     const count = await withTimeout(pools.poolsCount(), RPC_TIMEOUT_MS, 'poolsCount()')
     const countNum = Number(count)
-    if (poolId >= countNum) {
+    if (poolId > countNum) {
       return {
         ok: false,
         error: `Пул #${poolId} не существует в контракте (всего создано: ${countNum})`
       }
-    }
-
-    // ─── Шаг 1.5: получаем данные пула для проверки totalShares и sharePrice ───
-    let onChainPool = null
-    try {
-      onChainPool = await withTimeout(pools.getPool(poolId), RPC_TIMEOUT_MS, 'getPool()')
-    } catch {
-      // Не критично — продолжаем, но без проверки sharePrice
     }
 
     // ─── Шаг 2: если есть txHash — глубокая проверка через PoolCreated event ───
@@ -311,36 +312,15 @@ export async function verifyClubLotsCreation({
         }
       }
 
-      // Сверка totalShares через getPool (т.к. в событии PoolCreated этого нет)
-      if (expectedTotalShares !== null && expectedTotalShares !== undefined && onChainPool) {
-        const onChainShares = BigInt(parseInt(onChainPool.totalShares.toString()))
-        const expectedShares = BigInt(parseInt(expectedTotalShares))
-        if (onChainShares !== expectedShares) {
-          return {
-            ok: false,
-            error: `totalShares не совпадает: в БД ${expectedTotalShares}, в контракте ${onChainShares.toString()}`
-          }
-        }
-      }
-
-      // Сверка sharePrice через getPool
-      if (expectedSharePrice !== null && expectedSharePrice !== undefined && onChainPool) {
-        const expectedWei = await usdtToWei(expectedSharePrice)
-        if (!weiEqualWithTolerance(onChainPool.sharePrice, expectedWei)) {
-          const onChain = (Number(onChainPool.sharePrice) / 1e18).toFixed(2)
-          return {
-            ok: false,
-            error: `sharePrice не совпадает: в БД $${expectedSharePrice}, в контракте $${onChain}`
-          }
-        }
-      }
+      // ВНИМАНИЕ: проверки expectedTotalShares и expectedSharePrice убраны.
+      // В v2.4 этих полей в контракте нет — партнёр платит USDT, получает DCT
+      // по фиксированной цене $0.50. UI продолжает показывать "доли как штуки"
+      // на основе Supabase-метаданных, но on-chain их не существует.
 
       return {
         ok: true,
         verified: 'tx-deep-check',
         targetUSDTWei: matched.args.targetUSDT.toString(),
-        totalShares: onChainPool ? Number(onChainPool.totalShares) : null,
-        sharePriceWei: onChainPool ? onChainPool.sharePrice.toString() : null,
       }
     }
 
