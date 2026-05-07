@@ -403,7 +403,6 @@ function PoolFinanceCard({ pool }) {
   const treasury = parseFloat(pool.treasury)
   const dct = parseFloat(pool.totalDCT)
   const progress = target > 0 ? Math.min(100, (raised / target) * 100) : 0
-  const dctPrice = dct > 0 ? (treasury / dct).toFixed(4) : '0.50'
   const statusInfo = STATUS_LABELS[pool.status] || '?'
 
   return (
@@ -446,8 +445,11 @@ function PoolFinanceCard({ pool }) {
 
       <div className="mt-2 p-2 rounded-lg bg-blue-500/5 border border-blue-500/10">
         <div className="flex justify-between text-[10px]">
-          <span className="text-slate-400">Текущая цена 1 DCT:</span>
-          <span className="text-blue-300 font-bold">${dctPrice}</span>
+          <span className="text-slate-400">Цена покупки 1 DCT:</span>
+          <span className="text-blue-300 font-bold">$0.50 (фикс)</span>
+        </div>
+        <div className="text-[9px] text-slate-500 mt-0.5">
+          Партнёр платит $1 USDT → получает 2 DCT по контракту
         </div>
       </div>
     </div>
