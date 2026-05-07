@@ -24,6 +24,7 @@ export default function AdminPanel() {
   const SECTIONS = [
     { id: 'content', icon: '📢', label: 'Контент' },
     { id: 'lots', icon: '🎟', label: 'Лоты' },
+    { id: 'finance', icon: '📊', label: 'Финансы' },
     { id: 'fractional', icon: '🧩', label: 'Фракции' },
     { id: 'orders', icon: '📋', label: 'Заказы' },
     { id: 'showcase', icon: '🏪', label: 'Витрина' },
@@ -113,6 +114,9 @@ export default function AdminPanel() {
         {/* ЛОТЫ */}
         {activeSection === 'lots' && <LotsAdmin />}
 
+        {/* ФИНАНСЫ — read-only страница со всеми финансами системы с блокчейна */}
+        {activeSection === 'finance' && <FinanceAdmin />}
+
         {/* ФРАКЦИИ (on-chain FractionalGem) */}
         {activeSection === 'fractional' && <FractionalLotsAdmin />}
 
@@ -181,6 +185,7 @@ function AdminGuide({ onClose }) {
             <p>Админ-панель доступна только владельцу кошелька. Здесь 6 разделов:</p>
             <p><b className="text-gold-400">📢 Контент</b> — управление новостями и квестами. Новости отображаются в приложении для всех. Квесты — задания для партнёров с наградами.</p>
             <p><b className="text-gold-400">🎟 Лоты</b> — создание и управление клубными лотами (долевая покупка бриллиантов с розыгрышем).</p>
+            <p><b className="text-gold-400">📊 Финансы</b> — просмотр всех денег системы с блокчейна: пулы, маркетинг, фиксированные адреса распределения, мой баланс.</p>
             <p><b className="text-gold-400">🧩 Фракции</b> — создание и управление фракционными лотами в смарт-контракте FractionalGem (on-chain доли, стейкинг, ювелирка, продажа).</p>
             <p><b className="text-gold-400">📋 Заказы</b> — все заказы камней из конфигуратора. Смена статусов, заметки, история.</p>
             <p><b className="text-gold-400">🏪 Витрина</b> — создание корпоративных товаров, модерация, оформление продаж. Те же товары доступны пользователям в КЛУБ → Магазин.</p>
