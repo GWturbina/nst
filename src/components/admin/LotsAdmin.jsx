@@ -191,6 +191,28 @@ export default function LotsAdmin() {
     setTxPending(false)
   }
 
+  // ═══ Удалить лот совсем (только если не привязан к контракту) ═══
+  const handleDelete = async (lotId, lotTitle) => {
+    const confirm = window.confirm(
+      `Удалить лот «${lotTitle}» НАВСЕГДА?\n\n` +
+      `Это действие нельзя отменить. Запись будет полностью удалена из БД.\n\n` +
+      `Если хочешь сохранить для истории — используй "Отменить" вместо удаления.`
+    )
+    if (!confirm) return
+
+    setTxPending(true)
+    try {
+      const res = await authFetch('/api/lots', {
+        method: 'PATCH',
+        body: { action: 'delete', adminWallet: wallet, lotId }
+      })
+      const data = await res.json()
+      if (data.ok) { addNotification(`🗑 Лот «${lotTitle}» удалён`); reload() }
+      else addNotification(`❌ ${data.error}`)
+    } catch { addNotification('❌ Ошибка сети') }
+    setTxPending(false)
+  }
+
   if (loading) return <div className="px-3 mt-2 text-center py-8"><div className="text-2xl animate-spin">🎟</div></div>
 
   return (
@@ -329,6 +351,23 @@ export default function LotsAdmin() {
                 <button onClick={() => handleCancel(lot.id)} disabled={txPending}
                   className="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-red-500/15 border border-red-500/25 text-red-400">
                   ✕ Отмена
+                </button>
+                {/* Удалить совсем — только если ещё не задеплоен в контракт */}
+                {(lot.contract_lot_id === null || lot.contract_lot_id === undefined) && (
+                  <button onClick={() => handleDelete(lot.id, lot.title)} disabled={txPending}
+                    className="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-red-700/20 border border-red-700/40 text-red-300">
+                    🗑 Удалить совсем
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Для отменённых — кнопка удаления из истории */}
+            {lot.status === 'cancelled' && (
+              <div className="flex gap-1 flex-wrap">
+                <button onClick={() => handleDelete(lot.id, lot.title)} disabled={txPending}
+                  className="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-red-700/20 border border-red-700/40 text-red-300">
+                  🗑 Удалить из истории
                 </button>
               </div>
             )}
