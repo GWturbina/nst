@@ -177,15 +177,27 @@ export async function POST(request) {
     }
 
     const gc = num(gemCost, 10, 10000000)
-    const sp = num(sharePrice)
-    if (![25, 50, 100].includes(sp)) {
-      return NextResponse.json({ ok: false, error: 'Цена доли: $25, $50 или $100' }, { status: 400 })
+    if (!gc || gc < 10) {
+      return NextResponse.json({ ok: false, error: 'Стоимость камня минимум $10' }, { status: 400 })
     }
     if (!title) return NextResponse.json({ ok: false, error: 'Укажите название' }, { status: 400 })
 
+    // ─── Новая модель v2.4: партнёры платят любую сумму USDT ───
+    // Поля sharePrice и totalShares больше НЕ ограничены — это просто
+    // декоративные UI-метаданные. Контракт оперирует только targetUSDT (= gemCost)
+    // и amountUSDT (любая сумма от партнёра).
+    //
+    // Если sharePrice не задан или 0 — ставим $50 как декоративную метку.
+    // Если задан — принимаем любое значение > 0.
+    const sp = num(sharePrice) || 50
+    if (sp <= 0) {
+      return NextResponse.json({ ok: false, error: 'sharePrice должен быть > 0' }, { status: 400 })
+    }
+
     const lotPrice = Math.round(gc * 100 / 80 * 100) / 100
-    const totalShares = Math.floor(lotPrice / sp)
-    if (totalShares < 2) return NextResponse.json({ ok: false, error: 'Мало долей (мин. 2)' }, { status: 400 })
+    // total_shares — декоративное число для UI (показывает дроби в визуализации).
+    // На контракт не влияет.
+    const totalShares = Math.max(2, Math.floor(lotPrice / sp))
 
     const { data, error } = await supabase
       .from('dc_lots')
