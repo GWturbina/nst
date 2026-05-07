@@ -488,11 +488,42 @@ export async function claimDrainedPool(poolId) {
  * @param {string} name — название пула
  * @param {number|string} targetUSDT — цель сбора в USDT
  * @param {string} metaUrl — IPFS/HTTP URL с фотками+метаданными
+ * @returns {Promise<{poolId: number, receipt: object}>} ID созданного пула + квитанция
  */
 export async function createPool(name, targetUSDT, metaUrl = '') {
   const c = getContract('ClubPools', CLUBPOOLS_ABI)
   const tx = await c.createPool(String(name), parse(targetUSDT), String(metaUrl || ''))
-  return await tx.wait()
+  const receipt = await tx.wait()
+
+  // Парсим event PoolCreated чтобы получить присвоенный poolId
+  // event PoolCreated(uint256 indexed poolId, string name, uint256 targetUSDT, uint256 dctAmount)
+  let poolId = null
+  try {
+    const iface = new ethers.Interface(CLUBPOOLS_ABI)
+    const poolsAddrLower = ADDRESSES.ClubPools.toLowerCase()
+    for (const log of (receipt.logs || [])) {
+      if ((log.address || '').toLowerCase() !== poolsAddrLower) continue
+      try {
+        const parsed = iface.parseLog({ topics: log.topics, data: log.data })
+        if (parsed && parsed.name === 'PoolCreated') {
+          poolId = num(parsed.args.poolId)
+          break
+        }
+      } catch {}
+    }
+  } catch (e) {
+    console.warn('createPool: не удалось распарсить poolId из event:', e?.message)
+  }
+
+  // Fallback: если не удалось достать из event — берём poolsCount (последний созданный)
+  if (poolId === null) {
+    try {
+      const cRead = getReadContract('ClubPools', CLUBPOOLS_ABI)
+      poolId = num(await cRead.poolsCount())
+    } catch {}
+  }
+
+  return { poolId, receipt }
 }
 
 /**
@@ -501,6 +532,8 @@ export async function createPool(name, targetUSDT, metaUrl = '') {
  *
  * В новой модели sharePrice/minGwLevel/secret/fundraisingDays игнорируются —
  * они задаются константами в контракте. Передаём только name + targetUSDT + metaUrl.
+ *
+ * @returns {Promise<{poolId: number, receipt: object}>} — для совместимости с LotsAdmin
  */
 export async function createLotOnChain(targetUSDT, sharePrice, minGwLevel, secret, opts = {}) {
   const name = opts.name || `Pool ${Date.now()}`
