@@ -92,12 +92,21 @@ async function doConnect() {
     const gwStatus = await C.getGWUserStatus(result.address).catch(() => null)
     const isReg = gwStatus?.isRegistered || false
 
+    // Параллельно проверяем — может быть это админский кошелёк (owner / staff).
+    // Для админов подпись ОБЯЗАТЕЛЬНА — иначе админка не работает.
+    let isAdminWallet = false
+    try {
+      const adminRes = await fetch(`/api/admin?wallet=${result.address}`)
+      const adminData = await adminRes.json()
+      isAdminWallet = !!(adminData?.ok && adminData?.isAdmin)
+    } catch {}
+
     if (isReg) {
       // Зарегистрирован → обновляем данные + запрашиваем подпись
       store.updateRegistration(true, gwStatus.odixId || null)
       if (gwStatus.maxPackage > 0) store.setLevel(gwStatus.maxPackage)
 
-      // Подпись — только для зарегистрированных (не пугаем новичков)
+      // Подпись — для зарегистрированных или админов
       const authAge = store.authTs ? Date.now() - store.authTs * 1000 : Infinity
       if (!store.authSig || authAge > 12 * 60 * 60 * 1000) {
         try {
@@ -112,6 +121,25 @@ async function doConnect() {
 
       await refreshDataForAddress(result.address)
       startRefreshCycle(result.address)
+    } else if (isAdminWallet) {
+      // Админ (owner/staff) — НЕ зарегистрирован, но подпись нужна для админки
+      store.updateRegistration(false, null)
+      const authAge = store.authTs ? Date.now() - store.authTs * 1000 : Infinity
+      if (!store.authSig || authAge > 12 * 60 * 60 * 1000) {
+        try {
+          const auth = await web3.signAuthMessage()
+          store.setAuth(auth)
+          store.addNotification('🔑 Подпись админа получена')
+          window.__authDeclined = false
+        } catch (authErr) {
+          console.warn('Admin auth signature declined')
+          store.addNotification('⚠️ Подпись отклонена — админ-функции работать не будут')
+          window.__authDeclined = true
+        }
+      }
+      // Загружаем балансы для админа тоже
+      const balances = await C.getBalances(result.address).catch(() => ({ bnb: '0', usdt: '0' }))
+      store.updateBalances(balances)
     } else {
       // НЕ зарегистрирован → показать модал регистрации (без подписи!)
       store.updateRegistration(false, null)
