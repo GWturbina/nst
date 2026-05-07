@@ -215,7 +215,15 @@ function PoolsSection() {
   const handleBuy = async () => {
     if (!buyModal || !wallet) return
     setTxPending(true)
-    const result = await safeCall(() => Club.buyShare(buyModal.poolId, buyCount))
+    // buyShare ждёт сумму USDT, не количество долей
+    const sharePrice = parseFloat(buyModal.sharePrice) || 0.5
+    if (sharePrice <= 0) {
+      addNotification('❌ Цена доли не задана')
+      setTxPending(false)
+      return
+    }
+    const usdtAmount = buyCount * sharePrice
+    const result = await safeCall(() => Club.buyShare(buyModal.poolId, usdtAmount))
     setTxPending(false)
     if (result.ok) {
       addNotification(`✅ Куплено ${buyCount} доля(ей) в пуле «${buyModal.name}»`)
