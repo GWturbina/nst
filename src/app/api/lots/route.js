@@ -194,7 +194,15 @@ export async function POST(request) {
       return NextResponse.json({ ok: false, error: 'sharePrice должен быть > 0' }, { status: 400 })
     }
 
-    const lotPrice = Math.round(gc * 100 / 80 * 100) / 100
+    // ─── Расчёт цели сбора с учётом распределения 85/5/10 ───
+    // Контракт автоматически делит каждый платёж партнёра:
+    //   85% → котёл пула (на камень)
+    //   5%  → реклама (adsFundAddr)
+    //   10% → маркетинг (9 уровней + фикс)
+    // Чтобы в котле оказался gemCost — партнёрам нужно вложить
+    // ВСЕГО (gemCost / 0.85). Эту сумму и передаём в контракт как targetUSDT.
+    const lotPrice = Math.round(gc * 100 / 85 * 100) / 100  // gemCost / 0.85, округление до центов
+
     // total_shares — декоративное число для UI (показывает дроби в визуализации).
     // На контракт не влияет.
     const totalShares = Math.max(2, Math.floor(lotPrice / sp))
@@ -478,7 +486,7 @@ export async function PATCH(request) {
       // 2. Получаем параметры лота из БД для сверки с контрактом
       const { data: dbLot } = await supabase
         .from('dc_lots')
-        .select('gem_cost, share_price, total_shares')
+        .select('gem_cost, lot_price, share_price, total_shares')
         .eq('id', lotId)
         .single()
       if (!dbLot) {
@@ -486,12 +494,13 @@ export async function PATCH(request) {
       }
 
       // 3. ─── Серверная on-chain проверка ───
-      // Если передан contractTxHash → глубокая сверка (gemCost/sharePrice/totalShares).
-      // Иначе → базовая (контракт реально содержит лот с таким ID).
+      // Передаём lot_price (= gem_cost / 0.85) — именно эту сумму LotsAdmin
+      // отправляет в контракт как targetUSDT. Если в контракте targetUSDT
+      // совпадает с lot_price из БД — значит деплой прошёл корректно.
       const check = await verifyClubLotsCreation({
         contractLotId: cLotId,
         txHash: contractTxHash || null,
-        expectedGemCost: dbLot.gem_cost,
+        expectedGemCost: dbLot.lot_price || dbLot.gem_cost,  // приоритет lot_price
         expectedSharePrice: dbLot.share_price,
         expectedTotalShares: dbLot.total_shares,
       })
