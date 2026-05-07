@@ -8,6 +8,7 @@ import FractionalLotsAdmin from '@/components/admin/FractionalLotsAdmin'
 import ShowcaseAdmin from '@/components/admin/ShowcaseAdmin'
 import LevelContentAdmin from '@/components/admin/LevelContentAdmin'
 import BoostConfigAdmin from '@/components/admin/BoostConfigAdmin'
+import FinanceAdmin from '@/components/admin/FinanceAdmin'
 
 export default function AdminPanel() {
   const { wallet, isAdmin, ownerWallet, addNotification,
