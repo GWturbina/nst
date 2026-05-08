@@ -121,6 +121,28 @@ export async function getBNBPrice() {
 
 export async function register(sponsorId = 0) {
   const gw = getContract('GlobalWay')
+
+  // ★ ФИКС: Сначала проверяем НАПРЯМУЮ в GW (не через Bridge!).
+  // Bridge может быть не синхронизирован с GW — поэтому если кошелёк уже
+  // зарегистрирован прямо в GlobalWay, register() ревёртит без reason,
+  // и пользователь видит "спонсор не существует" хотя на самом деле всё ок.
+  try {
+    const accs = await window.ethereum?.request({ method: 'eth_accounts' })
+    const me = accs?.[0]
+    if (me) {
+      const isReg = await gw.isUserRegistered(me).catch(() => false)
+      if (isReg) {
+        // Уже зарегистрирован напрямую в GW — не делаем повторную транзакцию
+        const err = new Error('Already registered')
+        err.reason = 'Already registered'
+        throw err
+      }
+    }
+  } catch (e) {
+    if (e?.reason === 'Already registered') throw e
+    // Игнорируем другие ошибки проверки — пробуем register всё равно
+  }
+
   const tx = await gw.register(sponsorId)
   return await tx.wait()
 }
@@ -186,6 +208,37 @@ async function getBridgeContract() {
 }
 
 export async function getGWUserStatus(address) {
+  // ★ ФИКС: Сначала проверяем НАПРЯМУЮ в GlobalWay (источник правды).
+  // Если зарегистрирован — берём данные оттуда. Bridge может отставать.
+  try {
+    const gw = getContract('GlobalWay')
+    const directReg = await gw.isUserRegistered(address).catch(() => false)
+    if (directReg) {
+      // Зарегистрирован в GW напрямую — дополним данные через getUserInfo
+      const info = await gw.getUserInfo(address).catch(() => null)
+      const maxLevel = info ? Number(info.maxLevel) : 0
+      // Пробуем дополнить данными из Bridge (odixId/sponsor) если он работает
+      const bridgeData = await (async () => {
+        try {
+          const bridge = await getBridgeContract()
+          if (!bridge) return null
+          const s = await bridge.getUserStatus(address)
+          return s
+        } catch { return null }
+      })()
+      return {
+        isRegistered: true,
+        odixId: bridgeData ? Number(bridgeData.odixId) : 0,
+        maxPackage: maxLevel,
+        rank: bridgeData ? Number(bridgeData.rank) : 0,
+        quarterlyActive: bridgeData ? bridgeData.quarterlyActive : false,
+        sponsor: bridgeData ? bridgeData.sponsor : '0x0000000000000000000000000000000000000000',
+        activeLevels: bridgeData ? [...bridgeData.activeLevels] : [],
+      }
+    }
+  } catch {}
+
+  // Fallback на Bridge если в GW не зарегистрирован (или GW недоступен)
   try {
     const bridge = await getBridgeContract()
     if (!bridge) return null
