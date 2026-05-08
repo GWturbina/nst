@@ -28,6 +28,15 @@ export default function LevelsTab() {
     }
   }, [])
 
+  // ★★★ ФИКС: сбрасываем застрявший txPending при заходе на страницу
+  // Если предыдущая транзакция упала и не сбросила состояние — кнопки навсегда disabled.
+  // Этот useEffect гарантирует что страница всегда стартует с чистым состоянием.
+  useEffect(() => {
+    setTxPending(false)
+    setBuying(false)
+    addNotification('🔧 Страница уровней загружена (v2)')
+  }, [])
+
   // Живой курс: BNB → $
   const fmtUsd = (bnb) => {
     if (!bnb || !bnbPrice) return ''
