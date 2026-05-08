@@ -47,6 +47,9 @@ export default function LevelsTab() {
   }
 
   const handleBuy = async (lv) => {
+    // ★ ДИАГНОСТИКА: показываем что клик дошёл (видно на экране без консоли)
+    addNotification(`🔧 Клик: уровень ${lv.id} ${lv.name}`)
+
     if (!wallet) { addNotification(`❌ ${t('connectWalletFirst')}`); return }
 
     // Если не зарегистрирован — сначала показываем модал спонсора
@@ -118,6 +121,7 @@ export default function LevelsTab() {
 
   const doBuyLevel = async (lv) => {
     if (!lv) return
+    addNotification(`🔧 Запускаю покупку ${lv.name}...`)
     setBuying(true)
     setTxPending(true)
     try {
@@ -166,12 +170,16 @@ export default function LevelsTab() {
           const isExpanded = expandedLv === i
 
           return (
-            <div key={i} onClick={() => !isLocked && setExpandedLv(isExpanded ? null : i)}
-              className={`rounded-2xl border transition-all overflow-hidden ${isLocked ? 'opacity-40' : 'cursor-pointer'}`}
+            <div key={i}
+              className={`rounded-2xl border transition-all overflow-hidden ${isLocked ? 'opacity-40' : ''}`}
               style={{
                 background: isActive ? `${lv.color}15` : 'var(--bg-card)',
                 borderColor: isActive ? `${lv.color}40` : isNext ? `${lv.color}25` : 'var(--border)',
               }}>
+              {/* Верхняя часть кликабельная — для раскрытия. Развёрнутая часть НЕ перехватывает клики */}
+              <div onClick={() => !isLocked && setExpandedLv(isExpanded ? null : i)}
+                className={!isLocked ? 'cursor-pointer' : ''}
+                style={{ pointerEvents: isLocked ? 'none' : 'auto' }}>
               <div className="p-3 flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl border flex-shrink-0"
                   style={{ borderColor: `${lv.color}40`, background: `${lv.color}15` }}>
@@ -196,6 +204,7 @@ export default function LevelsTab() {
                   )}
                 </div>
               </div>
+              </div> {/* закрываем кликабельную верхнюю часть */}
 
               {isExpanded && (
                 <div className="px-3 pb-3 border-t" style={{ borderColor: `${lv.color}15` }}>
