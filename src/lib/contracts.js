@@ -120,12 +120,17 @@ export async function getBNBPrice() {
 // регистрации из внешних проектов (CardGift, GWAD).
 
 export async function register(sponsorId = 0) {
-  // ★ ИСПРАВЛЕНИЕ: Регистрация делается в MatrixRegistry, НЕ в GlobalWay.
-  // GlobalWay.register() — внутренняя функция для технических узлов и
-  // ревёртит "Already registered" для обычных пользовательских вызовов.
-  // Главный GW сайт (gwad.ink) вызывает MatrixRegistry.register(sponsorId).
-  const mr = getContract('MatrixRegistry')
-  const tx = await mr.register(sponsorId)
+  // ★ ИСПРАВЛЕНИЕ: Регистрация в DC идёт через NSSPlatform.register(),
+  // не через GlobalWay.register() и не через MatrixRegistry.register().
+  //
+  // NSSPlatform — это отдельный контракт Diamond Club / NSS системы.
+  // Он ведёт свою таблицу пользователей (isNSSUser) и при регистрации
+  // делает нужные действия в MatrixRegistry/GlobalWay через bridge.
+  //
+  // Прямой вызов GlobalWay.register() ревёртит "Already registered"
+  // (это внутренняя функция для технических аккаунтов).
+  const nss = getContract('NSSPlatform')
+  const tx = await nss.register(sponsorId)
   return await tx.wait()
 }
 
@@ -190,17 +195,19 @@ async function getBridgeContract() {
 }
 
 export async function getGWUserStatus(address) {
-  // ★ ИСПРАВЛЕНИЕ: Сначала прямая проверка в MatrixRegistry —
-  // это надёжный источник. Если зарегистрирован — данные оттуда.
-  // Bridge используется как дополнение для уровней (если есть).
+  // ★ ИСПРАВЛЕНИЕ: Для DC главный источник — NSSPlatform.
+  // NSSPlatform.isNSSUser(address) → точная проверка регистрации в DC.
+  // NSSPlatform.getUserNSSInfo(address) → (bool, uint256, uint256, uint256)
+  // Bridge.getUserStatus используется как дополнение для полей сторонних
+  // систем (rank, sponsor) если он отвечает.
   try {
-    const mr = getReadContract('MatrixRegistry')
-    if (mr) {
-      const direct = await mr.isRegistered(address).catch(() => false)
-      if (direct) {
-        // Зарегистрирован в MatrixRegistry. Получим userId.
-        const userId = await mr.getUserIdByAddress(address).catch(() => 0)
-        // Дополним данными из Bridge если он отвечает (level и т.д.)
+    const nss = getReadContract('NSSPlatform')
+    if (nss) {
+      const isNss = await nss.isNSSUser(address).catch(() => false)
+      if (isNss) {
+        // Зарегистрирован в DC. Получаем дополнительную инфу.
+        const nssInfo = await nss.getUserNSSInfo(address).catch(() => null)
+        // Дополним из Bridge если он работает
         const bridgeData = await (async () => {
           try {
             const bridge = await getBridgeContract()
@@ -210,7 +217,7 @@ export async function getGWUserStatus(address) {
         })()
         return {
           isRegistered: true,
-          odixId: Number(userId) || (bridgeData ? Number(bridgeData.odixId) : 0),
+          odixId: bridgeData ? Number(bridgeData.odixId) : 0,
           maxPackage: bridgeData ? Number(bridgeData.maxPackage) : 0,
           rank: bridgeData ? Number(bridgeData.rank) : 0,
           quarterlyActive: bridgeData ? bridgeData.quarterlyActive : false,
@@ -221,7 +228,7 @@ export async function getGWUserStatus(address) {
     }
   } catch {}
 
-  // Fallback на Bridge если MatrixRegistry недоступен или говорит что не зарегистрирован
+  // Fallback на Bridge (на случай если NSSPlatform недоступен)
   try {
     const bridge = await getBridgeContract()
     if (!bridge) return null
@@ -246,24 +253,20 @@ export async function getUserLevel(address) {
 }
 
 export async function isRegistered(address) {
+  // ★ ИСПРАВЛЕНИЕ: Для DC источник истины — NSSPlatform.isNSSUser(),
+  // а не Bridge.isUserRegistered (тот про GW общую регистрацию).
+  // Пользователь может быть зарегистрирован в GW (через главный сайт),
+  // но не в NSS (Diamond Club) — для DC он "не зарегистрирован".
   try {
-    // ★ ИСПРАВЛЕНИЕ: Сначала проверяем напрямую в MatrixRegistry —
-    // это источник истины для регистрации (а не Bridge, который может отставать).
-    const mr = getReadContract('MatrixRegistry')
-    if (mr) {
-      const direct = await mr.isRegistered(address).catch(() => null)
-      if (direct === true) return true
-      // если direct === false — это надёжный ответ; если null — пробуем Bridge
-      if (direct === false) {
-        // Дополнительный fallback на Bridge, на случай если MatrixRegistry перенесён
-        const bridge = await getBridgeContract()
-        if (bridge) {
-          return await bridge.isUserRegistered(address).catch(() => false)
-        }
-        return false
-      }
+    const nss = getReadContract('NSSPlatform')
+    if (nss) {
+      const isNss = await nss.isNSSUser(address).catch(() => null)
+      if (isNss === true) return true
+      if (isNss === false) return false
     }
-    // MatrixRegistry недоступен — fallback на Bridge
+  } catch {}
+  // Fallback: Bridge (на случай если NSSPlatform недоступен)
+  try {
     const bridge = await getBridgeContract()
     if (!bridge) {
       const result = await safeRead('NSSPlatform', 'isNSSUser', [address])
