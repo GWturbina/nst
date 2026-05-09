@@ -27,8 +27,19 @@ async function refreshDataForAddress(address) {
 
     // GlobalWay status
     if (gwStatus) {
-      store.updateRegistration(gwStatus.isRegistered, gwStatus.odixId || null)
-      if (gwStatus.maxPackage > 0) store.setLevel(gwStatus.maxPackage)
+      // ★ ФИКС: Не обнуляем registered=true если только что зарегистрировались.
+      // Если store.registered уже true, и gwStatus временно вернул false
+      // (Bridge не синхронизирован, RPC лагает) — оставляем registered=true.
+      // Только обновляем уровень и odixId если они улучшились.
+      const currentReg = store.registered
+      if (gwStatus.isRegistered) {
+        store.updateRegistration(true, gwStatus.odixId || store.userId || null)
+        if (gwStatus.maxPackage > 0) store.setLevel(gwStatus.maxPackage)
+      } else if (!currentReg) {
+        // Только если в store ещё не зарегистрирован → отражаем как есть
+        store.updateRegistration(false, null)
+      }
+      // else: store уже registered=true, gwStatus говорит false — игнорируем (защита)
     }
 
     // ═══ FIX ISSUE-10: Загружаем тапы с сервера на уровне приложения ═══
@@ -92,21 +103,12 @@ async function doConnect() {
     const gwStatus = await C.getGWUserStatus(result.address).catch(() => null)
     const isReg = gwStatus?.isRegistered || false
 
-    // Параллельно проверяем — может быть это админский кошелёк (owner / staff).
-    // Для админов подпись ОБЯЗАТЕЛЬНА — иначе админка не работает.
-    let isAdminWallet = false
-    try {
-      const adminRes = await fetch(`/api/admin?wallet=${result.address}`)
-      const adminData = await adminRes.json()
-      isAdminWallet = !!(adminData?.ok && adminData?.isAdmin)
-    } catch {}
-
     if (isReg) {
       // Зарегистрирован → обновляем данные + запрашиваем подпись
       store.updateRegistration(true, gwStatus.odixId || null)
       if (gwStatus.maxPackage > 0) store.setLevel(gwStatus.maxPackage)
 
-      // Подпись — для зарегистрированных или админов
+      // Подпись — только для зарегистрированных (не пугаем новичков)
       const authAge = store.authTs ? Date.now() - store.authTs * 1000 : Infinity
       if (!store.authSig || authAge > 12 * 60 * 60 * 1000) {
         try {
@@ -121,25 +123,6 @@ async function doConnect() {
 
       await refreshDataForAddress(result.address)
       startRefreshCycle(result.address)
-    } else if (isAdminWallet) {
-      // Админ (owner/staff) — НЕ зарегистрирован, но подпись нужна для админки
-      store.updateRegistration(false, null)
-      const authAge = store.authTs ? Date.now() - store.authTs * 1000 : Infinity
-      if (!store.authSig || authAge > 12 * 60 * 60 * 1000) {
-        try {
-          const auth = await web3.signAuthMessage()
-          store.setAuth(auth)
-          store.addNotification('🔑 Подпись админа получена')
-          window.__authDeclined = false
-        } catch (authErr) {
-          console.warn('Admin auth signature declined')
-          store.addNotification('⚠️ Подпись отклонена — админ-функции работать не будут')
-          window.__authDeclined = true
-        }
-      }
-      // Загружаем балансы для админа тоже
-      const balances = await C.getBalances(result.address).catch(() => ({ bnb: '0', usdt: '0' }))
-      store.updateBalances(balances)
     } else {
       // НЕ зарегистрирован → показать модал регистрации (без подписи!)
       store.updateRegistration(false, null)
@@ -213,12 +196,18 @@ async function setupSessionForAddress(address, options = {}) {
         }
       }
     }
-  } else {
-    // Кошелёк подключён, но НЕ зарегистрирован → открыть модалку
+  } else if (!store.registered) {
+    // ★ ФИКС: Кошелёк НЕ зарегистрирован И в store ещё не помечен как зарегистрированный
+    // → открыть модалку регистрации.
+    // ВАЖНО: если store уже registered=true (после успешной регистрации в текущей сессии)
+    // — НЕ обнуляем. Это защита от случая когда getGWUserStatus временно
+    // возвращает null (Bridge не синхронизирован или RPC лагает) и стирает
+    // только что успешную регистрацию, открывая модалку повторно.
     store.updateRegistration(false, null)
     const savedRef = typeof localStorage !== 'undefined' ? localStorage.getItem('dc_ref') : null
     store.setAutoRegister(savedRef && /^\d+$/.test(savedRef) ? savedRef : null)
   }
+  // else: store.registered уже true — оставляем как есть, ничего не сбрасываем
 
   await refreshDataForAddress(address)
   startRefreshCycle(address)
