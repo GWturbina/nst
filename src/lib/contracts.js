@@ -13,14 +13,12 @@ import NSSPlatformABIFile from '@/contracts/abi/NSSPlatform.json'
 import GlobalWayABIFile from '@/contracts/abi/GlobalWay.json'
 import NSTTokenABIFile from '@/contracts/abi/NSTToken.json'
 import SwapHelperABIFile from '@/contracts/abi/SwapHelper.json'
-import MatrixRegistryABIFile from '@/contracts/abi/MatrixRegistry.json'
 
 const ABIS = {
   NSSPlatform: NSSPlatformABIFile.abi || NSSPlatformABIFile,
   GlobalWay: GlobalWayABIFile.abi || GlobalWayABIFile,
   NSTToken: NSTTokenABIFile.abi || NSTTokenABIFile,
   SwapHelper: SwapHelperABIFile.abi || SwapHelperABIFile,
-  MatrixRegistry: MatrixRegistryABIFile.abi || MatrixRegistryABIFile,
 }
 
 const READ_RPC = process.env.NEXT_PUBLIC_RPC_URL || 'https://opbnb-mainnet-rpc.bnbchain.org'
@@ -122,22 +120,20 @@ export async function getBNBPrice() {
 // регистрации из внешних проектов (CardGift, GWAD).
 
 export async function register(sponsorId = 0) {
-  // ★ ИСПРАВЛЕНИЕ: Регистрация делается через MatrixRegistry.register(sponsorId).
+  // ✅ ПРАВИЛЬНЫЙ путь: NSSPlatform.register(sponsorId).
   //
-  // Это ПУБЛИЧНАЯ функция — любой пользователь может вызвать её
-  // со СВОЕГО кошелька (без директоров и проектных кошельков).
+  // NSSPlatform — публичная функция (без onlyDirector).
+  // Внутри она:
+  //   1. Проверяет что user не зарегистрирован в GW и в NSS
+  //   2. Вызывает Bridge.registerUser("NSS", msg.sender, sponsorId)
+  //   3. Bridge проверяет msg.sender == projectWallet (= NSSPlatform)
+  //   4. После регистрации: isNSSUser=true, можно покупать уровни
   //
-  // GlobalWay.register() — это ДРУГАЯ функция (для технических узлов),
-  // ревёртит "Already registered" из-за внутренней проверки.
-  //
-  // NSSPlatform.register() — для директоров/проектного кошелька (не подходит).
-  //
-  // MatrixRegistry — это ОБЩИЙ реестр всех пользователей экосистемы
-  // GlobalWay. Регистрация там даёт пользователю ID и связь со спонсором.
-  // После этого NSSPlatform.isNSSUser() автоматически возвращает true
-  // (или после первой покупки уровня в DC).
-  const mr = getContract('MatrixRegistry')
-  const tx = await mr.register(sponsorId)
+  // ВАЖНО: в Bridge для проекта "NSS" projectWallet ДОЛЖЕН быть
+  // равен адресу NSSPlatform (0xFb1d...4f2B). Иначе ревёртит
+  // "Only project wallet or director".
+  const nss = getContract('NSSPlatform')
+  const tx = await nss.register(sponsorId)
   return await tx.wait()
 }
 
@@ -202,36 +198,6 @@ async function getBridgeContract() {
 }
 
 export async function getGWUserStatus(address) {
-  // ★ ИСПРАВЛЕНИЕ: Сначала проверяем напрямую через MatrixRegistry.
-  // Это надёжный источник — если зарегистрирован там, значит зарегистрирован.
-  // Bridge используется как дополнение для уровней/ранга.
-  try {
-    const mr = getReadContract('MatrixRegistry')
-    if (mr) {
-      const direct = await mr.isRegistered(address).catch(() => false)
-      if (direct) {
-        const userId = await mr.getUserIdByAddress(address).catch(() => 0)
-        const bridgeData = await (async () => {
-          try {
-            const bridge = await getBridgeContract()
-            if (!bridge) return null
-            return await bridge.getUserStatus(address)
-          } catch { return null }
-        })()
-        return {
-          isRegistered: true,
-          odixId: Number(userId) || (bridgeData ? Number(bridgeData.odixId) : 0),
-          maxPackage: bridgeData ? Number(bridgeData.maxPackage) : 0,
-          rank: bridgeData ? Number(bridgeData.rank) : 0,
-          quarterlyActive: bridgeData ? bridgeData.quarterlyActive : false,
-          sponsor: bridgeData ? bridgeData.sponsor : '0x0000000000000000000000000000000000000000',
-          activeLevels: bridgeData ? [...bridgeData.activeLevels] : [],
-        }
-      }
-    }
-  } catch {}
-
-  // Fallback на Bridge
   try {
     const bridge = await getBridgeContract()
     if (!bridge) return null
@@ -256,20 +222,6 @@ export async function getUserLevel(address) {
 }
 
 export async function isRegistered(address) {
-  // ★ ИСПРАВЛЕНИЕ: Источник истины — MatrixRegistry.isRegistered().
-  // Это общий реестр, где должен быть зарегистрирован каждый пользователь.
-  try {
-    const mr = getReadContract('MatrixRegistry')
-    if (mr) {
-      const direct = await mr.isRegistered(address).catch(() => null)
-      if (direct === true) return true
-      if (direct === false) {
-        // Не в MatrixRegistry — значит реально не зарегистрирован
-        return false
-      }
-    }
-  } catch {}
-  // Fallback на Bridge только если MatrixRegistry недоступен
   try {
     const bridge = await getBridgeContract()
     if (!bridge) {
