@@ -120,20 +120,30 @@ export async function getBNBPrice() {
 // регистрации из внешних проектов (CardGift, GWAD).
 
 export async function register(sponsorId = 0) {
-  // ✅ ПРАВИЛЬНЫЙ путь: NSSPlatform.register(sponsorId).
-  //
-  // NSSPlatform — публичная функция (без onlyDirector).
-  // Внутри она:
-  //   1. Проверяет что user не зарегистрирован в GW и в NSS
-  //   2. Вызывает Bridge.registerUser("NSS", msg.sender, sponsorId)
-  //   3. Bridge проверяет msg.sender == projectWallet (= NSSPlatform)
-  //   4. После регистрации: isNSSUser=true, можно покупать уровни
-  //
-  // ВАЖНО: в Bridge для проекта "NSS" projectWallet ДОЛЖЕН быть
-  // равен адресу NSSPlatform (0xFb1d...4f2B). Иначе ревёртит
-  // "Only project wallet or director".
-  const nss = getContract('NSSPlatform')
-  const tx = await nss.register(sponsorId)
+  const gw = getContract('GlobalWay')
+
+  // ★ ФИКС: Сначала проверяем НАПРЯМУЮ в GW (не через Bridge!).
+  // Bridge может быть не синхронизирован с GW — поэтому если кошелёк уже
+  // зарегистрирован прямо в GlobalWay, register() ревёртит без reason,
+  // и пользователь видит "спонсор не существует" хотя на самом деле всё ок.
+  try {
+    const accs = await window.ethereum?.request({ method: 'eth_accounts' })
+    const me = accs?.[0]
+    if (me) {
+      const isReg = await gw.isUserRegistered(me).catch(() => false)
+      if (isReg) {
+        // Уже зарегистрирован напрямую в GW — не делаем повторную транзакцию
+        const err = new Error('Already registered')
+        err.reason = 'Already registered'
+        throw err
+      }
+    }
+  } catch (e) {
+    if (e?.reason === 'Already registered') throw e
+    // Игнорируем другие ошибки проверки — пробуем register всё равно
+  }
+
+  const tx = await gw.register(sponsorId)
   return await tx.wait()
 }
 
@@ -198,20 +208,62 @@ async function getBridgeContract() {
 }
 
 export async function getGWUserStatus(address) {
+  if (!address) return null
+
+  // ★★★ КРИТИЧНЫЙ ФИКС: используем getReadContract (публичный opBNB RPC),
+  // а НЕ getContract (который через web3.signer = SafePal RPC).
+  // SafePal может быть на BSC (chainId 56) или просто лагать с кэшем —
+  // тогда вызов GW.isUserRegistered возвращает false для уже зарегистрированных
+  // пользователей, и они снова видят модал регистрации.
+  //
+  // ALSO: убираем Bridge fallback для isRegistered. Bridge тут НЕ "источник истины
+  // когда GW не отвечает" — у Bridge свой mapping, который НЕ обновляется при
+  // регистрации через GlobalWay.register() напрямую. Если GW.isUserRegistered
+  // вернул false — значит реально не зарегистрирован, точка. Bridge тут не помощник.
   try {
-    const bridge = await getBridgeContract()
-    if (!bridge) return null
-    const s = await bridge.getUserStatus(address)
-    return {
-      isRegistered: s.isRegistered,
-      odixId: Number(s.odixId),
-      maxPackage: Number(s.maxPackage),
-      rank: Number(s.rank),
-      quarterlyActive: s.quarterlyActive,
-      sponsor: s.sponsor,
-      activeLevels: [...s.activeLevels],
+    const gw = getReadContract('GlobalWay')
+    if (!gw) return null
+
+    const isReg = await gw.isUserRegistered(address)
+    if (!isReg) {
+      return {
+        isRegistered: false,
+        odixId: 0,
+        maxPackage: 0,
+        rank: 0,
+        quarterlyActive: false,
+        sponsor: '0x0000000000000000000000000000000000000000',
+        activeLevels: [],
+      }
     }
-  } catch { return null }
+
+    // Зарегистрирован — обогащаем данными
+    const info = await gw.getUserInfo(address).catch(() => null)
+    const maxLevel = info ? Number(info.maxLevel) : 0
+
+    // Bridge — ТОЛЬКО для дополнительных полей (odixId, sponsor),
+    // НЕ для проверки регистрации
+    const bridgeData = await (async () => {
+      try {
+        const bridge = await getBridgeContract()
+        if (!bridge) return null
+        return await bridge.getUserStatus(address)
+      } catch { return null }
+    })()
+
+    return {
+      isRegistered: true,
+      odixId: bridgeData ? Number(bridgeData.odixId) : 0,
+      maxPackage: maxLevel,
+      rank: bridgeData ? Number(bridgeData.rank) : 0,
+      quarterlyActive: bridgeData ? bridgeData.quarterlyActive : false,
+      sponsor: bridgeData ? bridgeData.sponsor : '0x0000000000000000000000000000000000000000',
+      activeLevels: bridgeData ? [...bridgeData.activeLevels] : [],
+    }
+  } catch (e) {
+    console.error('getGWUserStatus error:', e)
+    return null
+  }
 }
 
 export async function getUserLevel(address) {
@@ -222,13 +274,13 @@ export async function getUserLevel(address) {
 }
 
 export async function isRegistered(address) {
+  // ★★★ ФИКС: проверяем GlobalWay через публичный RPC, НЕ Bridge.
+  // Bridge не знает про прямые регистрации через GW.register() —
+  // у него свой mapping для проектов. Источник истины — только GW.
   try {
-    const bridge = await getBridgeContract()
-    if (!bridge) {
-      const result = await safeRead('NSSPlatform', 'isNSSUser', [address])
-      return result === true
-    }
-    return await bridge.isUserRegistered(address)
+    const gw = getReadContract('GlobalWay')
+    if (!gw) return false
+    return await gw.isUserRegistered(address)
   } catch { return false }
 }
 
