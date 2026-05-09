@@ -13,12 +13,14 @@ import NSSPlatformABIFile from '@/contracts/abi/NSSPlatform.json'
 import GlobalWayABIFile from '@/contracts/abi/GlobalWay.json'
 import NSTTokenABIFile from '@/contracts/abi/NSTToken.json'
 import SwapHelperABIFile from '@/contracts/abi/SwapHelper.json'
+import MatrixRegistryABIFile from '@/contracts/abi/MatrixRegistry.json'
 
 const ABIS = {
   NSSPlatform: NSSPlatformABIFile.abi || NSSPlatformABIFile,
   GlobalWay: GlobalWayABIFile.abi || GlobalWayABIFile,
   NSTToken: NSTTokenABIFile.abi || NSTTokenABIFile,
   SwapHelper: SwapHelperABIFile.abi || SwapHelperABIFile,
+  MatrixRegistry: MatrixRegistryABIFile.abi || MatrixRegistryABIFile,
 }
 
 const READ_RPC = process.env.NEXT_PUBLIC_RPC_URL || 'https://opbnb-mainnet-rpc.bnbchain.org'
