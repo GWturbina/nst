@@ -77,12 +77,13 @@ export default function AutoRegisterModal() {
       const confirmed = await C.waitForRegistration(wallet)
       const gwStatus = await C.getGWUserStatus(wallet).catch(() => null)
 
-      if (gwStatus) {
-        useGameStore.getState().updateRegistration(gwStatus.isRegistered, gwStatus.odixId || sid)
-        if (gwStatus.maxPackage > 0) useGameStore.getState().setLevel(gwStatus.maxPackage)
-      } else {
-        useGameStore.getState().updateRegistration(true, sid)
-      }
+      // ★ FIX: tx прошла успешно (await C.register выше не упал) → registered=true.
+      // НЕ доверяем gwStatus.isRegistered: getGWUserStatus может уйти в Bridge fallback,
+      // а Bridge не синхронизируется с GW при прямой регистрации через GW.register().
+      // В итоге gwStatus.isRegistered = false, и старый код писал в store false,
+      // из-за чего модал регистрации появлялся повторно при заходе в Уровни.
+      useGameStore.getState().updateRegistration(true, gwStatus?.odixId || sid)
+      if (gwStatus?.maxPackage > 0) useGameStore.getState().setLevel(gwStatus.maxPackage)
 
       addNotification('✅ Регистрация прошла успешно!')
 
