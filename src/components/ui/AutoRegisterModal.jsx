@@ -14,6 +14,7 @@
 import { useState } from 'react'
 import useGameStore from '@/lib/store'
 import { useBlockchain } from '@/lib/useBlockchain'
+import { gwadTrackRegistration } from '@/lib/gwadTracking'
 import * as C from '@/lib/contracts'
 import { shortAddress } from '@/lib/web3'
 import { LEVELS } from '@/lib/gameData'
@@ -90,6 +91,11 @@ export default function AutoRegisterModal() {
       // Запускаем подпись + загрузку данных в фоне
       // (не дожидаемся, чтобы пользователь сразу увидел экран бота)
       afterRegistration().catch(() => {})
+
+      // ★ Уведомляем рекламную систему gwad.ink о новой регистрации.
+      // Если пользователь пришёл не по нашей рекламе (нет UTM в localStorage) —
+      // функция тихо вернёт false и ничего не сделает.
+      gwadTrackRegistration(wallet).catch(() => {})
 
       // Переходим на шаг активации Telegram
       setStep('telegram')
