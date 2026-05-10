@@ -1,6 +1,6 @@
 import './globals.css'
 import ErrorBoundary from '@/components/ui/ErrorBoundary'
-
+import GwadUtmCapture from '@/components/GwadUtmCapture'
 export const metadata = {
   title: 'Diamond Club — GST',
   description: 'Инвестиции в драгоценные камни. DCT токен с реальным обеспечением.',
@@ -10,7 +10,6 @@ export const metadata = {
     images: ['/og-diamond.png'],
   },
 }
-
 export default function RootLayout({ children }) {
   return (
     <html lang="ru">
@@ -19,6 +18,7 @@ export default function RootLayout({ children }) {
         <script src="https://telegram.org/js/telegram-web-app.js" defer />
       </head>
       <body>
+        <GwadUtmCapture />
         <ErrorBoundary>
           {children}
         </ErrorBoundary>
