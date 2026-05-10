@@ -61,6 +61,29 @@ export async function safeCall(fn) {
 const fmt = ethers.formatEther
 
 // ═══════════════════════════════════════════════════
+// MATRIX REGISTRY — ИСТОЧНИК ПРАВДЫ для регистрации
+// ═══════════════════════════════════════════════════
+// MatrixRegistry — это единый реестр всех пользователей экосистемы.
+// В отличие от GlobalWay.isUserRegistered (локальный кэш в GW, который
+// НЕ синхронизируется при регистрации через Bridge), MatrixRegistry
+// видит ВСЕХ — независимо от того, через какой проект пришёл человек.
+//
+// Используется для pre-check перед register() и в getGWUserStatus.
+// Это убирает зависимость от того, какой Bridge записан в NSSPlatform.
+// ═══════════════════════════════════════════════════
+
+const MATRIX_REGISTRY_ABI = [
+  'function isRegistered(address user) external view returns (bool)',
+  'function getUserIdByAddress(address user) external view returns (uint256)',
+]
+
+function getMatrixRegistry() {
+  const addr = ADDRESSES.MatrixRegistry
+  if (!addr) return null
+  return new ethers.Contract(addr, MATRIX_REGISTRY_ABI, readProvider)
+}
+
+// ═══════════════════════════════════════════════════
 // БАЛАНСЫ
 // ═══════════════════════════════════════════════════
 
@@ -108,6 +131,7 @@ export async function getBNBPrice() {
   return null
 }
 
+
 // ═══════════════════════════════════════════════════
 // РЕГИСТРАЦИЯ / УРОВНИ
 // ═══════════════════════════════════════════════════
@@ -122,17 +146,22 @@ export async function getBNBPrice() {
 export async function register(sponsorId = 0) {
   const gw = getContract('GlobalWay')
 
-  // ★ ФИКС: Сначала проверяем НАПРЯМУЮ в GW (не через Bridge!).
-  // Bridge может быть не синхронизирован с GW — поэтому если кошелёк уже
-  // зарегистрирован прямо в GlobalWay, register() ревёртит без reason,
-  // и пользователь видит "спонсор не существует" хотя на самом деле всё ок.
+  // ★ ФИКС: Pre-check через MatrixRegistry — ЕДИНСТВЕННЫЙ источник правды.
+  // GlobalWay.isUserRegistered хранит локальный кэш, который НЕ обновляется
+  // при регистрации через Bridge из других проектов. Поэтому пользователь,
+  // зарегистрированный через Bridge, прошёл бы pre-check как "новый",
+  // а потом GW.register() ревёртил бы с "Already registered" внутри require.
+  // MatrixRegistry видит всех, независимо от пути регистрации.
   try {
     const accs = await window.ethereum?.request({ method: 'eth_accounts' })
     const me = accs?.[0]
     if (me) {
-      const isReg = await gw.isUserRegistered(me).catch(() => false)
+      const matrix = getMatrixRegistry()
+      const isReg = matrix
+        ? await matrix.isRegistered(me).catch(() => false)
+        : false
       if (isReg) {
-        // Уже зарегистрирован напрямую в GW — не делаем повторную транзакцию
+        // Уже в реестре — не запускаем заведомо проигрышную транзакцию
         const err = new Error('Already registered')
         err.reason = 'Already registered'
         throw err
@@ -208,62 +237,46 @@ async function getBridgeContract() {
 }
 
 export async function getGWUserStatus(address) {
-  if (!address) return null
-
-  // ★★★ КРИТИЧНЫЙ ФИКС: используем getReadContract (публичный opBNB RPC),
-  // а НЕ getContract (который через web3.signer = SafePal RPC).
-  // SafePal может быть на BSC (chainId 56) или просто лагать с кэшем —
-  // тогда вызов GW.isUserRegistered возвращает false для уже зарегистрированных
-  // пользователей, и они снова видят модал регистрации.
-  //
-  // ALSO: убираем Bridge fallback для isRegistered. Bridge тут НЕ "источник истины
-  // когда GW не отвечает" — у Bridge свой mapping, который НЕ обновляется при
-  // регистрации через GlobalWay.register() напрямую. Если GW.isUserRegistered
-  // вернул false — значит реально не зарегистрирован, точка. Bridge тут не помощник.
+  // ★ ФИКС: Первая проверка — MatrixRegistry (источник правды).
+  // Это покрывает случай когда пользователь зарегистрирован через Bridge,
+  // но GW.users[].isRegistered ещё false (локальный кэш не обновлён).
+  // Также защищает от ситуации когда NSSPlatform указывает на старый Bridge.
   try {
-    const gw = getReadContract('GlobalWay')
-    if (!gw) return null
+    const matrix = getMatrixRegistry()
+    if (matrix) {
+      const inMatrix = await matrix.isRegistered(address).catch(() => false)
+      if (inMatrix) {
+        // Дополним статус данными из GW (maxLevel) и Bridge (odixId/sponsor)
+        const gw = getContract('GlobalWay')
+        const info = await gw.getUserInfo(address).catch(() => null)
+        const maxLevel = info ? Number(info.maxLevel) : 0
 
-    const isReg = await gw.isUserRegistered(address)
-    if (!isReg) {
-      return {
-        isRegistered: false,
-        odixId: 0,
-        maxPackage: 0,
-        rank: 0,
-        quarterlyActive: false,
-        sponsor: '0x0000000000000000000000000000000000000000',
-        activeLevels: [],
+        const bridgeData = await (async () => {
+          try {
+            const bridge = await getBridgeContract()
+            if (!bridge) return null
+            return await bridge.getUserStatus(address)
+          } catch { return null }
+        })()
+
+        const odixIdFromMatrix = await matrix.getUserIdByAddress(address).catch(() => 0n)
+
+        return {
+          isRegistered: true,
+          odixId: bridgeData ? Number(bridgeData.odixId) : Number(odixIdFromMatrix || 0n),
+          maxPackage: maxLevel,
+          rank: bridgeData ? Number(bridgeData.rank) : 0,
+          quarterlyActive: bridgeData ? bridgeData.quarterlyActive : false,
+          sponsor: bridgeData ? bridgeData.sponsor : '0x0000000000000000000000000000000000000000',
+          activeLevels: bridgeData ? [...bridgeData.activeLevels] : [],
+        }
       }
     }
+  } catch {}
 
-    // Зарегистрирован — обогащаем данными
-    const info = await gw.getUserInfo(address).catch(() => null)
-    const maxLevel = info ? Number(info.maxLevel) : 0
-
-    // Bridge — ТОЛЬКО для дополнительных полей (odixId, sponsor),
-    // НЕ для проверки регистрации
-    const bridgeData = await (async () => {
-      try {
-        const bridge = await getBridgeContract()
-        if (!bridge) return null
-        return await bridge.getUserStatus(address)
-      } catch { return null }
-    })()
-
-    return {
-      isRegistered: true,
-      odixId: bridgeData ? Number(bridgeData.odixId) : 0,
-      maxPackage: maxLevel,
-      rank: bridgeData ? Number(bridgeData.rank) : 0,
-      quarterlyActive: bridgeData ? bridgeData.quarterlyActive : false,
-      sponsor: bridgeData ? bridgeData.sponsor : '0x0000000000000000000000000000000000000000',
-      activeLevels: bridgeData ? [...bridgeData.activeLevels] : [],
-    }
-  } catch (e) {
-    console.error('getGWUserStatus error:', e)
-    return null
-  }
+  // Если в Matrix не найден — он действительно не зарегистрирован.
+  // Возвращаем null чтобы фронт показал модалку регистрации.
+  return null
 }
 
 export async function getUserLevel(address) {
@@ -274,13 +287,21 @@ export async function getUserLevel(address) {
 }
 
 export async function isRegistered(address) {
-  // ★★★ ФИКС: проверяем GlobalWay через публичный RPC, НЕ Bridge.
-  // Bridge не знает про прямые регистрации через GW.register() —
-  // у него свой mapping для проектов. Источник истины — только GW.
+  // ★ ФИКС: Спрашиваем MatrixRegistry напрямую — это самый надёжный путь.
   try {
-    const gw = getReadContract('GlobalWay')
-    if (!gw) return false
-    return await gw.isUserRegistered(address)
+    const matrix = getMatrixRegistry()
+    if (matrix) {
+      return await matrix.isRegistered(address)
+    }
+  } catch {}
+  // Fallback на Bridge (на случай если MatrixRegistry недоступен)
+  try {
+    const bridge = await getBridgeContract()
+    if (!bridge) {
+      const result = await safeRead('NSSPlatform', 'isNSSUser', [address])
+      return result === true
+    }
+    return await bridge.isUserRegistered(address)
   } catch { return false }
 }
 
