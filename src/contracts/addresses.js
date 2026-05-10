@@ -9,6 +9,11 @@
  * - Передеплоены ClubPools и ClubMarketing с новой логикой
  * - Остальные 3 контракта тоже передеплоены (для связности cross-wiring)
  * 
+ * ОБНОВЛЕНИЕ v2.5 (10 мая 2026):
+ * - GlobalWayBridge передеплоен (V2): исправлен баг с локальным кэшем
+ *   isUserRegistered — теперь Bridge берёт состояние из MatrixRegistry,
+ *   а не из своего внутреннего map. Старый Bridge 0x4489... — устарел.
+ * 
  * Старые адреса v2.3 — заброшены (не использовались).
  */
 const ADDRESSES = {
@@ -18,11 +23,11 @@ const ADDRESSES = {
   USDT: '0x9e5AAC1Ba1a2e6aEd6b32689DFcF62A509Ca96f3',  // Tether USD (18 decimals на opBNB)
   
   // ═══════════════════════════════════════════════════════
-  // GLOBALWAY ЭКОСИСТЕМА (без изменений)
+  // GLOBALWAY ЭКОСИСТЕМА
   // ═══════════════════════════════════════════════════════
   NSSPlatform:       '0xFb1ddFa8A7EAB0081EAe24ec3d24B0ED4Dd84f2B',
   GlobalWay:         '0xe8e2af46AEEec1B51B335f10C5912620B1a2707F',
-  GlobalWayBridge:   '0xdc18816018F995502A40010AA811461ce98308dd',
+  GlobalWayBridge:   '0xdc18816018F995502A40010AA811461ce98308dd',  // ★ V2 (новый, с фиксом кэша)
   MatrixRegistry:    '0xD62945edFF7605dFc77A4bF607c96Da72E03cd0C',
   GWTToken:          '0x933B0Cb1f43170f3F0fcf082572CC931D6e93b5F',
   GlobalWayStats:    '0x1c5A63AfC7dd0b057B9dcAA3B6B47B4078a5A808',
