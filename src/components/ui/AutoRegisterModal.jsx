@@ -2,16 +2,14 @@
 /**
  * AutoRegisterModal — Модал регистрации для новых пользователей
  *
- * Показывается СРАЗУ после подключения кошелька, если адрес не зарегистрирован.
- * ID спонсора подтягивается из реферальной ссылки (dc_ref) и ЗАБЛОКИРОВАН.
- * Подпись кошелька запрашивается ПОСЛЕ регистрации, не до.
- *
  * Шаги:
- *   register → форма ввода спонсора и регистрация в смарт-контракте
- *   telegram → активация Telegram-бота @DiamondClubGWSBot после успеха
- *   (ошибки отображаются через errorMsg прямо в форме register)
+ *   intro        — образовательный экран. Развилка: «Есть SafePal» / «Нет SafePal»
+ *                  Показывается если кошелёк ещё не подключён.
+ *   wrongNetwork — кошелёк подключён, но сеть не opBNB. Кнопка автопереключения.
+ *   register     — форма ввода спонсора и регистрация в смарт-контракте
+ *   telegram     — активация Telegram-бота @DiamondClubGWSBot после успеха
  */
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import useGameStore from '@/lib/store'
 import { useBlockchain } from '@/lib/useBlockchain'
 import { gwadTrackRegistration } from '@/lib/gwadTracking'
@@ -19,7 +17,13 @@ import * as C from '@/lib/contracts'
 import { shortAddress } from '@/lib/web3'
 import { LEVELS } from '@/lib/gameData'
 
-const BOT_USERNAME = 'DiamondClubGWSBot'
+// ═══ БОТЫ ═══
+const BOT_USERNAME = 'DiamondClubGWSBot'      // старый — для post-регистрации (новости, лоты)
+const ONBOARDING_BOT = 'gwad_diamond_bot'      // новый — для тех у кого нет SafePal
+
+// ═══ СЕТЬ ═══
+const OPBNB_CHAIN_ID = 204
+const OPBNB_CHAIN_HEX = '0xCC'
 
 export default function AutoRegisterModal() {
   const { wallet, pendingRefId, clearAutoRegister, addNotification, t } = useGameStore()
@@ -27,16 +31,123 @@ export default function AutoRegisterModal() {
 
   const [sponsorInput, setSponsorInput] = useState(pendingRefId || '')
   const [registering, setRegistering] = useState(false)
-  const [step, setStep] = useState('register') // register | telegram
   const [errorMsg, setErrorMsg] = useState('')
   const [botClicked, setBotClicked] = useState(false)
+  const [connecting, setConnecting] = useState(false)
+  const [switching, setSwitching] = useState(false)
+  const [currentChainId, setCurrentChainId] = useState(null)
 
   const hasRefFromLink = !!pendingRefId
-  const bnbPrice = useGameStore(s => s.bnbPrice)
-  const bnb = useGameStore(s => s.bnb)
 
-  // ★ Deep link в бот — бот при /start свяжет учётки по ID спонсора
+  // Deep link в onboarding-бот (для тех у кого нет SafePal)
+  const onboardingBotLink = `https://t.me/${ONBOARDING_BOT}?start=ref_${pendingRefId || 'none'}_diamond`
+
+  // Deep link в активационный бот (после регистрации)
   const botLink = `https://t.me/${BOT_USERNAME}?start=${pendingRefId || sponsorInput || '0'}`
+
+  // ═══ Определяем стартовый шаг ═══
+  // Если wallet ещё не подключён — показываем intro
+  // Если подключён, но сеть не opBNB — показываем wrongNetwork
+  // Если всё ок — register
+  const determineStep = () => {
+    if (!wallet) return 'intro'
+    if (currentChainId !== null && currentChainId !== OPBNB_CHAIN_ID) return 'wrongNetwork'
+    return 'register'
+  }
+  const [step, setStep] = useState(determineStep())
+
+  // ═══ Чтение текущей сети ═══
+  useEffect(() => {
+    async function readChain() {
+      try {
+        const provider = window.ethereum || window.safepalProvider
+        if (!provider) return
+        const cid = await provider.request({ method: 'eth_chainId' })
+        const num = parseInt(cid, 16)
+        setCurrentChainId(num)
+      } catch (e) {
+        // игнорируем
+      }
+    }
+    readChain()
+
+    const provider = window.ethereum || window.safepalProvider
+    if (!provider) return
+    const handler = (newCid) => {
+      const num = parseInt(newCid, 16)
+      setCurrentChainId(num)
+    }
+    provider.on?.('chainChanged', handler)
+    return () => provider.removeListener?.('chainChanged', handler)
+  }, [])
+
+  // ═══ Переход между шагами при изменении wallet/network ═══
+  useEffect(() => {
+    if (step === 'telegram') return // после успешной регистрации не сбрасываем
+    if (!wallet) {
+      setStep('intro')
+    } else if (currentChainId !== null && currentChainId !== OPBNB_CHAIN_ID) {
+      setStep('wrongNetwork')
+    } else if (step === 'intro' || step === 'wrongNetwork') {
+      setStep('register')
+    }
+  }, [wallet, currentChainId])
+
+  // ═══ Действия ═══
+  const handleConnectWallet = async () => {
+    setConnecting(true)
+    try {
+      const provider = window.ethereum || window.safepalProvider
+      if (!provider) {
+        // SafePal нет → отправляем в onboarding-бот
+        window.open(onboardingBotLink, '_blank', 'noopener,noreferrer')
+        return
+      }
+      await provider.request({ method: 'eth_requestAccounts' })
+      // wallet попадёт в store через accountsChanged listener
+      // step переключится автоматически через useEffect
+    } catch (e) {
+      addNotification('❌ ' + (e?.message || 'Ошибка подключения'))
+    }
+    setConnecting(false)
+  }
+
+  const handleSwitchNetwork = async () => {
+    setSwitching(true)
+    try {
+      const provider = window.ethereum || window.safepalProvider
+      if (!provider) {
+        addNotification('❌ Кошелёк не найден')
+        setSwitching(false)
+        return
+      }
+      try {
+        await provider.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: OPBNB_CHAIN_HEX }]
+        })
+      } catch (switchError) {
+        // сеть не добавлена — добавляем
+        if (switchError?.code === 4902) {
+          await provider.request({
+            method: 'wallet_addEthereumChain',
+            params: [{
+              chainId: OPBNB_CHAIN_HEX,
+              chainName: 'opBNB Mainnet',
+              nativeCurrency: { name: 'BNB', symbol: 'BNB', decimals: 18 },
+              rpcUrls: ['https://opbnb-mainnet-rpc.bnbchain.org'],
+              blockExplorerUrls: ['https://opbnb.bscscan.com']
+            }]
+          })
+        } else {
+          throw switchError
+        }
+      }
+    } catch (e) {
+      addNotification('❌ ' + (e?.message || 'Не удалось переключить сеть'))
+    }
+    setSwitching(false)
+  }
 
   const handleRegister = async () => {
     const sid = parseInt(sponsorInput)
@@ -49,8 +160,6 @@ export default function AutoRegisterModal() {
     setErrorMsg('')
     try {
       // ═══ PRE-CHECK 1: Может адрес УЖЕ зарегистрирован? ═══
-      // Без этой проверки контракт ревёртит без сообщения
-      // и пользователь видит "missing revert data" вместо понятной фразы.
       const preStatus = await C.getGWUserStatus(wallet).catch(() => null)
       if (preStatus?.isRegistered) {
         addNotification('ℹ️ Этот кошелёк уже зарегистрирован!')
@@ -63,7 +172,6 @@ export default function AutoRegisterModal() {
       }
 
       // ═══ PRE-CHECK 2: Хватает ли BNB на газ? ═══
-      // Без газа eth_estimateGas падает с пустым revert => "missing revert data".
       const currentBnb = parseFloat(useGameStore.getState().bnb || '0')
       if (currentBnb < 0.001) {
         setErrorMsg(`Недостаточно BNB на газ. У вас ${currentBnb.toFixed(4)} BNB, нужно минимум 0.005 BNB. Пополните кошелёк.`)
@@ -74,30 +182,17 @@ export default function AutoRegisterModal() {
       addNotification(`⏳ Регистрация с ID #${sid}...`)
       await C.register(sid)
 
-      // Ждём подтверждения из блокчейна
       const confirmed = await C.waitForRegistration(wallet)
       const gwStatus = await C.getGWUserStatus(wallet).catch(() => null)
 
-      // ★ FIX: tx прошла успешно (await C.register выше не упал) → registered=true.
-      // НЕ доверяем gwStatus.isRegistered: getGWUserStatus может уйти в Bridge fallback,
-      // а Bridge не синхронизируется с GW при прямой регистрации через GW.register().
-      // В итоге gwStatus.isRegistered = false, и старый код писал в store false,
-      // из-за чего модал регистрации появлялся повторно при заходе в Уровни.
       useGameStore.getState().updateRegistration(true, gwStatus?.odixId || sid)
       if (gwStatus?.maxPackage > 0) useGameStore.getState().setLevel(gwStatus.maxPackage)
 
       addNotification('✅ Регистрация прошла успешно!')
 
-      // Запускаем подпись + загрузку данных в фоне
-      // (не дожидаемся, чтобы пользователь сразу увидел экран бота)
       afterRegistration().catch(() => {})
-
-      // ★ Уведомляем рекламную систему gwad.ink о новой регистрации.
-      // Если пользователь пришёл не по нашей рекламе (нет UTM в localStorage) —
-      // функция тихо вернёт false и ничего не сделает.
       gwadTrackRegistration(wallet).catch(() => {})
 
-      // Переходим на шаг активации Telegram
       setStep('telegram')
 
     } catch (err) {
@@ -116,8 +211,6 @@ export default function AutoRegisterModal() {
       } else if (msg.includes('Sponsor not found') || msg.includes('Invalid sponsor')) {
         setErrorMsg(`Спонсор #${sid} не найден. Проверьте ID.`)
       } else if (msg.includes('missing revert data') || msg.includes('CALL_EXCEPTION') || msg.includes('execution reverted')) {
-        // Контракт ревёртит без причины. Часто это означает что транзакция
-        // на самом деле прошла или адрес уже зарегистрирован — перепроверим.
         const recheck = await C.getGWUserStatus(wallet).catch(() => null)
         if (recheck?.isRegistered) {
           addNotification('✅ Регистрация подтверждена!')
@@ -135,19 +228,155 @@ export default function AutoRegisterModal() {
     setRegistering(false)
   }
 
-  const handleSkip = () => {
-    clearAutoRegister()
+  const handleSkip = () => clearAutoRegister()
+  const handleBotClick = () => setBotClicked(true)
+  const handleFinish = () => clearAutoRegister()
+
+  // ═══════════════════════════════════════════════════════════════
+  // ШАГ INTRO — образовательный экран с развилкой
+  // ═══════════════════════════════════════════════════════════════
+  if (step === 'intro') {
+    return (
+      <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-3"
+        style={{ background: 'rgba(0,0,0,0.92)' }}>
+        <div className="max-w-[440px] w-full rounded-3xl overflow-hidden"
+          style={{ background: 'linear-gradient(180deg, #1a1040 0%, #0c0c1e 100%)', border: '1px solid rgba(255,215,0,0.25)' }}>
+
+          {/* Header */}
+          <div className="px-5 pt-5 pb-3 text-center">
+            <div className="text-4xl mb-2">💎</div>
+            <h3 className="text-xl font-black text-white mb-1">Регистрация в Diamond Club</h3>
+            {hasRefFromLink && (
+              <p className="text-[11px] mb-1" style={{ color: '#ffd700' }}>
+                ✅ Спонсор #{pendingRefId} из реферальной ссылки
+              </p>
+            )}
+          </div>
+
+          {/* Объяснение Web3 */}
+          <div className="mx-5 mb-3 p-3 rounded-xl" style={{ background: 'rgba(56,189,248,0.06)', border: '1px solid rgba(56,189,248,0.2)' }}>
+            <div className="text-[11px] font-black text-sky-300 mb-1.5">💡 Это Web3-регистрация</div>
+            <div className="text-[11px] text-slate-300 mb-1.5">
+              Мы НЕ собираем твои данные. Регистрация анонимная — без email, имени, телефона, документов.
+            </div>
+          </div>
+
+          {/* Что нужно */}
+          <div className="mx-5 mb-3 p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <div className="text-[11px] font-black text-white mb-1.5">Для регистрации нужно:</div>
+            <div className="space-y-1 text-[11px] text-slate-300">
+              <div>✅ SafePal-кошелёк (бесплатное приложение)</div>
+              <div>✅ Сеть opBNB</div>
+              <div>✅ ~$2 в BNB на одну транзакцию</div>
+            </div>
+          </div>
+
+          {/* Что НЕ нужно */}
+          <div className="mx-5 mb-4 p-3 rounded-xl" style={{ background: 'rgba(225,29,72,0.04)', border: '1px solid rgba(225,29,72,0.12)' }}>
+            <div className="text-[10px] font-black text-rose-300/80 mb-1">НЕ нужно:</div>
+            <div className="text-[10px] text-slate-400">
+              ❌ Email&nbsp;&nbsp;❌ Имя&nbsp;&nbsp;❌ Телефон&nbsp;&nbsp;❌ Документы&nbsp;&nbsp;❌ Карты
+            </div>
+          </div>
+
+          {/* Развилка */}
+          <div className="px-5 pb-5 space-y-2.5">
+            <button
+              onClick={handleConnectWallet}
+              disabled={connecting}
+              className="w-full py-4 rounded-2xl text-[15px] font-black transition-all disabled:opacity-40"
+              style={{ background: 'linear-gradient(135deg, #ffd700, #f5a623)', color: '#000' }}>
+              {connecting ? '⏳ Подключение...' : '🦊 У меня есть SafePal — подключить'}
+            </button>
+
+            <a
+              href={onboardingBotLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block w-full py-3.5 rounded-2xl text-center text-[13px] font-black"
+              style={{
+                background: 'linear-gradient(135deg, #0088cc, #0066aa)',
+                color: '#fff',
+                textDecoration: 'none',
+                boxShadow: '0 0 20px rgba(0,136,204,0.4)',
+              }}>
+              📱 Не знаю что это — получи инструкцию в Telegram
+            </a>
+
+            <div className="text-[10px] text-slate-500 text-center mt-2">
+              Telegram-бот пошагово объяснит как установить SafePal и пройти регистрацию.
+              Это займёт 5-10 минут.
+            </div>
+
+            <button onClick={handleSkip}
+              className="w-full pt-2 text-[10px] text-slate-600 text-center">
+              Закрыть
+            </button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
-  const handleBotClick = () => {
-    setBotClicked(true)
+  // ═══════════════════════════════════════════════════════════════
+  // ШАГ WRONG NETWORK — переключение сети
+  // ═══════════════════════════════════════════════════════════════
+  if (step === 'wrongNetwork') {
+    return (
+      <div className="fixed inset-0 z-[70] flex items-center justify-center p-4"
+        style={{ background: 'rgba(0,0,0,0.92)' }}>
+        <div className="max-w-[420px] w-full p-5 rounded-3xl"
+          style={{ background: 'linear-gradient(180deg, #2a1a0d 0%, #0c0c1e 100%)', border: '1px solid rgba(245,166,35,0.4)' }}>
+
+          <div className="text-center mb-4">
+            <div className="text-5xl mb-2">🔀</div>
+            <h3 className="text-xl font-black text-white mb-1">Неправильная сеть</h3>
+            <p className="text-[12px] text-slate-400">
+              Для регистрации нужна сеть <b className="text-white">opBNB Mainnet</b>.<br />
+              Сейчас твой кошелёк подключён к другой сети.
+            </p>
+          </div>
+
+          <div className="p-3 rounded-xl mb-4" style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <div className="flex justify-between text-[11px] mb-1">
+              <span className="text-slate-400">Кошелёк:</span>
+              <span className="text-white font-mono">{wallet ? shortAddress(wallet) : ''}</span>
+            </div>
+            <div className="flex justify-between text-[11px] mb-1">
+              <span className="text-slate-400">Сейчас сеть:</span>
+              <span className="text-rose-400 font-bold">chainId {currentChainId ?? '?'}</span>
+            </div>
+            <div className="flex justify-between text-[11px]">
+              <span className="text-slate-400">Нужна сеть:</span>
+              <span className="text-emerald-400 font-bold">opBNB ({OPBNB_CHAIN_ID})</span>
+            </div>
+          </div>
+
+          <button
+            onClick={handleSwitchNetwork}
+            disabled={switching}
+            className="w-full py-4 rounded-2xl text-[15px] font-black transition-all disabled:opacity-40 mb-2"
+            style={{ background: 'linear-gradient(135deg, #ffd700, #f5a623)', color: '#000' }}>
+            {switching ? '⏳ Переключение...' : '🔀 Переключить на opBNB автоматически'}
+          </button>
+
+          <div className="text-[10px] text-slate-500 text-center leading-relaxed">
+            Если кнопка не сработала — открой SafePal вручную:<br />
+            Settings → Networks → opBNB Mainnet (или добавь её)
+          </div>
+
+          <button onClick={handleSkip}
+            className="w-full pt-3 text-[10px] text-slate-600 text-center">
+            Закрыть
+          </button>
+        </div>
+      </div>
+    )
   }
 
-  const handleFinish = () => {
-    clearAutoRegister()
-  }
-
-  // ═══ ШАГ 2: АКТИВАЦИЯ TELEGRAM-БОТА ═══
+  // ═══════════════════════════════════════════════════════════════
+  // ШАГ TELEGRAM — после успешной регистрации (БЕЗ ИЗМЕНЕНИЙ)
+  // ═══════════════════════════════════════════════════════════════
   if (step === 'telegram') {
     return (
       <div className="fixed inset-0 z-[70] flex items-center justify-center p-4"
@@ -155,7 +384,6 @@ export default function AutoRegisterModal() {
         <div className="max-w-[420px] w-full p-5 rounded-3xl"
           style={{ background: 'linear-gradient(180deg, #0d2818 0%, #0a0a20 100%)', border: '1px solid rgba(16,185,129,0.3)' }}>
 
-          {/* Заголовок успеха */}
           <div className="text-center mb-4">
             <div className="text-5xl mb-2">✅</div>
             <h3 className="text-xl font-black text-white mb-1">Регистрация прошла!</h3>
@@ -165,7 +393,6 @@ export default function AutoRegisterModal() {
             </p>
           </div>
 
-          {/* ★ ГЛАВНАЯ КНОПКА — БОТ (яркая, пульсирующая) */}
           <a
             href={botLink}
             target="_blank"
@@ -185,7 +412,6 @@ export default function AutoRegisterModal() {
             {botClicked ? '✅ Откройте Telegram и нажмите Start' : '🚀 Активировать @' + BOT_USERNAME}
           </a>
 
-          {/* Что даст бот */}
           <div className="p-3 rounded-xl mb-4" style={{ background: 'rgba(0,136,204,0.08)', border: '1px solid rgba(0,136,204,0.2)' }}>
             <div className="text-[12px] text-slate-300 leading-relaxed">
               ✅ Пошаговые инструкции по клубу<br />
@@ -195,7 +421,6 @@ export default function AutoRegisterModal() {
             </div>
           </div>
 
-          {/* Пропуск */}
           <button
             onClick={handleFinish}
             className="w-full py-2.5 text-[12px] text-slate-500 text-center"
@@ -204,7 +429,6 @@ export default function AutoRegisterModal() {
             Позже → перейти в кабинет
           </button>
 
-          {/* Анимация пульсации */}
           <style jsx>{`
             @keyframes dc-pulse {
               0%, 100% { transform: scale(1); }
@@ -216,7 +440,9 @@ export default function AutoRegisterModal() {
     )
   }
 
-  // ═══ ШАГ 1: ФОРМА РЕГИСТРАЦИИ ═══
+  // ═══════════════════════════════════════════════════════════════
+  // ШАГ REGISTER — форма регистрации (БЕЗ ИЗМЕНЕНИЙ)
+  // ═══════════════════════════════════════════════════════════════
   return (
     <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-3"
       style={{ background: 'rgba(0,0,0,0.9)' }}>
@@ -249,13 +475,11 @@ export default function AutoRegisterModal() {
           </label>
 
           {hasRefFromLink ? (
-            // Из реферальной ссылки — заблокировано
             <div className="p-3.5 rounded-xl text-center" style={{ background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.25)' }}>
               <div className="text-2xl font-black" style={{ color: '#ffd700' }}>ID: #{pendingRefId}</div>
               <div className="text-[9px] text-slate-500 mt-1">Привязан из реферальной ссылки</div>
             </div>
           ) : (
-            // Без реферальной ссылки — ручной ввод
             <div>
               <input
                 value={sponsorInput}
@@ -266,7 +490,11 @@ export default function AutoRegisterModal() {
                 style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }}
               />
               <div className="text-[9px] text-slate-500 mt-1.5 text-center">
-                💡 Спроси у того, кто дал тебе ссылку. Или попроси ссылку у знакомого из GlobalWay.
+                💡 Спроси у того, кто дал тебе ссылку. Нет ссылки? →{' '}
+                <a href={onboardingBotLink} target="_blank" rel="noopener noreferrer"
+                   style={{ color: '#38bdf8', textDecoration: 'underline' }}>
+                  получи в Telegram
+                </a>
               </div>
             </div>
           )}
