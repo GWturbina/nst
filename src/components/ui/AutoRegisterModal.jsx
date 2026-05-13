@@ -5,6 +5,7 @@
  * Шаги:
  *   intro        — образовательный экран. Развилка: «Есть SafePal» / «Нет SafePal»
  *                  Показывается если кошелёк ещё не подключён.
+ *   noSafePal    — SafePal не обнаружен в браузере. Инструкция как открыть через DApp.
  *   wrongNetwork — кошелёк подключён, но сеть не opBNB. Кнопка автопереключения.
  *   register     — форма ввода спонсора и регистрация в смарт-контракте
  *   telegram     — активация Telegram-бота @DiamondClubGWSBot после успеха
@@ -24,6 +25,31 @@ const ONBOARDING_BOT = 'gwad_diamond_bot'      // новый — для тех �
 // ═══ СЕТЬ ═══
 const OPBNB_CHAIN_ID = 204
 const OPBNB_CHAIN_HEX = '0xCC'
+
+// ═══ ДЕТЕКЦИЯ КОШЕЛЬКА ═══
+// Поддерживается ТОЛЬКО SafePal. MetaMask, Trust, Coinbase и др. — не подходят.
+// Возвращаем провайдер только если это SafePal, иначе null.
+function detectSafePalProvider() {
+  if (typeof window === 'undefined') return null
+
+  // 1. Прямой SafePal-провайдер (мобильное приложение SafePal Wallet)
+  if (window.safepalProvider) return window.safepalProvider
+
+  const eth = window.ethereum
+  if (!eth) return null
+
+  // 2. window.ethereum с явным флагом SafePal (extension)
+  if (eth.isSafePal || eth.isSafePalWallet) return eth
+
+  // 3. EIP-5749 / EIP-1193: множество провайдеров (например, SafePal extension рядом с MetaMask)
+  if (Array.isArray(eth.providers)) {
+    const safepal = eth.providers.find(p => p?.isSafePal || p?.isSafePalWallet)
+    if (safepal) return safepal
+  }
+
+  // Если есть window.ethereum, но он НЕ SafePal — отказываем
+  return null
+}
 
 export default function AutoRegisterModal() {
   const { wallet, pendingRefId, clearAutoRegister, addNotification, t } = useGameStore()
@@ -60,7 +86,7 @@ export default function AutoRegisterModal() {
   useEffect(() => {
     async function readChain() {
       try {
-        const provider = window.ethereum || window.safepalProvider
+        const provider = detectSafePalProvider()
         if (!provider) return
         const cid = await provider.request({ method: 'eth_chainId' })
         const num = parseInt(cid, 16)
@@ -71,7 +97,7 @@ export default function AutoRegisterModal() {
     }
     readChain()
 
-    const provider = window.ethereum || window.safepalProvider
+    const provider = detectSafePalProvider()
     if (!provider) return
     const handler = (newCid) => {
       const num = parseInt(newCid, 16)
@@ -97,10 +123,11 @@ export default function AutoRegisterModal() {
   const handleConnectWallet = async () => {
     setConnecting(true)
     try {
-      const provider = window.ethereum || window.safepalProvider
+      const provider = detectSafePalProvider()
       if (!provider) {
-        // SafePal нет → отправляем в onboarding-бот
-        window.open(onboardingBotLink, '_blank', 'noopener,noreferrer')
+        // SafePal не найден → показываем шаг с инструкцией (не открываем бот молча)
+        setStep('noSafePal')
+        setConnecting(false)
         return
       }
       await provider.request({ method: 'eth_requestAccounts' })
@@ -115,9 +142,10 @@ export default function AutoRegisterModal() {
   const handleSwitchNetwork = async () => {
     setSwitching(true)
     try {
-      const provider = window.ethereum || window.safepalProvider
+      const provider = detectSafePalProvider()
       if (!provider) {
-        addNotification('❌ Кошелёк не найден')
+        addNotification('❌ SafePal не найден')
+        setStep('noSafePal')
         setSwitching(false)
         return
       }
@@ -311,6 +339,88 @@ export default function AutoRegisterModal() {
             <button onClick={handleSkip}
               className="w-full pt-2 text-[10px] text-slate-600 text-center">
               Закрыть
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // ШАГ NO SAFEPAL — SafePal не обнаружен в браузере
+  // ═══════════════════════════════════════════════════════════════
+  if (step === 'noSafePal') {
+    const refForLink = pendingRefId || ''
+    const directUrl = `gws.ink/cabinet${refForLink ? '?ref=' + refForLink : ''}`
+    return (
+      <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-3"
+        style={{ background: 'rgba(0,0,0,0.92)' }}>
+        <div className="max-w-[440px] w-full rounded-3xl overflow-hidden"
+          style={{ background: 'linear-gradient(180deg, #2a1a0d 0%, #0c0c1e 100%)', border: '1px solid rgba(245,166,35,0.4)' }}>
+
+          {/* Header */}
+          <div className="px-5 pt-5 pb-3 text-center">
+            <div className="text-4xl mb-2">⚠️</div>
+            <h3 className="text-xl font-black text-white mb-1">SafePal не обнаружен</h3>
+            <p className="text-[12px] text-slate-400">
+              В этом браузере нет SafePal-кошелька.<br />
+              <b className="text-amber-300">Поддерживается только SafePal</b> — другие кошельки не работают с экосистемой.
+            </p>
+          </div>
+
+          {/* Что делать */}
+          <div className="mx-5 mb-3 p-3 rounded-xl" style={{ background: 'rgba(245,166,35,0.06)', border: '1px solid rgba(245,166,35,0.2)' }}>
+            <div className="text-[11px] font-black text-amber-300 mb-2">📱 Открой сайт через приложение SafePal:</div>
+            <ol className="text-[11px] text-slate-300 space-y-1.5 ml-4 list-decimal">
+              <li>Открой <b className="text-white">SafePal</b> на телефоне</li>
+              <li>Нажми <b className="text-white">DApp</b> внизу экрана</li>
+              <li>В поиске или адресной строке вбей:</li>
+            </ol>
+            <div className="mt-2 p-2 rounded-lg text-[11px] text-center font-mono"
+                 style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(245,166,35,0.3)', color: '#fbbf24' }}>
+              {directUrl}
+            </div>
+            <button
+              onClick={() => {
+                try {
+                  navigator.clipboard.writeText('https://' + directUrl)
+                  addNotification('✅ Ссылка скопирована')
+                } catch {}
+              }}
+              className="w-full mt-2 py-1.5 text-[10px] text-amber-300/80"
+              style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}>
+              📋 Скопировать ссылку
+            </button>
+          </div>
+
+          {/* Нет SafePal вообще */}
+          <div className="mx-5 mb-4 p-3 rounded-xl" style={{ background: 'rgba(0,136,204,0.06)', border: '1px solid rgba(0,136,204,0.2)' }}>
+            <div className="text-[11px] font-black text-sky-300 mb-1">SafePal не установлен?</div>
+            <div className="text-[11px] text-slate-300">
+              В Telegram-боте мы пошагово покажем как установить SafePal, настроить сеть opBNB и пройти регистрацию.
+            </div>
+          </div>
+
+          {/* Кнопки */}
+          <div className="px-5 pb-5 space-y-2.5">
+            <a
+              href={onboardingBotLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block w-full py-3.5 rounded-2xl text-center text-[13px] font-black"
+              style={{
+                background: 'linear-gradient(135deg, #0088cc, #0066aa)',
+                color: '#fff',
+                textDecoration: 'none',
+                boxShadow: '0 0 20px rgba(0,136,204,0.4)',
+              }}>
+              📱 Получить полную инструкцию в Telegram
+            </a>
+
+            <button
+              onClick={() => setStep('intro')}
+              className="w-full py-2.5 text-[11px] text-slate-500 text-center">
+              ← Назад
             </button>
           </div>
         </div>
