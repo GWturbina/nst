@@ -31,11 +31,15 @@ export default function CabinetPage() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return
+
+    // 1) Сохраняем ref из URL в localStorage (как было)
     const urlParams = new URLSearchParams(window.location.search)
     const refFromUrl = urlParams.get('ref')
     if (refFromUrl && /^\d+$/.test(refFromUrl)) {
       localStorage.setItem('dc_ref', refFromUrl)
     }
+
+    // 2) Поддержка Telegram start_param (как было)
     const tg = window.Telegram?.WebApp
     if (tg) {
       const startParam = tg.initDataUnsafe?.start_param
@@ -43,6 +47,18 @@ export default function CabinetPage() {
         localStorage.setItem('dc_ref', startParam)
       }
     }
+
+    // 3) ★ НОВОЕ: автооткрытие модала регистрации для новых пользователей
+    // Если кошелёк ещё не подключён И юзер ещё не зарегистрирован — открываем модал
+    // (он покажет шаг 'intro' с объяснением Web3 и развилкой "есть SafePal / нет SafePal")
+    // Если кошелёк подключён, useBlockchain.js сам откроет модал с шагом 'register'
+    setTimeout(() => {
+      const store = useGameStore.getState()
+      if (!store.wallet && !store.registered && !store.showAutoRegister) {
+        const savedRef = localStorage.getItem('dc_ref')
+        store.setAutoRegister(savedRef && /^\d+$/.test(savedRef) ? savedRef : null)
+      }
+    }, 500) // небольшая задержка чтобы useBlockchainInit успел проверить сохранённую сессию
   }, [])
 
   const ActiveComponent = TAB_COMPONENTS[activeTab] || MineTab
