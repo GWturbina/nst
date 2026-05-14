@@ -219,7 +219,9 @@ export default function AutoRegisterModal() {
       addNotification('✅ Регистрация прошла успешно!')
 
       afterRegistration().catch(() => {})
-      gwadTrackRegistration(wallet).catch(() => {})
+      // ★ Этап 4: передаём new_gw_id чтобы бот моментально уведомил юзера
+      // если он пришёл через @gwad_diamond_bot (с параметром tg_id в URL)
+      gwadTrackRegistration(wallet, gwStatus?.odixId || sid).catch(() => {})
 
       setStep('telegram')
 
