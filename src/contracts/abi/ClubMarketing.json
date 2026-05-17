@@ -1,8 +1,9 @@
 {
   "contractName": "ClubMarketing",
-  "address": "0x559291b6fAD0cb11C4630553B92139500bf202e4",
+  "address": "0x21c15931E8954109fC8143E3a1209Ab99109b158",
   "network": "opBNB",
   "chainId": 204,
+  "version": "v2.6",
   "abi": [
     {
       "inputs": [
@@ -49,6 +50,33 @@
       ],
       "stateMutability": "nonpayable",
       "type": "constructor"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "target",
+          "type": "address"
+        }
+      ],
+      "name": "AddressEmptyCode",
+      "type": "error"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "name": "AddressInsufficientBalance",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "FailedInnerCall",
+      "type": "error"
     },
     {
       "inputs": [
