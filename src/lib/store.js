@@ -173,6 +173,19 @@ const useGameStore = create(
     return earned
   },
 
+  // ═══ FIX: откат локального тапа если сервер отклонил (429 / ошибка) ═══
+  // Возвращает локальное состояние к серверному значению.
+  // Вызываем когда serverTap вернул ошибку — иначе localStorage расходится с БД
+  // и при reload пользователь видит "пропажу" GST.
+  revertTap: (earned) => {
+    const { localNss, energy, taps } = get()
+    set({
+      localNss: Math.max(0, +(localNss - earned).toFixed(4)),
+      energy: Math.min(200, energy + 1),
+      taps: Math.max(0, taps - 1),
+    })
+  },
+
   regenEnergy: () => {
     const { energy, maxEnergy } = get()
     if (energy < maxEnergy) set({ energy: Math.min(energy + ENERGY_CONFIG.regenAmount, maxEnergy) })
