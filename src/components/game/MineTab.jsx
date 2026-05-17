@@ -120,7 +120,7 @@ export default function MineTab() {
     e.stopPropagation()
     if (isTapping.current) return
     isTapping.current = true
-    setTimeout(() => { isTapping.current = false }, 120)
+    setTimeout(() => { isTapping.current = false }, 180)
 
     if (wallet && registered) {
       // ═══ СЕРВЕРНЫЙ ТАП (для зарегистрированных) ═══
@@ -143,7 +143,16 @@ export default function MineTab() {
           if (result.decayApplied > 0) {
             addNotification(`⚠️ Сгорело ${result.decayApplied.toFixed(0)} GST за неактивность. Тапайте регулярно!`)
           }
+        } else {
+          // ═══ FIX: ОТКАТ оптимистичного обновления ═══
+          // Если сервер вернул 429 (anti-spam) или null (сетевая ошибка) —
+          // локальный счётчик ушёл вперёд БД. Откатываем чтобы при reload
+          // не было "пропажи" GST.
+          useGameStore.getState().revertTap(earned)
         }
+      }).catch(() => {
+        // Сетевая ошибка — тоже откат
+        useGameStore.getState().revertTap(earned)
       })
     } else {
       // ═══ ЛОКАЛЬНЫЙ ТАП (незарегистрированные — с throttle) ═══
