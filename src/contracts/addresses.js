@@ -1,20 +1,26 @@
 /**
- * Diamond Club v2.4 — Contract Addresses on opBNB Mainnet
+ * Diamond Club v2.6 — Contract Addresses on opBNB Mainnet
  * ════════════════════════════════════════════════════════
+ * 
+ * ОБНОВЛЕНИЕ v2.6 (17 мая 2026):
+ * - Деплоен новый ClubPoolsV26 с двухфазной продажей:
+ *   • recordSaleAccounting (Фаза А — запись долгов)
+ *   • payObligations (Фаза Б — оплата 25%, не всей суммы)
+ *   • seizeFromGuarantor (взыскание с гарантского кошелька при просрочке 14 дней)
+ * - Деплоен новый ClubMarketingV26 (та же логика, новый адрес)
+ * - Деплоен новый ClubDCT (т.к. minter/burner в старом заблокированы навсегда — C-02 FIX)
+ * - Старые DCT партнёров остались на старом ClubDCT (заморожены), новые DCT минтятся на новом
+ * - Добавлен Guarantor — отдельный кошелёк со страховым USDT
+ * - Старый ClubMarket НЕ подключаем (его функции удалены в новом ClubPools)
+ *   • Партнёры могут забрать неклаимленный маркетинг через старый ClubMarketing
  * 
  * ОБНОВЛЕНИЕ v2.4 (5 мая 2026):
  * - Исправлено распределение маркетинга:
  *   85% камень + 5% реклама + 10% маркетинг
  *   Внутри 10% маркетинга: 90% партнёры, 3% тех, 2.5% GWT, 2.5% CGT, 2% автор
- * - Передеплоены ClubPools и ClubMarketing с новой логикой
- * - Остальные 3 контракта тоже передеплоены (для связности cross-wiring)
  * 
  * ОБНОВЛЕНИЕ v2.5 (10 мая 2026):
  * - GlobalWayBridge передеплоен (V2): исправлен баг с локальным кэшем
- *   isUserRegistered — теперь Bridge берёт состояние из MatrixRegistry,
- *   а не из своего внутреннего map. Старый Bridge 0x4489... — устарел.
- * 
- * Старые адреса v2.3 — заброшены (не использовались).
  */
 const ADDRESSES = {
   // ═══════════════════════════════════════════════════════
@@ -27,7 +33,7 @@ const ADDRESSES = {
   // ═══════════════════════════════════════════════════════
   NSSPlatform:       '0xFb1ddFa8A7EAB0081EAe24ec3d24B0ED4Dd84f2B',
   GlobalWay:         '0xe8e2af46AEEec1B51B335f10C5912620B1a2707F',
-  GlobalWayBridge:   '0xdc18816018F995502A40010AA811461ce98308dd',  // ★ V2 (новый, с фиксом кэша)
+  GlobalWayBridge:   '0xdc18816018F995502A40010AA811461ce98308dd',
   MatrixRegistry:    '0xD62945edFF7605dFc77A4bF607c96Da72E03cd0C',
   GWTToken:          '0x933B0Cb1f43170f3F0fcf082572CC931D6e93b5F',
   GlobalWayStats:    '0x1c5A63AfC7dd0b057B9dcAA3B6B47B4078a5A808',
@@ -37,17 +43,25 @@ const ADDRESSES = {
   SwapHelper:        '0xFF0e9BFFf1cc5A6B65f689bF2442056627686Bf5',
   
   // ═══════════════════════════════════════════════════════
-  // PRIVATE MAILBOX (без изменений)
+  // PRIVATE MAILBOX
   // ═══════════════════════════════════════════════════════
   PrivateMailbox:    '0xb251919Fa79dA48b060f57D5f0A0ECD1291e37A5',
   
   // ═══════════════════════════════════════════════════════
-  // DIAMOND CLUB v2.4 (deployed 5 мая 2026, opBNB mainnet)
+  // DIAMOND CLUB v2.6 (deployed 17 мая 2026, opBNB mainnet) — РАБОЧАЯ СИСТЕМА
   // ═══════════════════════════════════════════════════════
-  ClubDirectors:  '0x04Ace39aE3386FC6Af75AE37F1eF2fFEDf5D5058',
-  ClubDCT:        '0xc3D300e07E063d1dEAA75F5B2fF40652172f5434',
-  ClubMarketing:  '0x559291b6fAD0cb11C4630553B92139500bf202e4',
-  ClubPools:      '0xf7e9c12D9f6DC0a426E0f43465958ce020b7432e',
-  ClubMarket:     '0xEf3dc061992fff128661F74BE3A8543C8AE23c59',
+  ClubDirectors:  '0x04Ace39aE3386FC6Af75AE37F1eF2fFEDf5D5058',  // не менялся
+  ClubDCT:        '0x511971C8e72efa31050f8A66CBf804A1F823886f',  // ★ НОВЫЙ v2.6
+  ClubMarketing:  '0x21c15931E8954109fC8143E3a1209Ab99109b158',  // ★ НОВЫЙ v2.6
+  ClubPools:      '0xb408278465202dea461c728BF5AA7762f3C5bC78',  // ★ НОВЫЙ v2.6
+  ClubMarket:     '0xEf3dc061992fff128661F74BE3A8543C8AE23c59',  // старый, не подключен к новому Pools
+  Guarantor:      '0x5f01ddc97da2a1c8758326122d5b28f74b4ddb6f',  // ★ НОВОЕ v2.6
+  
+  // ═══════════════════════════════════════════════════════
+  // СТАРЫЕ АДРЕСА v2.4 (для отображения "архивных" балансов партнёров)
+  // ═══════════════════════════════════════════════════════
+  ClubDCT_OLD:        '0xc3D300e07E063d1dEAA75F5B2fF40652172f5434',  // партнёры держат "архивные" DCT
+  ClubMarketing_OLD:  '0x559291b6fAD0cb11C4630553B92139500bf202e4',  // партнёры могут claim() неклаимленный маркетинг
+  ClubPools_OLD:      '0xf7e9c12D9f6DC0a426E0f43465958ce020b7432e',  // заморожен после миграции
 }
 export default ADDRESSES
