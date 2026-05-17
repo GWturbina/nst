@@ -109,8 +109,13 @@ async function doConnect() {
       if (gwStatus.maxPackage > 0) store.setLevel(gwStatus.maxPackage)
 
       // Подпись — только для зарегистрированных (не пугаем новичков)
+      // FIX (18 мая 2026): 23 часа вместо 12 + anti-spam 60 сек
       const authAge = store.authTs ? Date.now() - store.authTs * 1000 : Infinity
-      if (!store.authSig || authAge > 12 * 60 * 60 * 1000) {
+      const lastReq = window.__lastAuthRequest || 0
+      const tooSoon = Date.now() - lastReq < 60000
+
+      if ((!store.authSig || authAge > 23 * 60 * 60 * 1000) && !tooSoon) {
+        window.__lastAuthRequest = Date.now()
         try {
           const auth = await web3.signAuthMessage()
           store.setAuth(auth)
@@ -181,14 +186,23 @@ async function setupSessionForAddress(address, options = {}) {
     store.updateRegistration(true, gwStatus.odixId || null)
     if (gwStatus.maxPackage > 0) store.setLevel(gwStatus.maxPackage)
 
-    // Подпись — только для зарегистрированных и только если она устарела
+    // Подпись — только для зарегистрированных и только если её НЕТ или сильно устарела
+    // FIX (18 мая 2026): Не запрашиваем повторно если уже есть authSig.
+    // Сервер проверяет 24 часа, клиент держал 12 — это вызывало лишние запросы
+    // при reconnect от SafePal Extension idle timeout. Теперь 23 часа.
+    // Также anti-spam: не запрашивать чаще раза в 60 секунд.
     if (!skipSignature) {
       const authAge = store.authTs ? Date.now() - store.authTs * 1000 : Infinity
-      if (!store.authSig || authAge > 12 * 60 * 60 * 1000) {
+      const lastReq = window.__lastAuthRequest || 0
+      const tooSoon = Date.now() - lastReq < 60000
+
+      if ((!store.authSig || authAge > 23 * 60 * 60 * 1000) && !tooSoon) {
         if (!window.__authDeclined) {
+          window.__lastAuthRequest = Date.now()
           try {
             const auth = await web3.signAuthMessage()
             store.setAuth(auth)
+            window.__authDeclined = false
           } catch {
             console.warn('Auth signature declined on auto-reconnect')
             window.__authDeclined = true
@@ -221,7 +235,8 @@ export function useBlockchainInit() {
     _listenersAttached = true
 
     // FIX: SafePal extension делает session refresh (disconnect→reconnect за 1-2 сек)
-    // Ждём 3 секунды — если за это время придёт accountsChanged, не отключаемся
+    // FIX (18 мая 2026): Ждём 10 секунд вместо 3 — SafePal иногда тормозит,
+    // особенно при idle timeout. Если за это время придёт accountsChanged — не отключаемся.
     let disconnectTimer = null
     const onDisconnected = () => {
       if (disconnectTimer) clearTimeout(disconnectTimer)
@@ -233,7 +248,7 @@ export function useBlockchainInit() {
           useGameStore.getState().clearWallet()
           // НЕ стираем authSig — может быть session refresh
         }
-      }, 3000)
+      }, 10000)
     }
     const onAccountChanged = (e) => {
       // Отменяем таймер disconnect — это был session refresh, не настоящий disconnect
