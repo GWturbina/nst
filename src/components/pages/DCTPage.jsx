@@ -400,7 +400,8 @@ function RedeemSection() {
     setTxPending(true)
     let result
     if (redeemMode === 'floor') {
-      result = await safeCall(() => Club.redeemAtFloor(redeemModal.poolId))
+      // v2.6: redeemAtFloor УДАЛЕНА. Для drained-пулов используем claimDrainedPool.
+      result = await safeCall(() => Club.claimDrainedPool(redeemModal.poolId))
     } else {
       result = await safeCall(() => Club.redeem(redeemModal.poolId, redeemAmount))
     }
