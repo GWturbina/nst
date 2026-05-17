@@ -20,7 +20,7 @@ const POOLS_ABI = [
   'function addFactory(address factory)',
   'function revokeFactory(address factory)',
   'function withdrawForGemPurchase(address to, uint256 amount)',
-  'function recordGemPurchased(uint256 poolId, uint256 itemId, uint256 cost)',
+  'function recordPurchase(uint256 poolId, uint256 amount)',
   'function multisig() view returns (address)',
   'function owner() view returns (address)',
   'function getReserveBalance() view returns (uint256)',
@@ -63,7 +63,6 @@ export default function FactoryAdmin() {
   const [withdrawAddr, setWithdrawAddr] = useState('')
   const [withdrawAmount, setWithdrawAmount] = useState('')
   const [recordPoolId, setRecordPoolId] = useState('')
-  const [recordItemId, setRecordItemId] = useState('')
   const [recordCost, setRecordCost] = useState('')
   const [checkAddr, setCheckAddr] = useState('')
 
@@ -332,18 +331,18 @@ export default function FactoryAdmin() {
     setTxPending(false)
   }
 
-  // ═══ Регистрация камня ═══
+  // ═══ Регистрация закупки камня (v2.6: учёт по сумме, без itemId) ═══
   const handleRecordGem = async () => {
     const pid = parseInt(recordPoolId)
-    const iid = parseInt(recordItemId)
     const cost = parseFloat(recordCost)
     if (!pid || pid < 1) { addNotification('❌ Pool ID'); return }
-    if (!iid || iid < 1) { addNotification('❌ Item ID'); return }
     if (!cost || cost <= 0) { addNotification('❌ Cost'); return }
 
     const confirm = window.confirm(
-      `Зарегистрировать камень?\n` +
-      `Pool: #${pid}, Item: #${iid}, Cost: $${cost.toFixed(2)}`
+      `Записать закупку камня?\n` +
+      `Pool: #${pid}, Cost: $${cost.toFixed(2)}\n\n` +
+      `Списывает $${cost.toFixed(2)} с treasury пула, добавляет к costBasis.\n` +
+      `Статус пула → InGem`
     )
     if (!confirm) return
 
@@ -353,10 +352,10 @@ export default function FactoryAdmin() {
       const signer = await browserProvider.getSigner()
       const poolsW = new ethers.Contract(ADDRESSES.ClubPools, POOLS_ABI, signer)
       const costWei = ethers.parseEther(String(cost))
-      const tx = await poolsW.recordGemPurchased(pid, iid, costWei)
+      const tx = await poolsW.recordPurchase(pid, costWei)
       await tx.wait()
-      addNotification(`✅ Камень зарегистрирован!`)
-      setRecordPoolId(''); setRecordItemId(''); setRecordCost('')
+      addNotification(`✅ Закупка записана!`)
+      setRecordPoolId(''); setRecordCost('')
       await reload()
     } catch (e) {
       addNotification(`❌ ${e?.shortMessage || e?.reason || e?.message || 'Ошибка'}`)
@@ -531,12 +530,13 @@ export default function FactoryAdmin() {
         </div>
       )}
 
-      {/* ═══ РЕГИСТРАЦИЯ КАМНЯ ═══ */}
+      {/* ═══ ЗАПИСЬ ЗАКУПКИ КАМНЯ (v2.6: учёт по сумме) ═══ */}
       {data.isOwner && data.poolsList.length > 0 && (
         <div className="p-3 rounded-2xl border" style={{ background: 'rgba(59,130,246,0.06)', borderColor: 'rgba(59,130,246,0.2)' }}>
-          <div className="text-[11px] font-bold text-blue-400 mb-1">📝 Зарегистрировать камень в пуле</div>
+          <div className="text-[11px] font-bold text-blue-400 mb-1">📝 Записать закупку камня</div>
           <div className="text-[9px] text-slate-500 mb-2">
-            После доставки камня. Списывает с treasury пула, статус → InGem.
+            После покупки камня на заводе. Списывает с treasury пула, статус → InGem.
+            <br/>В v2.6 учёт по сумме — можно записывать несколько раз для одного пула.
           </div>
           <div className="space-y-2">
             <select value={recordPoolId} onChange={e => setRecordPoolId(e.target.value)}
@@ -548,17 +548,12 @@ export default function FactoryAdmin() {
                 </option>
               ))}
             </select>
-            <div className="grid grid-cols-2 gap-2">
-              <input value={recordItemId} onChange={e => setRecordItemId(e.target.value)}
-                type="number" placeholder="Item ID"
-                className="p-2 rounded-lg bg-white/5 border border-white/10 text-[12px] text-white outline-none" />
-              <input value={recordCost} onChange={e => setRecordCost(e.target.value)}
-                type="number" step="0.01" placeholder="Cost USDT"
-                className="p-2 rounded-lg bg-white/5 border border-white/10 text-[12px] text-white outline-none" />
-            </div>
-            <button onClick={handleRecordGem} disabled={txPending || !recordPoolId || !recordItemId || !recordCost}
+            <input value={recordCost} onChange={e => setRecordCost(e.target.value)}
+              type="number" step="0.01" placeholder="Стоимость закупки USDT"
+              className="w-full p-2 rounded-lg bg-white/5 border border-white/10 text-[12px] text-white outline-none" />
+            <button onClick={handleRecordGem} disabled={txPending || !recordPoolId || !recordCost}
               className="w-full py-2.5 rounded-xl text-[12px] font-bold bg-blue-500/15 border border-blue-500/25 text-blue-400 disabled:opacity-50">
-              {txPending ? '⏳' : '📝 Зарегистрировать'}
+              {txPending ? '⏳' : '📝 Записать закупку'}
             </button>
           </div>
         </div>
