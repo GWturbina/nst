@@ -570,6 +570,159 @@ export async function isApprovedFactory(addr) {
 }
 
 // ═══════════════════════════════════════════════════════
+// V2.6: УЧЁТ ЗАКУПКИ КАМНЕЙ ПО СУММЕ
+// ═══════════════════════════════════════════════════════
+
+/**
+ * v2.6: Записать закупку камня по сумме (без itemId).
+ * Списывает amount с treasury пула, добавляет к costBasis, статус → InGem.
+ * Можно вызывать многократно для одного пула (если докупаем).
+ * @param {number} poolId
+ * @param {number|string} amount — сумма закупки USDT
+ */
+export async function recordPurchase(poolId, amount) {
+  const c = getContract('ClubPools', CLUBPOOLS_ABI)
+  const tx = await c.recordPurchase(poolId, parse(amount))
+  return await tx.wait()
+}
+
+// ═══════════════════════════════════════════════════════
+// V2.6: ДВУХФАЗНАЯ ПРОДАЖА
+// ═══════════════════════════════════════════════════════
+
+/**
+ * v2.6 Фаза А: Записать продажу — фиксирует долги БЕЗ движения денег.
+ * Owner сам держит деньги до payObligations.
+ * Создаёт SaleRecord, даёт 14 дней на оплату обязательств.
+ * 
+ * @param {number} poolId
+ * @param {number|string} saleAmount — полная сумма продажи USDT
+ * @param {number|string} costPart — закупочная цена этой партии USDT (списывается с costBasis)
+ * @returns {Promise<object>} receipt с saleId в events
+ */
+export async function recordSaleAccounting(poolId, saleAmount, costPart) {
+  const c = getContract('ClubPools', CLUBPOOLS_ABI)
+  const tx = await c.recordSaleAccounting(
+    poolId, 
+    parse(saleAmount), 
+    parse(costPart)
+  )
+  return await tx.wait()
+}
+
+/**
+ * v2.6 Фаза Б: Оплатить обязательства (~25% от прибыли).
+ * Заводит ТОЛЬКО obligationsTotal на контракт (маркетинг + реклама + резерв).
+ * Остальные 75% backing остаются у тебя (виртуально учитываются для роста цены DCT).
+ * 
+ * Перед вызовом делает USDT.approve автоматически.
+ * 
+ * @param {number} saleId — ID записи продажи (из recordSaleAccounting)
+ */
+export async function payObligations(saleId) {
+  const c = getContract('ClubPools', CLUBPOOLS_ABI)
+  
+  // Прочитаем сколько надо approve
+  const cRead = getReadContract('ClubPools', CLUBPOOLS_ABI)
+  const sale = await cRead.sales(saleId)
+  const obligationsTotal = sale.obligationsTotal
+  
+  if (sale.paid) {
+    throw new Error('Эта продажа уже оплачена')
+  }
+  
+  // Approve USDT
+  await ensureUSDTApproval(ADDRESSES.ClubPools, obligationsTotal)
+  
+  const tx = await c.payObligations(saleId)
+  return await tx.wait()
+}
+
+/**
+ * v2.6: Взыскать обязательства с гарантского кошелька при просрочке.
+ * Может вызвать ЛЮБОЙ адрес после deadline (14 дней).
+ * Гарант должен заранее сделать USDT.approve для нового ClubPools.
+ * 
+ * @param {number} saleId
+ */
+export async function seizeFromGuarantor(saleId) {
+  const c = getContract('ClubPools', CLUBPOOLS_ABI)
+  const tx = await c.seizeFromGuarantor(saleId)
+  return await tx.wait()
+}
+
+/**
+ * v2.6: Получить данные одной продажи по saleId
+ */
+export async function getSale(saleId) {
+  const c = getReadContract('ClubPools', CLUBPOOLS_ABI)
+  if (!c) return null
+  try {
+    const s = await c.sales(saleId)
+    return {
+      saleId,
+      poolId: Number(s.poolId),
+      saleAmount: fmt(s.saleAmount),
+      costPart: fmt(s.costPart),
+      profit: fmt(s.profit),
+      marketingPart: fmt(s.marketingPart),
+      adsPart: fmt(s.adsPart),
+      reservePart: fmt(s.reservePart),
+      backingPart: fmt(s.backingPart),
+      obligationsTotal: fmt(s.obligationsTotal),
+      paid: s.paid,
+      createdAt: Number(s.createdAt),
+      deadline: Number(s.deadline),
+      paidAt: Number(s.paidAt),
+      paidBy: s.paidBy,
+    }
+  } catch { return null }
+}
+
+/**
+ * v2.6: Получить общее количество записей продаж
+ */
+export async function getSalesCount() {
+  const c = getReadContract('ClubPools', CLUBPOOLS_ABI)
+  if (!c) return 0
+  try { return Number(await c.salesCount()) } catch { return 0 }
+}
+
+/**
+ * v2.6: Получить ВСЕ продажи (для админ-дашборда)
+ */
+export async function getAllSales() {
+  const total = await getSalesCount()
+  if (total === 0) return []
+  
+  const results = []
+  for (let i = 1; i <= total; i++) {
+    const s = await getSale(i)
+    if (s) results.push(s)
+  }
+  return results
+}
+
+/**
+ * v2.6: Получить адрес гаранта
+ */
+export async function getGuarantor() {
+  const c = getReadContract('ClubPools', CLUBPOOLS_ABI)
+  if (!c) return null
+  try { return await c.guarantor() } catch { return null }
+}
+
+/**
+ * v2.6: Получить дедлайн оплаты (в секундах)
+ * Обычно 14 дней = 1209600 секунд
+ */
+export async function getPaymentDeadline() {
+  const c = getReadContract('ClubPools', CLUBPOOLS_ABI)
+  if (!c) return 14 * 24 * 60 * 60
+  try { return Number(await c.PAYMENT_DEADLINE()) } catch { return 14 * 24 * 60 * 60 }
+}
+
+// ═══════════════════════════════════════════════════════
 // CLUB MARKET — магазин с эскроу
 // ═══════════════════════════════════════════════════════
 
