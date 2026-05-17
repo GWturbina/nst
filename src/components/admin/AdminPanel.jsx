@@ -10,6 +10,7 @@ import LevelContentAdmin from '@/components/admin/LevelContentAdmin'
 import BoostConfigAdmin from '@/components/admin/BoostConfigAdmin'
 import FinanceAdmin from '@/components/admin/FinanceAdmin'
 import FactoryAdmin from '@/components/admin/FactoryAdmin'
+import SalesAdmin from '@/components/admin/SalesAdmin'
 
 export default function AdminPanel() {
   const { wallet, isAdmin, ownerWallet, addNotification,
@@ -27,6 +28,7 @@ export default function AdminPanel() {
     { id: 'lots', icon: '🎟', label: 'Лоты' },
     { id: 'finance', icon: '📊', label: 'Финансы' },
     { id: 'factory', icon: '🏭', label: 'Завод' },
+    { id: 'sales', icon: '💎', label: 'Продажи' },
     { id: 'fractional', icon: '🧩', label: 'Фракции' },
     { id: 'orders', icon: '📋', label: 'Заказы' },
     { id: 'showcase', icon: '🏪', label: 'Витрина' },
@@ -121,6 +123,8 @@ export default function AdminPanel() {
 
         {/* ЗАВОД — управление whitelist заводов и выводы USDT */}
         {activeSection === 'factory' && <FactoryAdmin />}
+
+        {activeSection === 'sales' && <SalesAdmin />}
 
         {/* ФРАКЦИИ (on-chain FractionalGem) */}
         {activeSection === 'fractional' && <FractionalLotsAdmin />}
