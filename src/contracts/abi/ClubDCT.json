@@ -1,8 +1,9 @@
 {
   "contractName": "ClubDCT",
-  "address": "0xc3D300e07E063d1dEAA75F5B2fF40652172f5434",
+  "address": "0x511971C8e72efa31050f8A66CBf804A1F823886f",
   "network": "opBNB",
   "chainId": 204,
+  "version": "v2.6",
   "abi": [
     {
       "inputs": [
