@@ -1,8 +1,9 @@
 {
   "contractName": "ClubPools",
-  "address": "0xf7e9c12D9f6DC0a426E0f43465958ce020b7432e",
+  "address": "0xb408278465202dea461c728BF5AA7762f3C5bC78",
   "network": "opBNB",
   "chainId": 204,
+  "version": "v2.6",
   "abi": [
     {
       "inputs": [
@@ -19,6 +20,33 @@
       ],
       "stateMutability": "nonpayable",
       "type": "constructor"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "target",
+          "type": "address"
+        }
+      ],
+      "name": "AddressEmptyCode",
+      "type": "error"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "name": "AddressInsufficientBalance",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "FailedInnerCall",
+      "type": "error"
     },
     {
       "inputs": [
@@ -108,94 +136,6 @@
         }
       ],
       "name": "ClubMarketingSet",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        {
-          "indexed": true,
-          "internalType": "uint256",
-          "name": "combinedId",
-          "type": "uint256"
-        },
-        {
-          "indexed": false,
-          "internalType": "uint256[]",
-          "name": "poolIds",
-          "type": "uint256[]"
-        },
-        {
-          "indexed": false,
-          "internalType": "uint256[]",
-          "name": "contributions",
-          "type": "uint256[]"
-        },
-        {
-          "indexed": false,
-          "internalType": "uint256",
-          "name": "totalCost",
-          "type": "uint256"
-        }
-      ],
-      "name": "CombinedCreated",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        {
-          "indexed": true,
-          "internalType": "uint256",
-          "name": "combinedId",
-          "type": "uint256"
-        },
-        {
-          "indexed": true,
-          "internalType": "uint256",
-          "name": "itemId",
-          "type": "uint256"
-        }
-      ],
-      "name": "CombinedGemPurchased",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        {
-          "indexed": true,
-          "internalType": "uint256",
-          "name": "combinedId",
-          "type": "uint256"
-        },
-        {
-          "indexed": false,
-          "internalType": "uint256",
-          "name": "amount",
-          "type": "uint256"
-        }
-      ],
-      "name": "CombinedSaleFallbackToReserve",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        {
-          "indexed": true,
-          "internalType": "uint256",
-          "name": "combinedId",
-          "type": "uint256"
-        },
-        {
-          "indexed": false,
-          "internalType": "uint256",
-          "name": "salePrice",
-          "type": "uint256"
-        }
-      ],
-      "name": "CombinedSaleRecorded",
       "type": "event"
     },
     {
@@ -393,6 +333,19 @@
       "inputs": [
         {
           "indexed": true,
+          "internalType": "address",
+          "name": "newGuarantor",
+          "type": "address"
+        }
+      ],
+      "name": "GuarantorSet",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
           "internalType": "uint256",
           "name": "poolId",
           "type": "uint256"
@@ -424,6 +377,56 @@
         }
       ],
       "name": "MultisigSet",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "uint256",
+          "name": "saleId",
+          "type": "uint256"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "payer",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "name": "ObligationsPaid",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "uint256",
+          "name": "saleId",
+          "type": "uint256"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "guarantor",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "name": "ObligationsPaidByGuarantor",
       "type": "event"
     },
     {
@@ -533,6 +536,43 @@
         {
           "indexed": true,
           "internalType": "uint256",
+          "name": "oldPoolId",
+          "type": "uint256"
+        },
+        {
+          "indexed": true,
+          "internalType": "uint256",
+          "name": "newPoolId",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "partnersCount",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "totalDCT",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "treasuryUSDT",
+          "type": "uint256"
+        }
+      ],
+      "name": "PoolMigrated",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "uint256",
           "name": "poolId",
           "type": "uint256"
         },
@@ -562,6 +602,55 @@
         }
       ],
       "name": "Redeemed",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "uint256",
+          "name": "saleId",
+          "type": "uint256"
+        },
+        {
+          "indexed": true,
+          "internalType": "uint256",
+          "name": "poolId",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "saleAmount",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "costPart",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "profit",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "obligationsTotal",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint64",
+          "name": "deadline",
+          "type": "uint64"
+        }
+      ],
+      "name": "SaleAccountingRecorded",
       "type": "event"
     },
     {
@@ -798,33 +887,20 @@
     },
     {
       "inputs": [],
+      "name": "DEFAULT_MIN_LEVEL",
+      "outputs": [
+        {
+          "internalType": "uint8",
+          "name": "",
+          "type": "uint8"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
       "name": "EMERGENCY_TIMELOCK",
-      "outputs": [
-        {
-          "internalType": "uint256",
-          "name": "",
-          "type": "uint256"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "FLOOR_PRICE_DENOMINATOR",
-      "outputs": [
-        {
-          "internalType": "uint256",
-          "name": "",
-          "type": "uint256"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "FLOOR_PRICE_NUMERATOR",
       "outputs": [
         {
           "internalType": "uint256",
@@ -876,6 +952,32 @@
     },
     {
       "inputs": [],
+      "name": "MAX_PARTNER_LEVEL",
+      "outputs": [
+        {
+          "internalType": "uint8",
+          "name": "",
+          "type": "uint8"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "MIN_PURCHASE_USDT",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
       "name": "P2P_FEE_PCT",
       "outputs": [
         {
@@ -889,12 +991,12 @@
     },
     {
       "inputs": [],
-      "name": "REQUIRED_LEVEL",
+      "name": "PAYMENT_DEADLINE",
       "outputs": [
         {
-          "internalType": "uint8",
+          "internalType": "uint64",
           "name": "",
-          "type": "uint8"
+          "type": "uint64"
         }
       ],
       "stateMutability": "view",
@@ -1010,19 +1112,6 @@
       "type": "function"
     },
     {
-      "inputs": [
-        {
-          "internalType": "uint256",
-          "name": "poolId",
-          "type": "uint256"
-        }
-      ],
-      "name": "claimInactivePool",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
       "inputs": [],
       "name": "clubDCT",
       "outputs": [
@@ -1075,77 +1164,6 @@
       "type": "function"
     },
     {
-      "inputs": [],
-      "name": "combinedCount",
-      "outputs": [
-        {
-          "internalType": "uint256",
-          "name": "",
-          "type": "uint256"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "uint256",
-          "name": "",
-          "type": "uint256"
-        }
-      ],
-      "name": "combinedPurchases",
-      "outputs": [
-        {
-          "internalType": "uint256",
-          "name": "totalCost",
-          "type": "uint256"
-        },
-        {
-          "internalType": "uint256",
-          "name": "currentItemId",
-          "type": "uint256"
-        },
-        {
-          "internalType": "enum ClubPools.CombinedStatus",
-          "name": "status",
-          "type": "uint8"
-        },
-        {
-          "internalType": "uint64",
-          "name": "createdAt",
-          "type": "uint64"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "uint256[]",
-          "name": "poolIds",
-          "type": "uint256[]"
-        },
-        {
-          "internalType": "uint256[]",
-          "name": "contributions",
-          "type": "uint256[]"
-        }
-      ],
-      "name": "createCombinedPurchase",
-      "outputs": [
-        {
-          "internalType": "uint256",
-          "name": "combinedId",
-          "type": "uint256"
-        }
-      ],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
       "inputs": [
         {
           "internalType": "string",
@@ -1161,6 +1179,11 @@
           "internalType": "string",
           "name": "metaUrl",
           "type": "string"
+        },
+        {
+          "internalType": "uint8",
+          "name": "minLevel",
+          "type": "uint8"
         }
       ],
       "name": "createPool",
@@ -1305,7 +1328,7 @@
               "type": "uint256"
             },
             {
-              "internalType": "enum ClubPools.PoolStatus",
+              "internalType": "enum ClubPoolsV26.PoolStatus",
               "name": "status",
               "type": "uint8"
             },
@@ -1325,8 +1348,18 @@
               "type": "uint8"
             },
             {
+              "internalType": "uint8",
+              "name": "minLevel",
+              "type": "uint8"
+            },
+            {
               "internalType": "uint256",
               "name": "currentItemId",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "costBasis",
               "type": "uint256"
             },
             {
@@ -1335,7 +1368,7 @@
               "type": "string"
             }
           ],
-          "internalType": "struct ClubPools.Pool",
+          "internalType": "struct ClubPoolsV26.Pool",
           "name": "",
           "type": "tuple"
         }
@@ -1426,6 +1459,43 @@
       "type": "function"
     },
     {
+      "inputs": [],
+      "name": "guarantor",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "isPoolBuyer",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
       "inputs": [
         {
           "internalType": "uint256",
@@ -1466,6 +1536,97 @@
         }
       ],
       "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "oldPoolId",
+          "type": "uint256"
+        }
+      ],
+      "name": "markMigrationDone",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "oldPoolId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "string",
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "internalType": "uint256",
+          "name": "targetUSDT",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "raisedUSDT",
+          "type": "uint256"
+        },
+        {
+          "internalType": "string",
+          "name": "metaUrl",
+          "type": "string"
+        },
+        {
+          "internalType": "uint8",
+          "name": "minLevel",
+          "type": "uint8"
+        },
+        {
+          "internalType": "address[]",
+          "name": "partners",
+          "type": "address[]"
+        },
+        {
+          "internalType": "uint256[]",
+          "name": "dctAmounts",
+          "type": "uint256[]"
+        },
+        {
+          "internalType": "uint256[]",
+          "name": "investments",
+          "type": "uint256[]"
+        }
+      ],
+      "name": "migratePool",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "newPoolId",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "migrationDone",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
       "type": "function"
     },
     {
@@ -1530,6 +1691,43 @@
       "inputs": [
         {
           "internalType": "uint256",
+          "name": "saleId",
+          "type": "uint256"
+        }
+      ],
+      "name": "payObligations",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "poolBuyers",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
           "name": "",
           "type": "uint256"
         }
@@ -1567,7 +1765,7 @@
           "type": "uint256"
         },
         {
-          "internalType": "enum ClubPools.PoolStatus",
+          "internalType": "enum ClubPoolsV26.PoolStatus",
           "name": "status",
           "type": "uint8"
         },
@@ -1587,8 +1785,18 @@
           "type": "uint8"
         },
         {
+          "internalType": "uint8",
+          "name": "minLevel",
+          "type": "uint8"
+        },
+        {
           "internalType": "uint256",
           "name": "currentItemId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "costBasis",
           "type": "uint256"
         },
         {
@@ -1626,43 +1834,7 @@
           "type": "uint256"
         }
       ],
-      "name": "receiveTreasury",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "uint256",
-          "name": "combinedId",
-          "type": "uint256"
-        },
-        {
-          "internalType": "uint256",
-          "name": "itemId",
-          "type": "uint256"
-        }
-      ],
-      "name": "recordCombinedGemPurchased",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "uint256",
-          "name": "combinedId",
-          "type": "uint256"
-        },
-        {
-          "internalType": "uint256",
-          "name": "salePriceAfterMarketing",
-          "type": "uint256"
-        }
-      ],
-      "name": "recordCombinedSale",
+      "name": "recordPurchase",
       "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"
@@ -1676,63 +1848,23 @@
         },
         {
           "internalType": "uint256",
-          "name": "dctAmount",
+          "name": "saleAmount",
           "type": "uint256"
         },
         {
           "internalType": "uint256",
-          "name": "usdtValueCovered",
+          "name": "costPart",
           "type": "uint256"
         }
       ],
-      "name": "recordDCTPaymentForGem",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [
+      "name": "recordSaleAccounting",
+      "outputs": [
         {
           "internalType": "uint256",
-          "name": "poolId",
-          "type": "uint256"
-        },
-        {
-          "internalType": "uint256",
-          "name": "itemId",
-          "type": "uint256"
-        },
-        {
-          "internalType": "uint256",
-          "name": "cost",
+          "name": "saleId",
           "type": "uint256"
         }
       ],
-      "name": "recordGemPurchased",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "uint256",
-          "name": "poolId",
-          "type": "uint256"
-        },
-        {
-          "internalType": "uint256",
-          "name": "salePriceAfterMarketing",
-          "type": "uint256"
-        },
-        {
-          "internalType": "uint256",
-          "name": "costBasis",
-          "type": "uint256"
-        }
-      ],
-      "name": "recordSale",
-      "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"
     },
@@ -1750,19 +1882,6 @@
         }
       ],
       "name": "redeem",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "uint256",
-          "name": "poolId",
-          "type": "uint256"
-        }
-      ],
-      "name": "redeemAtFloor",
       "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"
@@ -1796,6 +1915,116 @@
         }
       ],
       "name": "revokeFactory",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "sales",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "poolId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "saleAmount",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "costPart",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "profit",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "marketingPart",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "adsPart",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "reservePart",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "backingPart",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "obligationsTotal",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bool",
+          "name": "paid",
+          "type": "bool"
+        },
+        {
+          "internalType": "uint64",
+          "name": "createdAt",
+          "type": "uint64"
+        },
+        {
+          "internalType": "uint64",
+          "name": "deadline",
+          "type": "uint64"
+        },
+        {
+          "internalType": "uint64",
+          "name": "paidAt",
+          "type": "uint64"
+        },
+        {
+          "internalType": "address",
+          "name": "paidBy",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "salesCount",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "saleId",
+          "type": "uint256"
+        }
+      ],
+      "name": "seizeFromGuarantor",
       "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"
@@ -1869,6 +2098,19 @@
       "inputs": [
         {
           "internalType": "address",
+          "name": "_guarantor",
+          "type": "address"
+        }
+      ],
+      "name": "setGuarantor",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
           "name": "_multisig",
           "type": "address"
         }
@@ -1927,7 +2169,7 @@
           "type": "uint256"
         },
         {
-          "internalType": "enum ClubPools.OfferStatus",
+          "internalType": "enum ClubPoolsV26.OfferStatus",
           "name": "status",
           "type": "uint8"
         },
