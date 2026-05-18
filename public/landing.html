@@ -2,38 +2,42 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title data-i18n="meta.title">Diamond Club — Инвестиции в природные бриллианты от +800% за год</title>
-<meta name="description" data-i18n-attr="content:meta.description" content="Инвестиции в природные бриллианты от +800% за год. Стейкинг в USDT. Бриллианты со скидкой до 70% от рынка. Блокчейн opBNB. Смарт-контракт с аудитом.">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title data-i18n="meta.title">Diamond Club — Владей долей настоящего бриллианта</title>
+<meta name="description" data-i18n-attr="content:meta.description" content="Инвестиционные доли природных бриллиантов от $10. Токен DCT на блокчейне opBNB. Реальный камень за каждым токеном. Сертификат GIA.">
 
 <!-- OpenGraph (Facebook, WhatsApp, Telegram, Viber, VK, LinkedIn) -->
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://gws.ink/">
-<meta property="og:title" data-i18n-attr="content:meta.og_title" content="💎 Diamond Club — Инвестиции в Природные Бриллианты">
-<meta property="og:description" data-i18n-attr="content:meta.og_description" content="От +800% за год. Стейкинг в USDT. Бриллианты со скидкой до 70% от рынка. Блокчейн opBNB.">
+<meta property="og:title" data-i18n-attr="content:meta.og_title" content="💎 Diamond Club — Бриллианты от $10 за долю">
+<meta property="og:description" data-i18n-attr="content:meta.og_description" content="Сертифицированный природный бриллиант. До −70% от рынка. Токен DCT в твоём кошельке. От $10.">
 
-<!-- Горизонтальная картинка (1200x630) — основная, для Telegram, Facebook, VK, Viber -->
-<meta property="og:image" content="https://gws.ink/landing-preview.jpg">
+<!-- Горизонтальная картинка (1200x630) — основная для Telegram, Facebook, VK, Viber -->
+<meta property="og:image" content="https://gws.ink/og/diamond-club-horizontal.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Diamond Club — Бриллианты от $50 за долю">
+<meta property="og:image:alt" content="Diamond Club — Бриллианты от $10 за долю">
 <meta property="og:image:type" content="image/jpeg">
 
-<!-- Квадратная картинка (1200x1200) — альтернатива для WhatsApp, iMessage -->
-<meta property="og:image" content="https://gws.ink/landing-preview-square.jpg">
+<!-- Квадратная картинка (1:1) — для WhatsApp, iMessage -->
+<meta property="og:image" content="https://gws.ink/og/diamond-club-square.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="1200">
-<meta property="og:image:alt" content="Diamond Club — Бриллианты от $50 за долю">
+<meta property="og:image:alt" content="Diamond Club — Бриллианты от $10 за долю">
 <meta property="og:image:type" content="image/jpeg">
 
 <meta property="og:site_name" content="Diamond Club">
 <meta property="og:locale" content="ru_RU">
+<meta property="og:locale:alternate" content="en_US">
+<meta property="og:locale:alternate" content="uk_UA">
 
 <!-- Twitter Card (использует горизонтальную) -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="💎 Diamond Club — Инвестиции в Природные Бриллианты">
-<meta name="twitter:description" content="От +800% за год. Стейкинг в USDT. Бриллианты со скидкой до 70% от рынка.">
-<meta name="twitter:image" content="https://gws.ink/landing-preview.jpg">
+<meta name="twitter:title" content="💎 Diamond Club — Бриллианты от $10 за долю">
+<meta name="twitter:description" content="Сертифицированный природный бриллиант. До −70% от рынка. Токен DCT в твоём кошельке.">
+<meta name="twitter:image" content="https://gws.ink/og/diamond-club-horizontal.jpg">
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -682,6 +686,102 @@ h1, h2, h3, h4 {
   .nav-actions .btn { display: none; }
   .hero-trust { gap: 20px; }
 }
+
+/* ═══════════════════════════════════════════════════════
+   АНИМАЦИИ ПОЯВЛЕНИЯ ПРИ ПРОКРУТКЕ (тонкий стиль)
+   Базовый класс .reveal — невидимо до триггера IntersectionObserver
+   Класс .revealed — добавляется JS когда секция в viewport
+   ═══════════════════════════════════════════════════════ */
+.reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.7s cubic-bezier(0.2, 0.7, 0.3, 1),
+              transform 0.7s cubic-bezier(0.2, 0.7, 0.3, 1);
+  will-change: opacity, transform;
+}
+.reveal.revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+.reveal-stagger > * {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.6s cubic-bezier(0.2, 0.7, 0.3, 1),
+              transform 0.6s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+.reveal-stagger.revealed > *:nth-child(1) { transition-delay: 0.05s; opacity: 1; transform: translateY(0); }
+.reveal-stagger.revealed > *:nth-child(2) { transition-delay: 0.15s; opacity: 1; transform: translateY(0); }
+.reveal-stagger.revealed > *:nth-child(3) { transition-delay: 0.25s; opacity: 1; transform: translateY(0); }
+.reveal-stagger.revealed > *:nth-child(4) { transition-delay: 0.35s; opacity: 1; transform: translateY(0); }
+.reveal-stagger.revealed > *:nth-child(5) { transition-delay: 0.45s; opacity: 1; transform: translateY(0); }
+
+/* Уважение к prefers-reduced-motion — для пользователей с настройкой
+   "уменьшить движение" анимации отключены полностью */
+@media (prefers-reduced-motion: reduce) {
+  .reveal, .reveal-stagger > * {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   ПОЛИРОВКА АДАПТИВА (мобильные < 720px и < 480px)
+   Финальные правки для новых блоков: prices, team-ads, lot
+   ═══════════════════════════════════════════════════════ */
+@media (max-width: 820px) {
+  /* Hero — компактнее на планшетах */
+  .hero { padding-top: 120px !important; }
+  .hero-content > * { max-width: 100%; }
+
+  /* Prices — таблицы становятся в одну колонку */
+  .prices-section { padding: 60px 16px !important; }
+  .prices-title { font-size: clamp(28px, 6vw, 40px) !important; }
+  .prices-subtitle { font-size: 15px !important; margin-bottom: 32px !important; }
+
+  /* Team-ads — карточки в одну колонку */
+  .team-ads-section { padding: 60px 16px !important; }
+  .team-ads-title { font-size: clamp(26px, 6vw, 38px) !important; }
+  .team-ads-subtitle { font-size: 15px !important; margin-bottom: 40px !important; }
+
+  /* Lot section — мобильный */
+  .lot-section { padding-top: 60px !important; padding-bottom: 60px !important; }
+  .lot-grid { padding: 0 16px !important; }
+  .lot-specs { padding: 16px !important; gap: 12px !important; }
+  .spec-item .value { font-size: 16px !important; }
+  .price-row .main { font-size: 38px !important; }
+  .timer-grid { gap: 6px !important; }
+
+  /* Footer — короче на мобильных */
+  .footer { padding: 40px 16px !important; }
+}
+
+@media (max-width: 480px) {
+  /* Самые маленькие экраны */
+  .prices-table-card { padding: 16px 12px !important; }
+  .prices-table { font-size: 12px !important; }
+  .prices-table thead th { font-size: 10px !important; padding: 6px 3px 8px !important; }
+  .prices-table tbody td { padding: 8px 3px !important; }
+  .prices-discount { font-size: 13px !important; padding: 12px 18px !important; }
+  .prices-discount strong { font-size: 16px !important; }
+
+  .flow-card { padding: 24px 18px !important; }
+  .flow-card-icon { font-size: 32px !important; }
+  .flow-card-title { font-size: 17px !important; }
+  .flow-card-text { font-size: 13px !important; }
+  .team-ads-bottom { padding: 24px 16px !important; }
+  .team-ads-bottom-title { font-size: 18px !important; }
+  .team-ads-bottom-text { font-size: 14px !important; }
+
+  /* CTA на мобильных */
+  .cta-section { padding: 80px 16px !important; }
+  .big-cta { padding: 28px 20px !important; }
+  .big-cta h3 { font-size: 24px !important; }
+  .big-cta p { font-size: 15px !important; }
+
+  /* Nav — компактнее */
+  .nav { padding: 12px 16px !important; }
+}
 </style>
 </head>
 <body>
@@ -696,10 +796,9 @@ h1, h2, h3, h4 {
   </a>
   <ul class="nav-links">
     <li><a href="#concept" data-i18n="nav.concept">Концепция</a></li>
-    <li><a href="#math" data-i18n="nav.math">Математика</a></li>
+    <li><a href="#prices" data-i18n="nav.prices">Цены</a></li>
     <li><a href="#lot" data-i18n="nav.lot">Первый лот</a></li>
-    <li><a href="#system" data-i18n="nav.system">Система</a></li>
-    <li><a href="#safety" data-i18n="nav.safety">Безопасность</a></li>
+    <li><a href="#team-ads" data-i18n="nav.system">Партнёрка</a></li>
   </ul>
   <div class="nav-actions">
     <div class="lang-switch">
@@ -740,15 +839,15 @@ h1, h2, h3, h4 {
         Сертифицированный природный камень. Без ювелирной наценки. Без посредников. Токен DCT на блокчейне — твоя доля в твоём кошельке.
       </p>
       <div class="hero-price" data-i18n="hero.price_label_html" data-i18n-html>
-        Порог входа — <span class="amount ice-text">от $50</span>
+        Порог входа — <span class="amount ice-text">от $10</span>
       </div>
       <div class="hero-cta">
         <a href="https://gws.ink/cabinet" data-cta="cabinet" class="btn btn-primary btn-large" data-i18n="hero.cta_primary">Войти в клуб →</a>
       </div>
       <div class="hero-trust">
         <div class="hero-trust-item">
-          <span class="val">12%</span>
-          <span class="label" data-i18n="hero.trust1_label">годовых USDT · гарантия</span>
+          <span class="val">$0.56</span>
+          <span class="label" data-i18n="hero.trust1_label">минимум за токен · форсмажор</span>
         </div>
         <div class="hero-trust-item">
           <span class="val">+420%</span>
@@ -935,7 +1034,7 @@ h1, h2, h3, h4 {
   </div>
 
   <div class="concept-quote" data-i18n="concept.quote">
-    Как сто долларов превращаются в пятьсот двадцать долларов. За один год. Через долю в настоящем бриллианте.
+    Как сто долларов превращаются в восемьсот двадцать долларов. За один год. Через долю в настоящем бриллианте.
   </div>
 
   <div class="vs-grid">
@@ -1025,6 +1124,236 @@ h1, h2, h3, h4 {
   </div>
 </section>
 
+<!-- ===== SECTION: PRICE COMPARISON (v2.6: рынок vs клуб) ===== -->
+<style>
+.prices-section {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 80px 24px;
+  position: relative;
+}
+.prices-eyebrow {
+  text-align: center;
+  font-size: 14px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(140, 200, 255, 0.7);
+  margin-bottom: 16px;
+}
+.prices-title {
+  text-align: center;
+  font-size: clamp(32px, 5vw, 56px);
+  font-weight: 800;
+  line-height: 1.1;
+  margin-bottom: 16px;
+  letter-spacing: -0.02em;
+}
+.prices-subtitle {
+  text-align: center;
+  font-size: 17px;
+  color: rgba(220, 235, 255, 0.65);
+  max-width: 700px;
+  margin: 0 auto 48px;
+  line-height: 1.5;
+}
+.prices-tables {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 32px;
+}
+.prices-table-card {
+  background: linear-gradient(180deg, rgba(20, 30, 50, 0.6) 0%, rgba(15, 25, 45, 0.4) 100%);
+  border: 1px solid rgba(120, 180, 255, 0.12);
+  border-radius: 24px;
+  padding: 28px;
+  position: relative;
+  overflow: hidden;
+}
+.prices-table-card.market::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, rgba(255, 120, 120, 0.6), transparent);
+}
+.prices-table-card.club::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, rgba(120, 220, 255, 0.8), transparent);
+}
+.prices-table-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+.prices-table-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+}
+.prices-table-badge {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+.prices-table-card.market .prices-table-badge {
+  background: rgba(255, 120, 120, 0.15);
+  color: rgb(255, 160, 160);
+  border: 1px solid rgba(255, 120, 120, 0.3);
+}
+.prices-table-card.club .prices-table-badge {
+  background: rgba(120, 220, 255, 0.15);
+  color: rgb(160, 230, 255);
+  border: 1px solid rgba(120, 220, 255, 0.3);
+}
+.prices-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.prices-table thead th {
+  text-align: right;
+  padding: 8px 6px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(180, 200, 230, 0.5);
+  border-bottom: 1px solid rgba(120, 180, 255, 0.1);
+}
+.prices-table thead th:first-child {
+  text-align: left;
+}
+.prices-table tbody td {
+  padding: 11px 6px;
+  text-align: right;
+  color: rgba(230, 240, 255, 0.85);
+  border-bottom: 1px solid rgba(120, 180, 255, 0.06);
+  font-variant-numeric: tabular-nums;
+}
+.prices-table tbody td:first-child {
+  text-align: left;
+  font-weight: 600;
+  color: rgba(180, 220, 255, 0.85);
+}
+.prices-table tbody tr:last-child td { border-bottom: none; }
+.prices-table tbody tr:hover { background: rgba(120, 180, 255, 0.04); }
+.prices-note {
+  text-align: center;
+  font-size: 14px;
+  color: rgba(180, 200, 230, 0.55);
+  font-style: italic;
+  max-width: 720px;
+  margin: 16px auto 0;
+  line-height: 1.5;
+}
+.prices-discount {
+  display: inline-block;
+  margin-top: 24px;
+  padding: 14px 28px;
+  background: linear-gradient(135deg, rgba(120, 220, 255, 0.15), rgba(100, 180, 255, 0.1));
+  border: 1px solid rgba(120, 220, 255, 0.3);
+  border-radius: 50px;
+  font-size: 15px;
+  font-weight: 600;
+  color: rgb(180, 230, 255);
+}
+.prices-discount strong {
+  color: #fff;
+  font-size: 18px;
+  margin-right: 4px;
+}
+.prices-cta-wrap {
+  text-align: center;
+  margin-top: 24px;
+}
+@media (max-width: 820px) {
+  .prices-tables { grid-template-columns: 1fr; gap: 16px; }
+  .prices-table-card { padding: 20px 16px; }
+  .prices-table { font-size: 13px; }
+  .prices-table tbody td { padding: 9px 4px; }
+}
+</style>
+<section class="prices-section reveal" id="prices">
+  <div class="prices-eyebrow" data-i18n="prices.eyebrow">— Сравнительные цены —</div>
+  <h2 class="prices-title" data-i18n="prices.title_html" data-i18n-html>
+    Сколько стоит бриллиант
+  </h2>
+  <p class="prices-subtitle" data-i18n="prices.subtitle">
+    Открытая правда об индустрии. Сравни рынок и наши закупочные цены — увидишь почему доли клуба выгодны.
+  </p>
+
+  <div class="prices-tables reveal-stagger">
+    <!-- Рыночная цена -->
+    <div class="prices-table-card market">
+      <div class="prices-table-header">
+        <div class="prices-table-title" data-i18n="prices.market_title">Рыночная цена</div>
+        <div class="prices-table-badge" data-i18n="prices.market_badge">в магазине</div>
+      </div>
+      <table class="prices-table">
+        <thead>
+          <tr>
+            <th data-i18n="prices.col_carat">Карат</th>
+            <th data-i18n="prices.col_no_cert">Без серт.</th>
+            <th data-i18n="prices.col_cert">С серт.</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>0.30</td><td>$400</td><td>$800</td></tr>
+          <tr><td>0.50</td><td>$800</td><td>$1,600</td></tr>
+          <tr><td>1.00</td><td>$2,500</td><td>$5,000</td></tr>
+          <tr><td>1.50</td><td>$6,000</td><td>$12,000</td></tr>
+          <tr><td>2.00</td><td>$10,000</td><td>$20,000</td></tr>
+          <tr><td>2.50</td><td>$15,000</td><td>$30,000</td></tr>
+          <tr><td>3.00</td><td>$25,000</td><td>$50,000</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Закупочная цена клуба -->
+    <div class="prices-table-card club">
+      <div class="prices-table-header">
+        <div class="prices-table-title" data-i18n="prices.club_title">Закупка клуба</div>
+        <div class="prices-table-badge" data-i18n="prices.club_badge">средняя</div>
+      </div>
+      <table class="prices-table">
+        <thead>
+          <tr>
+            <th data-i18n="prices.col_carat">Карат</th>
+            <th data-i18n="prices.col_no_cert">Без серт.</th>
+            <th data-i18n="prices.col_cert">С серт.</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>0.30</td><td>$325</td><td>$650</td></tr>
+          <tr><td>0.50</td><td>$550</td><td>$1,200</td></tr>
+          <tr><td>1.00</td><td>$1,100</td><td>$2,000</td></tr>
+          <tr><td>1.50</td><td>$1,800</td><td>$3,900</td></tr>
+          <tr><td>2.00</td><td>$3,100</td><td>$5,400</td></tr>
+          <tr><td>2.50</td><td>$5,000</td><td>$9,000</td></tr>
+          <tr><td>3.00</td><td>$9,000</td><td>$15,000</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div style="text-align:center;">
+    <div class="prices-discount" data-i18n="prices.discount_html" data-i18n-html>
+      <strong>До −70%</strong> от рынка · вся разница работает на тебя
+    </div>
+  </div>
+
+  <p class="prices-note" data-i18n="prices.note">
+    Источник рыночных цен — открытые данные ювелирных сетей. Закупочные цены — наши контракты с алмазным домом-партнёром. Сертификат GIA для каждого камня.
+  </p>
+</section>
+
 <!-- ===== SECTION: 5 STEPS ===== -->
 <style>
 .steps-wrap { max-width: 1200px; margin: 0 auto; }
@@ -1109,7 +1438,7 @@ h1, h2, h3, h4 {
   </div>
 
   <div class="steps-wrap">
-    <div class="steps-grid">
+    <div class="steps-grid reveal-stagger">
       <div class="step-card">
         <div class="step-num">1</div>
         <h4 data-i18n="how.step1_h4">Покупаешь долю</h4>
@@ -1136,254 +1465,6 @@ h1, h2, h3, h4 {
         <p data-i18n="how.step5_p">В любой момент продаёшь токены по новой цене. Плюс 12% USDT гарантии клуба.</p>
       </div>
     </div>
-  </div>
-</section>
-
-<!-- ===== SECTION: MATH ===== -->
-<style>
-.math-wrap { max-width: 1200px; margin: 0 auto; }
-.math-intro {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 60px;
-  align-items: center;
-  margin-bottom: 80px;
-}
-.math-intro .breakdown {
-  background: linear-gradient(135deg, rgba(13,26,46,0.9), rgba(20,34,64,0.6));
-  border: 1px solid var(--ice-border);
-  border-radius: 24px;
-  padding: 40px;
-}
-.math-intro .breakdown h4 {
-  font-size: 22px;
-  margin-bottom: 24px;
-  color: var(--text);
-}
-.breakdown-bar {
-  display: flex;
-  height: 48px;
-  border-radius: 100px;
-  overflow: hidden;
-  margin-bottom: 24px;
-  box-shadow: inset 0 0 0 1px rgba(165,216,248,0.15);
-}
-.breakdown-bar .seg-backing {
-  flex: 0 0 85%;
-  background: linear-gradient(90deg, var(--ice-4), var(--ice-3));
-  display: grid;
-  place-items: center;
-  color: var(--bg-deep);
-  font-weight: 800;
-  font-size: 14px;
-}
-.breakdown-bar .seg-marketing {
-  flex: 0 0 15%;
-  background: linear-gradient(90deg, #3b82f6, #67e8f9);
-  display: grid;
-  place-items: center;
-  color: var(--bg-deep);
-  font-weight: 800;
-  font-size: 12px;
-}
-
-.breakdown-list {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  font-size: 14px;
-}
-.breakdown-list li {
-  display: flex;
-  justify-content: space-between;
-  padding: 10px 0;
-  border-bottom: 1px dashed rgba(165,216,248,0.1);
-}
-.breakdown-list li:last-child { border-bottom: none; }
-.breakdown-list .label { color: var(--text-dim); }
-.breakdown-list .val { color: var(--ice-3); font-weight: 700; font-family: 'Manrope', sans-serif; font-size: 16px; }
-
-/* Growth cards */
-.growth-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  margin-top: 40px;
-}
-
-.growth-card {
-  padding: 32px 24px;
-  border-radius: 20px;
-  position: relative;
-  overflow: hidden;
-  background: linear-gradient(180deg, rgba(13,26,46,0.9), rgba(10,15,30,0.7));
-  border: 1px solid rgba(165,216,248,0.12);
-  transition: all 0.4s;
-}
-
-.growth-card:hover {
-  transform: translateY(-6px);
-  border-color: var(--ice-3);
-  box-shadow: 0 20px 50px -15px rgba(165,216,248,0.3);
-}
-
-.growth-card .stage {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.15em;
-  color: var(--ice-3);
-  margin-bottom: 12px;
-  font-weight: 700;
-}
-
-.growth-card .price {
-  font-family: 'Manrope', sans-serif;
-  font-size: 44px;
-  font-weight: 700;
-  line-height: 1;
-  margin-bottom: 4px;
-}
-
-.growth-card .growth-percent {
-  font-size: 14px;
-  color: var(--success);
-  font-weight: 700;
-  margin-bottom: 20px;
-}
-
-.growth-card .divider {
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--ice-border), transparent);
-  margin-bottom: 20px;
-}
-
-.growth-card .outcome {
-  font-size: 13px;
-  color: var(--text-dim);
-  line-height: 1.55;
-}
-.growth-card .outcome strong {
-  color: var(--ice-3);
-  font-family: 'Manrope', sans-serif;
-  font-size: 18px;
-  font-weight: 700;
-}
-
-.growth-card.peak {
-  background: linear-gradient(180deg, rgba(165,216,248,0.08), rgba(13,26,46,0.9));
-  border-color: var(--ice-3);
-  box-shadow: 0 0 40px rgba(165,216,248,0.1);
-}
-.growth-card.peak::before {
-  content: 'Пик года';
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  font-size: 10px;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  color: var(--bg-deep);
-  background: linear-gradient(135deg, var(--ice-3), var(--ice-4));
-  padding: 4px 10px;
-  border-radius: 100px;
-  font-weight: 800;
-}
-
-.math-disclaimer {
-  text-align: center;
-  margin-top: 48px;
-  font-size: 13px;
-  color: var(--text-dim);
-  max-width: 700px;
-  margin-left: auto;
-  margin-right: auto;
-  font-style: italic;
-  font-family: 'Manrope', sans-serif;
-  font-size: 16px;
-}
-
-@media (max-width: 960px) {
-  .math-intro { grid-template-columns: 1fr; gap: 40px; }
-  .growth-grid { grid-template-columns: repeat(2, 1fr); }
-  .math-intro .breakdown { padding: 28px; }
-}
-@media (max-width: 520px) {
-  .growth-grid { grid-template-columns: 1fr; }
-}
-</style>
-
-<section class="section" id="math">
-  <div class="section-head">
-    <div class="section-eyebrow" data-i18n="math.eyebrow">Математика без воды</div>
-    <h2 data-i18n="math.title_html" data-i18n-html><span class="ice-text">$100 → $520</span><br>за один год</h2>
-    <p class="section-lead" data-i18n="math.lead">Возьмём средний камень — закупка $4 000. Посмотрим, что происходит с твоими деньгами, когда клуб оборачивает этот камень 6 раз за год.</p>
-  </div>
-
-  <div class="math-wrap">
-    <div class="math-intro">
-      <div>
-        <h3 style="font-size:28px; margin-bottom:20px;" data-i18n="math.transparency_h3_html" data-i18n-html>Прозрачность <span class="ice-text">100%</span></h3>
-        <p style="color:var(--text-dim); margin-bottom:20px; line-height:1.6;" data-i18n="math.transparency_p1">Каждый доллар, который ты вкладываешь в долю, разделён в смарт-контракте. Эти проценты нельзя изменить. Они одинаковые для всех. Любой человек может зайти в блокчейн и проверить.</p>
-        <p style="color:var(--text-dim); line-height:1.6;" data-i18n="math.transparency_p2">Никаких скрытых комиссий. Никакого «кармана директора». Всё прошито в коде.</p>
-      </div>
-      <div class="breakdown">
-        <h4 data-i18n="math.breakdown_h4">Каждый $1 твоей доли</h4>
-        <div class="breakdown-bar">
-          <div class="seg-backing" data-i18n="math.breakdown_seg_stone">85% — камень</div>
-          <div class="seg-marketing">15%</div>
-        </div>
-        <ul class="breakdown-list">
-          <li><span class="label" data-i18n="math.breakdown_l1">Backing камня (твои токены DCT)</span><span class="val">85%</span></li>
-          <li><span class="label" data-i18n="math.breakdown_l2">Рекламный пул</span><span class="val">5%</span></li>
-          <li><span class="label" data-i18n="math.breakdown_l3">Партнёрская программа (9 уровней)</span><span class="val">9%</span></li>
-          <li><span class="label" data-i18n="math.breakdown_l4">Автору проекта</span><span class="val">0.2%</span></li>
-          <li><span class="label" data-i18n="math.breakdown_l5">Техническая поддержка</span><span class="val">0.3%</span></li>
-          <li><span class="label" data-i18n="math.breakdown_l6">Токеномика GWT</span><span class="val">0.25%</span></li>
-          <li><span class="label" data-i18n="math.breakdown_l7">Токеномика CGT</span><span class="val">0.25%</span></li>
-        </ul>
-      </div>
-    </div>
-
-    <div style="text-align:center; margin-bottom:40px;">
-      <h3 style="font-size:32px; margin-bottom:12px;" data-i18n="math.growth_h3_html" data-i18n-html>Рост цены токена <span class="ice-text">DCT</span></h3>
-      <p style="color:var(--text-dim); font-size:15px;" data-i18n="math.growth_p">Камень закупка $4 000 · клуб продаёт за $8 000 · прибыль идёт в backing</p>
-    </div>
-
-    <div class="growth-grid">
-      <div class="growth-card">
-        <div class="stage" data-i18n="math.stage1_label">Старт</div>
-        <div class="price ice-text">$0.50</div>
-        <div class="growth-percent" data-i18n="math.stage1_subtitle">Цена токена DCT</div>
-        <div class="divider"></div>
-        <div class="outcome" data-i18n="math.stage1_outcome_html" data-i18n-html>Твои $100 = <strong>80 токенов</strong><br>100% твоего капитала в камне</div>
-      </div>
-      <div class="growth-card">
-        <div class="stage" data-i18n="math.stage2_label">После 1 цикла</div>
-        <div class="price ice-text">$0.85</div>
-        <div class="growth-percent">+70%</div>
-        <div class="divider"></div>
-        <div class="outcome" data-i18n="math.stage2_outcome_html" data-i18n-html>Твои $100 теперь = <strong>$168</strong><br>Клуб продал камень один раз</div>
-      </div>
-      <div class="growth-card">
-        <div class="stage" data-i18n="math.stage3_label">После 3 циклов</div>
-        <div class="price ice-text">$1.55</div>
-        <div class="growth-percent">+210%</div>
-        <div class="divider"></div>
-        <div class="outcome" data-i18n="math.stage3_outcome_html" data-i18n-html>Твои $100 теперь = <strong>$310</strong><br>Полгода работы клуба</div>
-      </div>
-      <div class="growth-card peak">
-        <div class="stage" data-i18n="math.stage4_label">После 6 циклов</div>
-        <div class="price ice-text">$2.60</div>
-        <div class="growth-percent">+420%</div>
-        <div class="divider"></div>
-        <div class="outcome" data-i18n="math.stage4_outcome_html" data-i18n-html>Твои $100 теперь = <strong>$520</strong><br>Год работы клуба</div>
-      </div>
-    </div>
-
-    <p class="math-disclaimer" data-i18n="math.disclaimer">
-      А если камень идёт в ювелирное изделие — цена токена доходит до $4.10 за 3 цикла. Твои $100 превращаются в $820. +720% за год.
-    </p>
   </div>
 </section>
 
@@ -1647,7 +1728,7 @@ h1, h2, h3, h4 {
 }
 </style>
 
-<section class="section lot-section" id="lot">
+<section class="section lot-section reveal" id="lot">
   <div class="lot-grid">
     <div class="lot-visual">
       <div class="lot-badge" data-i18n="lot.badge">● Первый лот · подготовка</div>
@@ -1732,819 +1813,150 @@ h1, h2, h3, h4 {
   </div>
 </section>
 
-<!-- ===== SECTION: SYSTEM PIPELINE ===== -->
+<!-- ===== SECTION: TEAM + ADS (v2.6: объединённый блок партнёрка + реклама) ===== -->
 <style>
-.system-wrap { max-width: 1200px; margin: 0 auto; }
-
-.system-tagline {
-  text-align: center;
-  font-size: clamp(18px, 1.8vw, 22px);
-  color: var(--text-dim);
-  margin-bottom: 60px;
-  font-weight: 400;
-  line-height: 1.5;
-}
-.system-tagline strong {
-  color: var(--ice-2);
-  font-weight: 600;
-}
-
-.pipeline {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
-  position: relative;
+.team-ads-section {
   max-width: 1100px;
   margin: 0 auto;
-}
-
-.pipeline::before {
-  content: "";
-  position: absolute;
-  top: 90px;
-  left: 8%;
-  right: 8%;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(165,216,248,0.3) 10%, rgba(165,216,248,0.3) 90%, transparent);
-  z-index: 0;
-}
-
-.pipe-step {
+  padding: 100px 24px;
   position: relative;
-  padding: 32px 20px 28px;
-  background: linear-gradient(180deg, rgba(13,22,32,0.92), rgba(6,10,16,0.7));
-  border: 1px solid rgba(165,216,248,0.15);
-  border-radius: 20px;
-  z-index: 1;
+}
+.team-ads-eyebrow {
   text-align: center;
-  transition: all 0.4s;
-}
-
-.pipe-step:hover {
-  border-color: var(--ice-3);
-  transform: translateY(-4px);
-  box-shadow: 0 20px 40px -15px rgba(107,182,232,0.25);
-}
-
-.pipe-step.accent {
-  background: linear-gradient(180deg, rgba(165,216,248,0.08), rgba(13,22,32,0.8));
-  border-color: var(--ice-3);
-}
-
-.pipe-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, rgba(165,216,248,0.15), rgba(58,139,200,0.08));
-  border: 1px solid rgba(165,216,248,0.25);
-  display: grid;
-  place-items: center;
-  margin: 0 auto 20px;
-  color: var(--ice-3);
-}
-
-.pipe-step.accent .pipe-icon {
-  background: linear-gradient(135deg, rgba(165,216,248,0.25), rgba(58,139,200,0.15));
-}
-
-.pipe-step h4 {
-  font-size: 20px;
-  margin-bottom: 8px;
-  color: var(--text);
-  font-family: "Manrope", sans-serif;
-}
-
-.pipe-step .tagline {
-  font-size: 13px;
-  color: var(--ice-3);
+  font-size: 14px;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  font-weight: 600;
-  margin-bottom: 12px;
-}
-
-.pipe-step p {
-  font-size: 13px;
-  color: var(--text-dim);
-  line-height: 1.5;
-}
-
-.pipe-arrow {
-  position: absolute;
-  top: 80px;
-  right: -12px;
-  width: 24px;
-  height: 24px;
-  display: grid;
-  place-items: center;
-  color: var(--ice-3);
-  z-index: 2;
-  background: #000;
-  border-radius: 50%;
-  border: 1px solid var(--ice-border);
-}
-
-.pipe-step:last-child .pipe-arrow { display: none; }
-
-.system-keystone {
-  margin-top: 60px;
-  padding: 40px 48px;
-  background: linear-gradient(135deg, rgba(165,216,248,0.08), rgba(13,22,32,0.9));
-  border: 1px solid var(--ice-border);
-  border-radius: 24px;
-  text-align: center;
-  max-width: 900px;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.system-keystone .big-line {
-  font-family: "Manrope", sans-serif;
-  font-size: clamp(20px, 2vw, 26px);
-  font-weight: 700;
-  color: var(--text);
-  margin-bottom: 12px;
-  line-height: 1.3;
-}
-
-.system-keystone .big-line .gold-text,
-.system-keystone .big-line .ice-text {
-  background: linear-gradient(135deg, #ffffff 0%, #e0f4ff 30%, #a5d8f8 60%, #6bb6e8 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.system-keystone .small-line {
-  font-size: 15px;
-  color: var(--text-dim);
-  line-height: 1.55;
-}
-
-@media (max-width: 960px) {
-  .pipeline { grid-template-columns: repeat(2, 1fr); gap: 16px; }
-  .pipeline::before { display: none; }
-  .pipe-arrow { display: none !important; }
-  .system-keystone { padding: 28px 24px; }
-}
-
-@media (max-width: 520px) {
-  .pipeline { grid-template-columns: 1fr; }
-}
-</style>
-
-<section class="section" id="system">
-  <div class="section-head">
-    <div class="section-eyebrow" data-i18n="system.eyebrow">Система под ключ</div>
-    <h2 data-i18n="system.title_html" data-i18n-html>Не надо искать. Не надо уговаривать.<br><span class="ice-text">Не надо продавать.</span></h2>
-    <p class="section-lead" data-i18n="system.lead">Ты покупаешь не долю — ты покупаешь работающую систему. Одно действие запускает бесконечный поток клиентов, которые становятся инвесторами.</p>
-  </div>
-
-  <div class="system-wrap">
-    <p class="system-tagline" data-i18n="system.tagline_html" data-i18n-html>
-      Ты покупаешь <strong>время и опыт других людей</strong>.<br>
-      Реклама работает. Клиенты приходят. Доход капает.
-    </p>
-
-    <div class="pipeline">
-      <div class="pipe-step accent">
-        <div class="pipe-icon">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 11 L21 3 L21 21 L3 13 Z"/>
-            <path d="M11 15 L11 20 L8 20 L8 14"/>
-          </svg>
-        </div>
-        <div class="tagline" data-i18n="system.step1_tag">Шаг 1 · ты</div>
-        <h4 data-i18n="system.step1_h4">GWAD реклама</h4>
-        <p data-i18n="system.step1_p">Заказал рекламу от $5. Один раз. Дальше система сама.</p>
-        <div class="pipe-arrow">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
-        </div>
-      </div>
-
-      <div class="pipe-step">
-        <div class="pipe-icon">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="9"/>
-            <path d="M12 3 C15 7, 15 17, 12 21 C9 17, 9 7, 12 3"/>
-            <path d="M3 12 H21"/>
-          </svg>
-        </div>
-        <div class="tagline" data-i18n="system.step2_tag">24/7 без тебя</div>
-        <h4 data-i18n="system.step2_h4">Новые люди</h4>
-        <p data-i18n="system.step2_p">Система находит людей в соцсетях. Автомат. Никаких звонков и уговоров.</p>
-        <div class="pipe-arrow">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
-        </div>
-      </div>
-
-      <div class="pipe-step">
-        <div class="pipe-icon">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 3 L20 8 L12 21 L4 8 Z"/>
-            <path d="M4 8 L20 8"/>
-            <path d="M12 3 L8 8 L12 21 L16 8 L12 3"/>
-          </svg>
-        </div>
-        <div class="tagline" data-i18n="system.step3_tag">Автомат</div>
-        <h4 data-i18n="system.step3_h4">Покупают долю</h4>
-        <p data-i18n="system.step3_p">Клиенты становятся инвесторами. Закрепляются за тобой навсегда.</p>
-        <div class="pipe-arrow">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
-        </div>
-      </div>
-
-      <div class="pipe-step accent">
-        <div class="pipe-icon">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 3 V21"/>
-            <path d="M16 7 C16 5, 13 4, 12 4 C10 4, 8 5, 8 7 C8 9, 10 10, 12 10 C14 10, 16 11, 16 13 C16 15, 14 16, 12 16 C10 16, 8 15, 8 13"/>
-          </svg>
-        </div>
-        <div class="tagline" data-i18n="system.step4_tag">Твой результат</div>
-        <h4 data-i18n="system.step4_h4">Доход капает</h4>
-        <p data-i18n="system.step4_p">Процент со всех их операций. На все 9 уровней вглубь. Автоматически.</p>
-      </div>
-    </div>
-
-    <div class="system-keystone">
-      <div class="big-line" data-i18n="system.keystone_big_html" data-i18n-html>
-        Ты покупаешь не рекламу.<br>
-        Ты покупаешь <span class="ice-text">канал</span>, который работает бесконечно.
-      </div>
-      <div class="small-line" data-i18n="system.keystone_small">
-        Реклама запущена один раз — клиенты идут постоянно. Каждый, кто пришёл через твою рекламу, остаётся в твоей партнёрской сетке навсегда.
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ===== SECTION: 9 LEVELS — system builds it ===== -->
-<style>
-.levels-section {
-  background: linear-gradient(180deg, transparent 0%, rgba(13,22,32,0.4) 50%, transparent 100%);
-}
-
-.levels-wrap { max-width: 1200px; margin: 0 auto; }
-
-.levels-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 60px;
-  align-items: center;
-}
-
-/* Дерево партнёров */
-.tree-viz {
-  position: relative;
-  aspect-ratio: 1/0.95;
-  max-width: 520px;
-  margin: 0 auto;
-  padding: 20px;
-}
-
-.tree-svg {
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-}
-
-.tree-you {
-  fill: url(#youGrad);
-  filter: drop-shadow(0 0 20px rgba(165,216,248,0.6));
-}
-
-.tree-node {
-  fill: rgba(165,216,248,0.08);
-  stroke: var(--ice-3);
-  stroke-width: 1;
-}
-
-.tree-node-sm { fill: rgba(165,216,248,0.15); stroke: var(--ice-3); stroke-width: 0.6; }
-.tree-node-xs { fill: rgba(165,216,248,0.2); stroke: var(--ice-3); stroke-width: 0.4; opacity: 0.7; }
-
-.tree-line { stroke: rgba(165,216,248,0.3); stroke-width: 0.8; fill: none; }
-.tree-line-dim { stroke: rgba(165,216,248,0.15); stroke-width: 0.5; fill: none; }
-
-.tree-label {
-  font-family: "Manrope", sans-serif;
-  font-size: 11px;
-  fill: var(--text-dim);
-  font-weight: 500;
-}
-
-.tree-you-text {
-  font-family: "Manrope", sans-serif;
-  font-size: 16px;
-  font-weight: 800;
-  fill: #000;
-}
-
-.tree-l1-text {
-  font-family: "Manrope", sans-serif;
-  font-size: 10px;
-  fill: var(--ice-2);
-  font-weight: 600;
-}
-
-/* GWAD бокс сбоку */
-.tree-gwad-box {
-  fill: rgba(165,216,248,0.12);
-  stroke: var(--ice-3);
-  stroke-width: 1;
-  stroke-dasharray: 4 3;
-}
-
-.tree-gwad-text {
-  font-family: "Manrope", sans-serif;
-  font-size: 10px;
-  font-weight: 700;
-  fill: var(--ice-2);
-}
-
-.tree-flow-arrow {
-  stroke: var(--ice-3);
-  stroke-width: 1.5;
-  fill: none;
-  stroke-dasharray: 5 4;
-  animation: flow-dash 2s linear infinite;
-}
-
-@keyframes flow-dash {
-  to { stroke-dashoffset: -18; }
-}
-
-.tree-pulse-dot {
-  fill: var(--ice-2);
-  animation: pulse-dot 2s ease-in-out infinite;
-}
-
-@keyframes pulse-dot {
-  0%, 100% { opacity: 0.3; r: 3; }
-  50% { opacity: 1; r: 5; }
-}
-
-/* Right column */
-.levels-right h3 {
-  font-size: clamp(24px, 2.4vw, 32px);
-  margin-bottom: 18px;
-  line-height: 1.15;
-}
-
-.levels-right .quote {
-  font-size: 17px;
-  color: var(--ice-2);
-  margin-bottom: 20px;
-  line-height: 1.5;
-  font-weight: 500;
-}
-
-.levels-right p {
-  color: var(--text-dim);
+  color: rgba(140, 200, 255, 0.7);
   margin-bottom: 16px;
-  line-height: 1.65;
-  font-size: 15px;
 }
-
-.levels-stats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-  margin-top: 32px;
-  padding: 28px;
-  background: linear-gradient(135deg, rgba(165,216,248,0.05), rgba(13,22,32,0.6));
-  border: 1px solid var(--ice-border);
-  border-radius: 20px;
-}
-
-.lstat {
+.team-ads-title {
   text-align: center;
-}
-.lstat .num {
-  font-family: "Manrope", sans-serif;
-  font-size: 28px;
+  font-size: clamp(32px, 5vw, 56px);
   font-weight: 800;
-  line-height: 1;
-  margin-bottom: 6px;
+  line-height: 1.1;
+  margin-bottom: 24px;
+  letter-spacing: -0.02em;
 }
-.lstat .num.ice-text,
-.lstat .num {
-  background: linear-gradient(135deg, #ffffff 0%, #a5d8f8 60%, #6bb6e8 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+.team-ads-subtitle {
+  text-align: center;
+  font-size: 19px;
+  color: rgba(220, 235, 255, 0.7);
+  max-width: 720px;
+  margin: 0 auto 64px;
+  line-height: 1.5;
 }
-.lstat .lab {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-dim);
-  line-height: 1.3;
-}
-
-.levels-footnote {
-  margin-top: 48px;
-  padding: 22px 28px;
-  background: rgba(165,216,248,0.03);
-  border-left: 2px solid var(--ice-3);
-  border-radius: 0 8px 8px 0;
-  font-size: 15px;
-  color: var(--text);
-  font-style: normal;
-  max-width: 900px;
-  margin-left: auto;
-  margin-right: auto;
-  line-height: 1.55;
-}
-.levels-footnote strong {
-  color: var(--ice-2);
-}
-
-@media (max-width: 960px) {
-  .levels-grid { grid-template-columns: 1fr; gap: 40px; }
-  .tree-viz { max-width: 400px; }
-  .levels-stats { grid-template-columns: 1fr; gap: 14px; }
-  .lstat { text-align: left; padding: 12px 0; border-bottom: 1px dashed rgba(165,216,248,0.1); display: flex; align-items: baseline; justify-content: space-between; }
-  .lstat:last-child { border-bottom: none; }
-}
-</style>
-
-<section class="section levels-section" id="levels">
-  <div class="section-head">
-    <div class="section-eyebrow" data-i18n="levels.eyebrow">Проверенная механика выплат</div>
-    <h2 data-i18n="levels.title_html" data-i18n-html>9 уровней.<br><span class="ice-text">Но строит их за тебя система.</span></h2>
-    <p class="section-lead" data-i18n="levels.lead">Старая добрая партнёрская схема, которая работает в мире десятилетиями. Только раньше её строил сам человек — теперь её строит реклама GWAD.</p>
-  </div>
-
-  <div class="levels-wrap">
-    <div class="levels-grid">
-      <div class="tree-viz">
-        <svg class="tree-svg" viewBox="0 0 500 480" preserveAspectRatio="xMidYMid meet">
-          <defs>
-            <linearGradient id="youGrad" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stop-color="#ffffff"/>
-              <stop offset="50%" stop-color="#a5d8f8"/>
-              <stop offset="100%" stop-color="#6bb6e8"/>
-            </linearGradient>
-            <linearGradient id="gwadGrad" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stop-color="rgba(165,216,248,0.25)"/>
-              <stop offset="100%" stop-color="rgba(58,139,200,0.1)"/>
-            </linearGradient>
-          </defs>
-
-          <!-- GWAD источник слева вверху -->
-          <rect class="tree-gwad-box" x="10" y="50" width="100" height="50" rx="10" fill="url(#gwadGrad)"/>
-          <text class="tree-gwad-text" x="60" y="74" text-anchor="middle" data-i18n="levels.tree_gwad_label">GWAD</text>
-          <text class="tree-gwad-text" x="60" y="90" text-anchor="middle" font-size="9" fill="#a5d8f8" opacity="0.7" data-i18n="levels.tree_gwad_sub">реклама</text>
-
-          <!-- Стрелка потока от GWAD к твоему дереву -->
-          <path class="tree-flow-arrow" d="M 115 75 Q 170 75 200 100"/>
-          <circle class="tree-pulse-dot" cx="155" cy="80" r="3"/>
-
-          <!-- Подпись о потоке -->
-          <text class="tree-label" x="155" y="115" text-anchor="middle" font-size="10" fill="#a5d8f8" opacity="0.7" data-i18n="levels.tree_flow_label">поток клиентов →</text>
-
-          <!-- ТЫ - большой круг/диамант сверху по центру -->
-          <g transform="translate(250, 130)">
-            <circle class="tree-you" cx="0" cy="0" r="50"/>
-            <text class="tree-you-text" x="0" y="-4" text-anchor="middle" dominant-baseline="middle" data-i18n="levels.tree_you">ТЫ</text>
-            <text class="tree-you-text" x="0" y="14" text-anchor="middle" font-size="10" font-weight="600" data-i18n="levels.tree_you_sub">получаешь %</text>
-          </g>
-
-          <!-- Линии от ТЫ к L1 -->
-          <path class="tree-line" d="M 250 180 Q 250 210 110 235"/>
-          <path class="tree-line" d="M 250 180 L 250 235"/>
-          <path class="tree-line" d="M 250 180 Q 250 210 390 235"/>
-
-          <!-- L1 — уровень 1: 3 больших кружка -->
-          <circle class="tree-node" cx="110" cy="255" r="22"/>
-          <text class="tree-l1-text" x="110" y="259" text-anchor="middle">L1</text>
-
-          <circle class="tree-node" cx="250" cy="255" r="22"/>
-          <text class="tree-l1-text" x="250" y="259" text-anchor="middle">L1</text>
-
-          <circle class="tree-node" cx="390" cy="255" r="22"/>
-          <text class="tree-l1-text" x="390" y="259" text-anchor="middle">L1</text>
-
-          <!-- Линии L1 → L2 -->
-          <path class="tree-line-dim" d="M 110 277 L 75 320"/>
-          <path class="tree-line-dim" d="M 110 277 L 145 320"/>
-          <path class="tree-line-dim" d="M 250 277 L 215 320"/>
-          <path class="tree-line-dim" d="M 250 277 L 285 320"/>
-          <path class="tree-line-dim" d="M 390 277 L 355 320"/>
-          <path class="tree-line-dim" d="M 390 277 L 425 320"/>
-
-          <!-- L2 — 6 средних кружков -->
-          <circle class="tree-node-sm" cx="75" cy="335" r="14"/>
-          <circle class="tree-node-sm" cx="145" cy="335" r="14"/>
-          <circle class="tree-node-sm" cx="215" cy="335" r="14"/>
-          <circle class="tree-node-sm" cx="285" cy="335" r="14"/>
-          <circle class="tree-node-sm" cx="355" cy="335" r="14"/>
-          <circle class="tree-node-sm" cx="425" cy="335" r="14"/>
-
-          <!-- Линии L2 → L3 -->
-          <path class="tree-line-dim" d="M 75 349 L 60 390" opacity="0.5"/>
-          <path class="tree-line-dim" d="M 75 349 L 90 390" opacity="0.5"/>
-          <path class="tree-line-dim" d="M 145 349 L 130 390" opacity="0.5"/>
-          <path class="tree-line-dim" d="M 145 349 L 160 390" opacity="0.5"/>
-          <path class="tree-line-dim" d="M 215 349 L 200 390" opacity="0.5"/>
-          <path class="tree-line-dim" d="M 215 349 L 230 390" opacity="0.5"/>
-          <path class="tree-line-dim" d="M 285 349 L 270 390" opacity="0.5"/>
-          <path class="tree-line-dim" d="M 285 349 L 300 390" opacity="0.5"/>
-          <path class="tree-line-dim" d="M 355 349 L 340 390" opacity="0.5"/>
-          <path class="tree-line-dim" d="M 355 349 L 370 390" opacity="0.5"/>
-          <path class="tree-line-dim" d="M 425 349 L 410 390" opacity="0.5"/>
-          <path class="tree-line-dim" d="M 425 349 L 440 390" opacity="0.5"/>
-
-          <!-- L3 — маленькие кружки -->
-          <circle class="tree-node-xs" cx="60" cy="400" r="7"/>
-          <circle class="tree-node-xs" cx="90" cy="400" r="7"/>
-          <circle class="tree-node-xs" cx="130" cy="400" r="7"/>
-          <circle class="tree-node-xs" cx="160" cy="400" r="7"/>
-          <circle class="tree-node-xs" cx="200" cy="400" r="7"/>
-          <circle class="tree-node-xs" cx="230" cy="400" r="7"/>
-          <circle class="tree-node-xs" cx="270" cy="400" r="7"/>
-          <circle class="tree-node-xs" cx="300" cy="400" r="7"/>
-          <circle class="tree-node-xs" cx="340" cy="400" r="7"/>
-          <circle class="tree-node-xs" cx="370" cy="400" r="7"/>
-          <circle class="tree-node-xs" cx="410" cy="400" r="7"/>
-          <circle class="tree-node-xs" cx="440" cy="400" r="7"/>
-
-          <!-- ... L4-L9 многоточие -->
-          <text class="tree-label" x="250" y="445" text-anchor="middle" font-size="11" fill="#a5d8f8" opacity="0.6" data-i18n="levels.tree_more_label">... и так до L9 (до 512 человек в команде)</text>
-
-          <!-- Level markers слева -->
-          <text class="tree-label" x="5" y="260" font-size="10" fill="#6bb6e8" opacity="0.6">L1</text>
-          <text class="tree-label" x="5" y="340" font-size="10" fill="#6bb6e8" opacity="0.6">L2</text>
-          <text class="tree-label" x="5" y="404" font-size="10" fill="#6bb6e8" opacity="0.6">L3</text>
-        </svg>
-      </div>
-
-      <div class="levels-right">
-        <h3 data-i18n="levels.right_h3_html" data-i18n-html>Не ты <span class="ice-text">приглашаешь</span>.<br>Тебе <span class="ice-text">приглашают.</span></h3>
-
-        <p class="quote" data-i18n="levels.quote">
-          Раньше эти 9 уровней человек строил сам: искал, уговаривал, продавал. Половина выгорала на первых трёх рефералах.
-        </p>
-
-        <p data-i18n="levels.p1_html" data-i18n-html>
-          Теперь твою партнёрскую сетку строит <strong style="color:var(--ice-2);">реклама GWAD</strong>. Запустил — пошёл трафик — клиенты закрепляются в твоей сетке автоматически.
-        </p>
-
-        <p data-i18n="levels.p2_html" data-i18n-html>
-          Механика выплат та же, проверенная десятилетиями. Ты получаешь процент с покупок людей на всех 9 уровнях глубины. Только теперь тебе <strong style="color:var(--ice-2);">не надо этих людей искать</strong>.
-        </p>
-
-        <div class="levels-stats">
-          <div class="lstat">
-            <div class="num">$2 870</div>
-            <div class="lab" data-i18n="levels.stat1_lab">твой средний доход с одного камня в год</div>
-          </div>
-          <div class="lstat">
-            <div class="num">∞</div>
-            <div class="lab" data-i18n="levels.stat2_lab">клиент остаётся твоим партнёром навсегда</div>
-          </div>
-          <div class="lstat">
-            <div class="num">0</div>
-            <div class="lab" data-i18n="levels.stat3_lab">человек тебе нужно лично уговаривать</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <p class="levels-footnote" data-i18n="levels.footnote_html" data-i18n-html>
-      <strong>Просто старая добрая партнёрская механика.</strong> Только теперь её строит не ты — а реклама. Сетка собирается автоматически, клиенты закрепляются навсегда, проценты капают со всех 9 уровней. Ты владеешь построенной машиной.
-    </p>
-  </div>
-</section>
-
-<!-- ===== SECTION: SAFETY ===== -->
-<style>
-.safety-grid {
+.team-ads-flow {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: 1fr auto 1fr auto 1fr;
   gap: 20px;
-  max-width: 1200px;
-  margin: 0 auto;
+  align-items: center;
+  margin-bottom: 48px;
 }
-.safety-card {
-  padding: 40px 28px;
-  background: linear-gradient(180deg, rgba(13,26,46,0.9), rgba(10,15,30,0.5));
-  border: 1px solid rgba(165,216,248,0.12);
-  border-radius: 20px;
-  transition: all 0.4s;
+.flow-card {
+  background: linear-gradient(180deg, rgba(20, 30, 50, 0.6) 0%, rgba(15, 25, 45, 0.4) 100%);
+  border: 1px solid rgba(120, 180, 255, 0.15);
+  border-radius: 24px;
+  padding: 32px 24px;
+  text-align: center;
   position: relative;
   overflow: hidden;
 }
-.safety-card::before {
+.flow-card::before {
   content: '';
   position: absolute;
   top: 0; left: 0; right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, var(--ice-3), transparent);
-  opacity: 0;
-  transition: opacity 0.4s;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, rgba(120, 220, 255, 0.6), transparent);
 }
-.safety-card:hover {
-  border-color: var(--ice-3);
-  transform: translateY(-6px);
-  box-shadow: 0 20px 50px -15px rgba(165,216,248,0.2);
+.flow-card-icon {
+  font-size: 40px;
+  margin-bottom: 16px;
+  filter: drop-shadow(0 0 12px rgba(120, 220, 255, 0.4));
 }
-.safety-card:hover::before { opacity: 1; }
-.safety-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 16px;
-  background: linear-gradient(135deg, rgba(165,216,248,0.15), rgba(165,216,248,0.05));
-  border: 1px solid var(--ice-border);
-  display: grid;
-  place-items: center;
-  margin-bottom: 24px;
-  color: var(--ice-3);
-}
-.safety-card h4 { font-size: 20px; margin-bottom: 12px; color: var(--text); }
-.safety-card p { color: var(--text-dim); font-size: 14px; line-height: 1.6; }
-.safety-card .highlight {
-  display: inline-block;
-  margin-top: 16px;
-  padding: 4px 10px;
-  background: rgba(165,216,248,0.1);
-  border: 1px solid var(--ice-border);
-  border-radius: 4px;
-  font-size: 11px;
-  color: var(--ice-3);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+.flow-card-title {
+  font-size: 20px;
   font-weight: 700;
+  color: #fff;
+  margin-bottom: 12px;
 }
-@media (max-width: 960px) { .safety-grid { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 520px) { .safety-grid { grid-template-columns: 1fr; } }
-</style>
-
-<section class="section" id="safety">
-  <div class="section-head">
-    <div class="section-eyebrow" data-i18n="safety.eyebrow">Доверие на коде, не на слове</div>
-    <h2 data-i18n="safety.title_html" data-i18n-html>Безопасность <span class="ice-text">смарт-контракта</span></h2>
-    <p class="section-lead" data-i18n="safety.lead">Код невозможно обмануть. Даже если основатель завтра пропадёт — деньги вернутся автоматически. Это прошито в блокчейне.</p>
-  </div>
-
-  <div class="safety-grid">
-    <div class="safety-card">
-      <div class="safety-icon">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 2 L20 6 V12 C20 17 16 21 12 22 C8 21 4 17 4 12 V6 Z"/>
-          <path d="M9 12 L11 14 L15 10"/>
-        </svg>
-      </div>
-      <h4 data-i18n="safety.card1_h4">Аудит безопасности</h4>
-      <p data-i18n="safety.card1_p">Смарт-контракт задеплоен в opBNB. Адрес публичный. Код прошёл аудит — 19 параметров безопасности проверены, все критические замечания закрыты.</p>
-      <div class="highlight" data-i18n="safety.card1_highlight">19 параметров · audit passed</div>
-    </div>
-
-    <div class="safety-card">
-      <div class="safety-icon">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="8" width="18" height="12" rx="2"/>
-          <path d="M7 8 V6 C7 4 9 3 12 3 C15 3 17 4 17 6 V8"/>
-          <circle cx="12" cy="14" r="2"/>
-        </svg>
-      </div>
-      <h4 data-i18n="safety.card2_h4">Твоя доля — твой NFT</h4>
-      <p data-i18n="safety.card2_p">Когда покупаешь долю — получаешь NFT-токен на свой SafePal. С номером лота и количеством долей. Никто не может его забрать. Это твой актив.</p>
-      <div class="highlight" data-i18n="safety.card2_highlight">NFT · SafePal wallet</div>
-    </div>
-
-    <div class="safety-card">
-      <div class="safety-icon">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 12 A9 9 0 1 1 21 12 A9 9 0 1 1 3 12"/>
-          <path d="M12 7 V12 L15 14"/>
-        </svg>
-      </div>
-      <h4 data-i18n="safety.card3_h4">Авто-возврат через 90 дней</h4>
-      <p data-i18n="safety.card3_p">Если админ не проявляет активности 90 дней — смарт-контракт автоматически возвращает USDT всем участникам. Без моего участия. Отменить нельзя.</p>
-      <div class="highlight" data-i18n="safety.card3_highlight">90 дней · dead-man switch</div>
-    </div>
-
-    <div class="safety-card">
-      <div class="safety-icon">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 2 L22 20 H2 Z"/>
-          <path d="M12 9 V14"/>
-          <circle cx="12" cy="17" r="0.5" fill="currentColor"/>
-        </svg>
-      </div>
-      <h4 data-i18n="safety.card4_h4">Экстренный возврат</h4>
-      <p data-i18n="safety.card4_p">Если лот не состоялся или поставщик подвёл — администратор возвращает USDT всем участникам. Токены сжигаются. Никто не остаётся с обесцененным токеном.</p>
-      <div class="highlight" data-i18n="safety.card4_highlight">Full refund · burn tokens</div>
-    </div>
-  </div>
-</section>
-
-<!-- ===== SECTION: ROLES ===== -->
-<style>
-.roles-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 24px;
-  max-width: 1200px;
-  margin: 0 auto;
-}
-.role-card {
-  padding: 48px 36px;
-  background: linear-gradient(180deg, rgba(13,26,46,0.9), rgba(10,15,30,0.6));
-  border: 1px solid rgba(165,216,248,0.12);
-  border-radius: 24px;
-  position: relative;
-  overflow: hidden;
-  transition: all 0.5s;
-}
-.role-card::after {
-  content: '';
-  position: absolute;
-  inset: -50% -50% auto auto;
-  width: 200%;
-  height: 200%;
-  background: radial-gradient(circle, rgba(165,216,248,0.08) 0%, transparent 40%);
-  opacity: 0;
-  transition: opacity 0.5s;
-  pointer-events: none;
-}
-.role-card:hover {
-  border-color: var(--ice-3);
-  transform: translateY(-8px);
-  box-shadow: 0 30px 60px -20px rgba(165,216,248,0.25);
-}
-.role-card:hover::after { opacity: 1; }
-.role-emoji { font-size: 48px; margin-bottom: 20px; display: block; }
-.role-card h3 { font-size: 26px; margin-bottom: 12px; color: var(--ice-3); }
-.role-card .tagline {
-  font-family: 'Manrope', sans-serif;
-  font-style: italic;
-  font-size: 17px;
-  color: var(--text-dim);
-  margin-bottom: 24px;
-  min-height: 50px;
-}
-.role-card ul { list-style: none; display: flex; flex-direction: column; gap: 12px; }
-.role-card li {
+.flow-card-text {
   font-size: 14px;
-  color: var(--text);
-  padding-left: 24px;
-  position: relative;
+  color: rgba(200, 220, 240, 0.65);
+  line-height: 1.5;
+}
+.flow-arrow {
+  font-size: 28px;
+  color: rgba(120, 220, 255, 0.5);
+  font-weight: 300;
+}
+.team-ads-bottom {
+  text-align: center;
+  padding: 32px;
+  background: linear-gradient(135deg, rgba(120, 220, 255, 0.06), rgba(100, 180, 255, 0.04));
+  border: 1px solid rgba(120, 220, 255, 0.18);
+  border-radius: 20px;
+}
+.team-ads-bottom-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 8px;
+}
+.team-ads-bottom-text {
+  font-size: 15px;
+  color: rgba(200, 220, 240, 0.7);
   line-height: 1.55;
 }
-.role-card li::before {
-  content: '◆';
-  position: absolute;
-  left: 0;
-  color: var(--ice-3);
-  font-size: 10px;
-  top: 4px;
+.team-ads-bottom-text strong {
+  color: rgb(180, 230, 255);
 }
-@media (max-width: 960px) { .roles-grid { grid-template-columns: 1fr; } }
+@media (max-width: 820px) {
+  .team-ads-flow {
+    grid-template-columns: 1fr;
+  }
+  .flow-arrow {
+    transform: rotate(90deg);
+    margin: 0 auto;
+  }
+}
 </style>
+<section class="team-ads-section reveal" id="team-ads">
+  <div class="team-ads-eyebrow" data-i18n="teamads.eyebrow">— Партнёрка + реклама —</div>
+  <h2 class="team-ads-title" data-i18n="teamads.title_html" data-i18n-html>
+    Три простых <span class="ice-text">шага</span>
+  </h2>
+  <p class="team-ads-subtitle" data-i18n="teamads.subtitle">
+    Ты ничего не строишь руками. Покупаешь долю — клуб делает остальное.
+  </p>
 
-<section class="section" id="roles">
-  <div class="section-head">
-    <div class="section-eyebrow" data-i18n="roles.eyebrow">Кому это подходит</div>
-    <h2 data-i18n="roles.title_html" data-i18n-html>Три пути. <span class="ice-text">Один клуб.</span></h2>
-    <p class="section-lead" data-i18n="roles.lead">Клуб — не для всех. Это для тех, кто готов думать не на неделю, а на годы. Выбери роль — или совмещай все три.</p>
+  <div class="team-ads-flow reveal-stagger">
+    <div class="flow-card">
+      <div class="flow-card-icon">💎</div>
+      <div class="flow-card-title" data-i18n="teamads.card1_title">Покупаешь долю</div>
+      <div class="flow-card-text" data-i18n="teamads.card1_text">От $10. Получаешь токены DCT в свой кошелёк.</div>
+    </div>
+
+    <div class="flow-arrow">→</div>
+
+    <div class="flow-card">
+      <div class="flow-card-icon">👥</div>
+      <div class="flow-card-title" data-i18n="teamads.card2_title">Команда строится</div>
+      <div class="flow-card-text" data-i18n="teamads.card2_text">9 уровней автоматически. Проценты со всех — на твой кошелёк.</div>
+    </div>
+
+    <div class="flow-arrow">→</div>
+
+    <div class="flow-card">
+      <div class="flow-card-icon">📡</div>
+      <div class="flow-card-title" data-i18n="teamads.card3_title">Реклама работает</div>
+      <div class="flow-card-text" data-i18n="teamads.card3_text">GWAD-площадка приводит клиентов. Тебе не нужно никого искать.</div>
+    </div>
   </div>
 
-  <div class="roles-grid">
-    <div class="role-card">
-      <span class="role-emoji">💎</span>
-      <h3 data-i18n="roles.role1_h3">Инвестор</h3>
-      <p class="tagline" data-i18n="roles.role1_tagline">«Есть свободные $100. Хочу сохранить и приумножить. Понимаю, что камень надёжнее любой монеты.»</p>
-      <ul>
-        <li data-i18n="roles.role1_li1">Порог входа от $50 — без кредитов</li>
-        <li data-i18n="roles.role1_li2">Гарантия 12% в USDT + рост токена</li>
-        <li data-i18n="roles.role1_li3">Реальный актив в твоём кошельке</li>
-        <li data-i18n="roles.role1_li4">Выход в любой момент через P2P</li>
-      </ul>
-    </div>
-
-    <div class="role-card">
-      <span class="role-emoji">🎯</span>
-      <h3 data-i18n="roles.role2_h3">Владелец канала</h3>
-      <p class="tagline" data-i18n="roles.role2_tagline">«Не хочу никого уговаривать. Запущу рекламу раз — система приведёт клиентов за меня.»</p>
-      <ul>
-        <li data-i18n="roles.role2_li1">Реклама GWAD от $5 — один заказ</li>
-        <li data-i18n="roles.role2_li2">Клиенты идут 24/7, автоматически</li>
-        <li data-i18n="roles.role2_li3">Каждый закрепляется в твоей сетке навсегда</li>
-        <li data-i18n="roles.role2_li4">Проценты с 9 уровней — пассивно</li>
-      </ul>
-    </div>
-
-    <div class="role-card">
-      <span class="role-emoji">🏢</span>
-      <h3 data-i18n="roles.role3_h3">Предприниматель</h3>
-      <p class="tagline" data-i18n="roles.role3_tagline">«У меня бизнес. Ищу новые направления. Интересует ювелирное производство под брендом клуба.»</p>
-      <ul>
-        <li data-i18n="roles.role3_li1">Процент с продаж всех изделий</li>
-        <li data-i18n="roles.role3_li2">Доступ к закрытому B2B-потоку</li>
-        <li data-i18n="roles.role3_li3">Рост токена до +720% на ювелирке</li>
-        <li data-i18n="roles.role3_li4">Вход в экосистему GlobalWay</li>
-      </ul>
+  <div class="team-ads-bottom">
+    <div class="team-ads-bottom-title" data-i18n="teamads.bottom_title">Старая партнёрская механика — новый двигатель</div>
+    <div class="team-ads-bottom-text" data-i18n="teamads.bottom_text_html" data-i18n-html>
+      Сетку строит не ты — <strong>её строит реклама</strong>. Клиенты закрепляются навсегда. Проценты капают с 9 уровней. Ты владеешь построенной машиной.
     </div>
   </div>
 </section>
@@ -2647,9 +2059,9 @@ h1, h2, h3, h4 {
 
 <section class="section cta-section" id="cta">
   <div class="cta-wrap">
-    <div class="section-eyebrow" data-i18n="finalcta.eyebrow">Твой следующий шаг</div>
-    <h2 data-i18n="finalcta.title_html" data-i18n-html>Пятнадцать минут<br>и <span class="ice-text">от $50</span></h2>
-    <p class="lead" data-i18n="finalcta.lead">От «никогда не слышал» до первой доли в настоящем бриллианте. Вот весь путь.</p>
+    <div class="section-eyebrow" data-i18n="finalcta.eyebrow">Раз в жизни</div>
+    <h2 data-i18n="finalcta.title_html" data-i18n-html>Неужели это<br><span class="ice-text">правда возможно?</span></h2>
+    <p class="lead" data-i18n="finalcta.lead">Купить долю настоящего бриллианта от $10. Получить токен в блокчейне. Заработать +420% за год. Без посредников, без скрытых комиссий. Такое предложение бывает раз в жизни.</p>
 
     <div class="steps-flow">
       <div class="flow-step">
@@ -2665,7 +2077,7 @@ h1, h2, h3, h4 {
       <div class="flow-step">
         <span class="n" data-i18n="finalcta.step3_n">Шаг 03</span>
         <h5 data-i18n="finalcta.step3_h5">Пополни USDT</h5>
-        <p data-i18n="finalcta.step3_p">Сеть opBNB. Минимум $50 (зависит от выбранного лота). Сеть — только opBNB.</p>
+        <p data-i18n="finalcta.step3_p">Сеть opBNB. Минимум $10 за долю. Без длинных переводов.</p>
       </div>
       <div class="flow-step">
         <span class="n" data-i18n="finalcta.step4_n">Шаг 04</span>
@@ -2680,10 +2092,10 @@ h1, h2, h3, h4 {
     </div>
 
     <div class="big-cta">
-      <h3 data-i18n="finalcta.big_h3_html" data-i18n-html>Diamond Club — <span class="ice-text">вместе мы сила</span></h3>
-      <p data-i18n="finalcta.big_p">Мы построили клуб, где каждый — от студентки до крупного предпринимателя — может стать совладельцем настоящего бриллианта. С порогом от $50.</p>
+      <h3 data-i18n="finalcta.big_h3_html" data-i18n-html>Такое <span class="ice-text">бывает один раз</span></h3>
+      <p data-i18n="finalcta.big_p">Двери в индустрию бриллиантов открыты для каждого. От $10. Без капитала. Без посредников. Без обещаний — только смарт-контракт и реальный камень. Завтра — это нормально. Сегодня — пока ещё удивительно.</p>
       <div class="cta-buttons">
-        <a href="https://gwad.ink/" data-cta="gwad" class="btn btn-primary btn-large" data-i18n="finalcta.cta_primary">Войти в клуб на gwad.ink →</a>
+        <a href="https://gws.ink/cabinet" data-cta="cabinet" class="btn btn-primary btn-large" data-i18n="finalcta.cta_primary">Войти в клуб →</a>
         <a href="#concept" class="btn btn-ghost btn-large" data-i18n="finalcta.cta_secondary">Посмотреть снова</a>
       </div>
     </div>
@@ -3019,6 +2431,190 @@ document.querySelectorAll('a[href^="#"]').forEach(a => {
     }
   });
 });
+</script>
+
+<!-- ═══════════════════════════════════════════════════════
+     АНИМАЦИИ ПОЯВЛЕНИЯ ПРИ ПРОКРУТКЕ (IntersectionObserver)
+     Активирует .reveal/.reveal-stagger когда элемент виден.
+     ═══════════════════════════════════════════════════════ -->
+<script>
+(function () {
+  // Проверка поддержки и настройки prefers-reduced-motion
+  if (!('IntersectionObserver' in window)) {
+    // Старые браузеры — показываем сразу
+    document.querySelectorAll('.reveal, .reveal-stagger').forEach(el => el.classList.add('revealed'));
+    return;
+  }
+
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (prefersReducedMotion) {
+    document.querySelectorAll('.reveal, .reveal-stagger').forEach(el => el.classList.add('revealed'));
+    return;
+  }
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('revealed');
+        observer.unobserve(entry.target); // показали — больше не следим
+      }
+    });
+  }, {
+    threshold: 0.12,            // 12% элемента видно — триггер
+    rootMargin: '0px 0px -60px' // начинать чуть раньше чем элемент полностью в viewport
+  });
+
+  // Подключаемся ко всем элементам с .reveal и .reveal-stagger
+  document.querySelectorAll('.reveal, .reveal-stagger').forEach(el => observer.observe(el));
+})();
+</script>
+
+<!-- ═══════════════════════════════════════════════════════
+     ПОДТЯГИВАНИЕ ДАННЫХ ПУЛА ИЗ БЛОКЧЕЙНА (v2.6)
+     Читает ClubPoolsV26, показывает первый активный пул.
+     Если активных нет — скрывает секцию #lot.
+     ═══════════════════════════════════════════════════════ -->
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.umd.min.js"></script>
+<script>
+(function () {
+  const RPC_URL = 'https://opbnb-mainnet-rpc.bnbchain.org';
+  const CLUB_POOLS = '0xb408278465202dea461c728BF5AA7762f3C5bC78'; // v2.6 mainnet
+
+  // Минимальный ABI — только то что нужно для чтения
+  const POOLS_ABI = [
+    'function poolsCount() view returns (uint256)',
+    'function pools(uint256) view returns (string name, uint256 targetUSDT, uint256 raisedUSDT, uint256 dctMinted, uint8 status, uint256 costBasis, uint256 sharePrice, uint256 createdAt, uint256 closedAt, uint256 partnersCount, uint8 minLevel, string metaUrl)',
+  ];
+
+  // Статусы пула
+  const POOL_STATUS = ['Open', 'InGem', 'Sold', 'Drained', 'Cycling'];
+  // Активные для отображения на лендинге: Open + Cycling
+  const ACTIVE_STATUSES = [0, 4];
+
+  function formatUSDT(wei) {
+    try {
+      const eth = ethers.formatUnits(wei, 18);
+      const num = parseFloat(eth);
+      if (num >= 1000) return num.toLocaleString('en-US', { maximumFractionDigits: 0 });
+      return num.toFixed(2);
+    } catch { return '0'; }
+  }
+
+  function hideSection(reason) {
+    console.log('[lot-loader]', reason);
+    const sec = document.getElementById('lot');
+    if (sec) sec.style.display = 'none';
+  }
+
+  async function loadActivePool() {
+    try {
+      const provider = new ethers.JsonRpcProvider(RPC_URL);
+      const contract = new ethers.Contract(CLUB_POOLS, POOLS_ABI, provider);
+
+      // Получаем общее количество пулов
+      const count = Number(await contract.poolsCount());
+      console.log('[lot-loader] всего пулов:', count);
+      if (count === 0) return hideSection('Пулов нет');
+
+      // Ищем первый активный пул (Open или Cycling)
+      let activePool = null;
+      let activePoolId = 0;
+
+      for (let i = 1; i <= count; i++) {
+        try {
+          const p = await contract.pools(i);
+          const status = Number(p.status);
+          if (ACTIVE_STATUSES.includes(status)) {
+            activePool = p;
+            activePoolId = i;
+            console.log('[lot-loader] активный пул #' + i + ':', p.name, 'status:', POOL_STATUS[status]);
+            break; // берём первый активный
+          }
+        } catch (e) {
+          console.warn('[lot-loader] ошибка чтения пула #' + i + ':', e.message);
+        }
+      }
+
+      if (!activePool) return hideSection('Нет активных пулов (Open/Cycling)');
+
+      // Заполняем данные на странице
+      const name = activePool.name || ('Пул #' + activePoolId);
+      const targetUSDT = parseFloat(ethers.formatUnits(activePool.targetUSDT, 18));
+      const raisedUSDT = parseFloat(ethers.formatUnits(activePool.raisedUSDT, 18));
+      const sharePrice = parseFloat(ethers.formatUnits(activePool.sharePrice, 18));
+      const costBasis = parseFloat(ethers.formatUnits(activePool.costBasis, 18));
+      const partnersCount = Number(activePool.partnersCount);
+      const status = Number(activePool.status);
+
+      // Количество долей (приблизительно = target / sharePrice)
+      const totalShares = sharePrice > 0 ? Math.round(targetUSDT / sharePrice) : 0;
+      const soldShares = sharePrice > 0 ? Math.round(raisedUSDT / sharePrice) : 0;
+
+      // Заголовок и название
+      const titleEl = document.querySelector('[data-i18n="lot.title_html"]');
+      if (titleEl && name) {
+        titleEl.innerHTML = name;
+        titleEl.removeAttribute('data-i18n'); // отключаем перевод т.к. подставили из контракта
+        titleEl.removeAttribute('data-i18n-html');
+      }
+
+      // Спеки (значения справа)
+      const setSpecValue = (label, value) => {
+        const specs = document.querySelectorAll('.lot-specs .spec-item');
+        specs.forEach(item => {
+          const lbl = item.querySelector('.label');
+          const val = item.querySelector('.value');
+          if (lbl && val && lbl.getAttribute('data-i18n') === label) {
+            val.textContent = value;
+          }
+        });
+      };
+
+      if (costBasis > 0) {
+        setSpecValue('lot.spec_purchase_label', '$' + costBasis.toLocaleString('en-US', { maximumFractionDigits: 0 }));
+      }
+      setSpecValue('lot.spec_shares_label', totalShares.toString());
+
+      // Цена за долю
+      const priceEl = document.querySelector('.price-row .main');
+      if (priceEl && sharePrice > 0) {
+        priceEl.textContent = '$' + sharePrice.toLocaleString('en-US', { maximumFractionDigits: 0 });
+      }
+
+      // Прогресс (если идёт сбор)
+      if (status === 0 || status === 4) {
+        const beforeEl = document.getElementById('timer-before-start');
+        const collectingEl = document.getElementById('timer-collecting');
+        if (beforeEl) beforeEl.style.display = 'none';
+        if (collectingEl) collectingEl.style.display = 'block';
+
+        const soldEl = document.getElementById('lot-sold');
+        const totalEl = document.getElementById('lot-total');
+        const fillEl = document.getElementById('lot-progress-fill');
+        if (soldEl) soldEl.textContent = soldShares;
+        if (totalEl) totalEl.textContent = totalShares;
+        if (fillEl && totalShares > 0) {
+          const pct = Math.min(100, (soldShares / totalShares) * 100);
+          fillEl.style.width = pct + '%';
+        }
+      }
+
+      console.log('[lot-loader] данные пула обновлены:', {
+        name, targetUSDT, raisedUSDT, sharePrice, costBasis, partnersCount, status: POOL_STATUS[status]
+      });
+    } catch (err) {
+      console.error('[lot-loader] ошибка:', err);
+      hideSection('Ошибка чтения контракта: ' + err.message);
+    }
+  }
+
+  // Запуск после загрузки страницы
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', loadActivePool);
+  } else {
+    loadActivePool();
+  }
+})();
 </script>
 
 </body>
