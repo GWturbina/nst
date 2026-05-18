@@ -1,14 +1,14 @@
 {
   "meta": {
     "title": "Diamond Club — Own a share of a real diamond",
-    "description": "Investment shares of natural diamonds from $10. DCT token on opBNB blockchain. Real stone behind every token. GIA certificate.",
+    "description": "Investment shares of natural diamonds from $10. DCT token on opBNB blockchain. Real diamond behind every token. GIA certificate.",
     "og_title": "💎 Diamond Club — Diamonds from $10 per share",
     "og_description": "Certified natural diamond. Up to −70% off market. DCT token in your wallet. From $10."
   },
   "hero": {
     "eyebrow": "Fractional ownership · opBNB · Smart contract",
     "title_html": "Investments in <span class=\"accent ice-text\">natural</span><br> <span class=\"ice-text\">diamonds</span>",
-    "subtitle": "Certified natural stone. No jewelry markup. No middlemen. DCT token on blockchain — your share is in your wallet.",
+    "subtitle": "Certified natural diamond. No jewelry markup. No middlemen. DCT token on blockchain — your share is in your wallet.",
     "price_label_html": "Entry — <span class=\"amount ice-text\">from $10</span>",
     "cta_primary": "Enter the club →",
     "trust1_label": "minimum per token · force majeure",
@@ -55,7 +55,7 @@
     "eyebrow": "Why this matters now",
     "title_html": "The diamond market is <span class=\"ice-text\">open.</span><br>For everyone.",
     "lead": "For 150 years natural diamonds have grown in price without a single major drawdown. But ordinary people were locked out of this market. Until today.",
-    "quote": "For the first time in the world — tokenized investments in natural diamonds inside a club asset system.",
+    "quote": "How one hundred dollars turn into eight hundred and twenty dollars. In one year. Through a share of a real diamond.",
     "old_h3": "The old market",
     "old_sub": "How it always was",
     "old_item1_title": "$5,000 minimum",
@@ -70,36 +70,36 @@
     "old_item5_desc": "The real return of an ordinary lone investor.",
     "new_h3": "Diamond Club",
     "new_sub": "How the club works",
-    "new_item1_title": "From $50 entry threshold",
+    "new_item1_title": "$10 entry threshold",
     "new_item1_desc": "Minimum share — the cost of dinner. Size depends on the diamond in the lot.",
     "new_item2_title": "Wholesale price",
-    "new_item2_desc": "The diamond is bought directly from the producer. No jewelry markup.",
+    "new_item2_desc": "Diamond is bought directly from manufacturer. No jewelry markup.",
     "new_item3_title": "Club vault",
-    "new_item3_desc": "Diamond in a secure vault. Your share — NFT in your SafePal.",
+    "new_item3_desc": "Diamond in secure storage. Your share is a token in your SafePal.",
     "new_item4_title": "P2P in one click",
     "new_item4_desc": "Sell your token on the club exchange. No buyers, no losses.",
-    "new_item5_title": "12% USDT + up to 420% token",
-    "new_item5_desc": "Club guarantee in dollars plus the growth of the DCT token value."
+    "new_item5_title": "From $0.56 + up to 820% token",
+    "new_item5_desc": "Club guarantee in force majeure, plus DCT token price growth."
   },
   "how": {
     "eyebrow": "Five steps",
     "title_html": "How it <span class=\"ice-text\">works</span>",
     "lead": "From your first share to profit — five transparent steps. All on the blockchain. No middlemen.",
     "step1_h4": "You buy a share",
-    "step1_p": "Open the cabinet, choose your Diamond. Pay USDT. From $50 per share — depends on the lot.",
+    "step1_p": "Go to your cabinet, choose a Diamond. Pay USDT. From $10 per share — depends on the lot.",
     "step2_h4": "You receive DCT",
-    "step2_p": "85% of your amount turns into DCT tokens at the starting price of $0.50. 80 tokens per share.",
+    "step2_p": "80% of your amount turns into DCT tokens at starting price $0.50. 80 tokens per share.",
     "step3_h4": "The club works",
-    "step3_p": "The club rotates the Diamond: sells — buys — sells again. on average 3–6 cycles per year.",
+    "step3_p": "Club cycles the Diamond: sells — buys — sells again. 3–6 cycles per year.",
     "step4_h4": "The token grows",
     "step4_p": "The profit from each sale goes into the token backing. The DCT price grows for all owners simultaneously.",
     "step5_h4": "You take your profit",
-    "step5_p": "At any time, sell your tokens at the new price. Plus $0.56 DCT in case of force majeure"
+    "step5_p": "Sell tokens at new price anytime. Plus $0.56 club guarantee in force majeure."
   },
   "finalcta": {
     "eyebrow": "Time to decide",
     "title_html": "These doors<br><span class=\"ice-text\">open once in a lifetime</span>",
-    "lead": "The diamond market was closed for 150 years. Today it has opened for everyone. Not for millionaires — for you. From $10. With a token in your wallet. With a real stone behind that token.",
+    "lead": "The diamond market was closed for 150 years. Today it has opened for everyone. Not for millionaires — for you. From $10. With a token in your wallet. With a real diamond behind that token.",
     "step1_n": "Step 01",
     "step1_h5": "Sign up",
     "step1_p": "At gws.ink. 3 minutes. Free.",
@@ -149,7 +149,7 @@
     "col_no_cert": "No cert.",
     "col_cert": "With cert.",
     "discount_html": "Difference <strong>up to −70%</strong> · all works for you",
-    "note": "Store prices — open data from jewelry chains. Purchase prices — our direct contracts with the diamond house. GIA certificate for every stone."
+    "note": "Store prices — open data from jewelry chains. Purchase prices — our direct contracts with the diamond house. GIA certificate for every diamond."
   },
   "teamads": {
     "eyebrow": "— The machine works itself —",
