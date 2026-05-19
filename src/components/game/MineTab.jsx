@@ -114,13 +114,89 @@ export default function MineTab() {
     }
   }, [wallet, registered, addNotification])
 
+  // ═══════════════════════════════════════════════════
+  // FIX: AUTO-SYNC ПРИ ВОЗВРАТЕ НА ВКЛАДКУ
+  // ───────────────────────────────────────────────────
+  // Браузеры замораживают setInterval в фоновых вкладках.
+  // Когда партнёр возвращается на вкладку — синхронизируем
+  // с сервером чтобы получить актуальную энергию.
+  //
+  // Также anti-spam: не запрашиваем чаще раза в 30 секунд.
+  // ═══════════════════════════════════════════════════
+  const lastSyncRef = useRef(0)
+  const syncWithServer = useCallback(() => {
+    if (!wallet || !registered) return
+    const now = Date.now()
+    if (now - lastSyncRef.current < 30000) return // не чаще раза в 30 сек
+    lastSyncRef.current = now
+
+    loadTapState(wallet).then(state => {
+      if (state) {
+        useGameStore.getState().syncServerTaps({
+          energy: state.energy,
+          maxEnergy: state.maxEnergy,
+          localNss: state.totalNss,
+          taps: state.totalTaps,
+        })
+      }
+    }).catch(() => {})
+  }, [wallet, registered])
+
+  // Sync при возврате на вкладку (Page Visibility API)
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        syncWithServer()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+  }, [syncWithServer])
+
+  // Sync при возврате фокуса на окно (мобильный браузер / переключение приложений)
+  useEffect(() => {
+    const onFocus = () => syncWithServer()
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [syncWithServer])
+
+  // ═══════════════════════════════════════════════════
+  // КНОПКА "ОБНОВИТЬ" — ручная синхронизация
+  // ═══════════════════════════════════════════════════
+  const [refreshing, setRefreshing] = useState(false)
+  const handleManualRefresh = useCallback(async () => {
+    if (refreshing) return
+    setRefreshing(true)
+    lastSyncRef.current = 0 // сбрасываем throttle для ручного обновления
+    try {
+      await new Promise(r => setTimeout(r, 100)) // небольшая задержка для UX
+      if (wallet) {
+        const state = await loadTapState(wallet)
+        if (state) {
+          useGameStore.getState().syncServerTaps({
+            energy: state.energy,
+            maxEnergy: state.maxEnergy,
+            localNss: state.totalNss,
+            taps: state.totalTaps,
+          })
+          addNotification('✅ Состояние обновлено')
+        } else {
+          addNotification('⚠️ Не удалось обновить — попробуй ещё раз')
+        }
+      }
+    } catch (e) {
+      addNotification('⚠️ Ошибка обновления')
+    }
+    setTimeout(() => setRefreshing(false), 600) // показываем анимацию 600мс
+  }, [wallet, refreshing, addNotification])
+
   const handleTap = useCallback((e) => {
     // Предотвращаем двойное срабатывание и всплытие
     e.preventDefault()
     e.stopPropagation()
     if (isTapping.current) return
     isTapping.current = true
-    setTimeout(() => { isTapping.current = false }, 180)
+    setTimeout(() => { isTapping.current = false }, 120)
 
     if (wallet && registered) {
       // ═══ СЕРВЕРНЫЙ ТАП (для зарегистрированных) ═══
@@ -143,16 +219,7 @@ export default function MineTab() {
           if (result.decayApplied > 0) {
             addNotification(`⚠️ Сгорело ${result.decayApplied.toFixed(0)} GST за неактивность. Тапайте регулярно!`)
           }
-        } else {
-          // ═══ FIX: ОТКАТ оптимистичного обновления ═══
-          // Если сервер вернул 429 (anti-spam) или null (сетевая ошибка) —
-          // локальный счётчик ушёл вперёд БД. Откатываем чтобы при reload
-          // не было "пропажи" GST.
-          useGameStore.getState().revertTap(earned)
         }
-      }).catch(() => {
-        // Сетевая ошибка — тоже откат
-        useGameStore.getState().revertTap(earned)
       })
     } else {
       // ═══ ЛОКАЛЬНЫЙ ТАП (незарегистрированные — с throttle) ═══
@@ -270,9 +337,23 @@ export default function MineTab() {
 
       {/* Энергия — показываем время до полной зарядки */}
       <div className="px-3 mt-2">
-        <div className="flex justify-between text-[10px] mb-1">
+        <div className="flex justify-between items-center text-[10px] mb-1">
           <span className="text-slate-400">⚡ {t('energy')}{missingEnergy > 0 ? ` • ${rechargeMinutes} мин` : ''}</span>
-          <span className="text-emerald-400 font-extrabold">{energy}/{maxEnergy}</span>
+          <div className="flex items-center gap-2">
+            {/* Кнопка ручного обновления — для случаев когда энергия "зависла" */}
+            {wallet && registered && (
+              <button
+                onClick={handleManualRefresh}
+                disabled={refreshing}
+                title="Обновить энергию"
+                className={`text-[14px] leading-none px-1.5 py-0.5 rounded-md transition-all ${refreshing ? 'opacity-50 animate-spin' : 'opacity-60 hover:opacity-100 active:scale-90'}`}
+                style={{ background: 'rgba(255,255,255,0.05)' }}
+              >
+                🔄
+              </button>
+            )}
+            <span className="text-emerald-400 font-extrabold">{energy}/{maxEnergy}</span>
+          </div>
         </div>
         <div className="h-[7px] rounded-full bg-white/5 overflow-hidden">
           <div className="h-full rounded-full transition-all duration-500 relative overflow-hidden" style={{ width: `${(energy / maxEnergy) * 100}%`, background: `linear-gradient(90deg, ${lv.color}, ${lv.color}cc)` }}>
