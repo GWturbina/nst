@@ -200,9 +200,26 @@ export default function AutoRegisterModal() {
       }
 
       // ═══ PRE-CHECK 2: Хватает ли BNB на газ? ═══
-      const currentBnb = parseFloat(useGameStore.getState().bnb || '0')
-      if (currentBnb < 0.001) {
-        setErrorMsg(`Недостаточно BNB на газ. У вас ${currentBnb.toFixed(4)} BNB, нужно минимум 0.005 BNB. Пополните кошелёк.`)
+      // Берём свежий баланс из RPC, не из store. store.bnb не сохраняется
+      // в persist, обновляется раз в 30 сек и падает в 0 при ошибке RPC,
+      // из-за чего юзер с реальным балансом получал ложное "Недостаточно BNB".
+      // Если RPC недоступен — pre-check пропускаем, контракт сам ревёртнет
+      // с insufficient funds (это обрабатывается в catch ниже).
+      const MIN_BNB = 0.001
+      let currentBnb = parseFloat(useGameStore.getState().bnb || '0')
+      let bnbFromRpc = false
+      try {
+        const fresh = await C.getBalances(wallet)
+        const freshBnb = parseFloat(fresh?.bnb || '0')
+        currentBnb = freshBnb
+        bnbFromRpc = true
+        // Подтянем актуальный баланс в store, чтобы Header тоже обновился
+        useGameStore.getState().updateBalances(fresh)
+      } catch {
+        // RPC недоступен — оставляем значение из store, pre-check пропускаем
+      }
+      if (bnbFromRpc && currentBnb < MIN_BNB) {
+        setErrorMsg(`Недостаточно BNB на газ. У вас ${currentBnb.toFixed(4)} BNB, нужно минимум ${MIN_BNB} BNB. Пополните кошелёк.`)
         setRegistering(false)
         return
       }
