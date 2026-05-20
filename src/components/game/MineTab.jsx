@@ -200,6 +200,21 @@ export default function MineTab() {
 
     if (wallet && registered) {
       // ═══ СЕРВЕРНЫЙ ТАП (для зарегистрированных) ═══
+      // Pre-check: если подписи нет — authFetch в serverTap бросит и тап
+      // потеряется на сервере, но локально успеет засчитаться (+0.01 GST,
+      // -1 энергия). При следующей синхронизации серверный state перекроет
+      // локальный и GST "испаряются" — отсюда жалоба "тапалка через раз,
+      // надо чистить кеш". Лучше сразу остановить и попросить переподпись.
+      const { authSig } = useGameStore.getState()
+      if (!authSig) {
+        isTapping.current = false
+        if (!window.__dcAuthWarnedTap) {
+          window.__dcAuthWarnedTap = true
+          addNotification('⚠️ Подпись кошелька устарела. Открой меню кошелька в шапке и переподключи.')
+        }
+        return
+      }
+
       // Оптимистичное обновление UI + серверная верификация
       const earned = doTap()
       if (!earned) { isTapping.current = false; return }
@@ -219,6 +234,11 @@ export default function MineTab() {
           if (result.decayApplied > 0) {
             addNotification(`⚠️ Сгорело ${result.decayApplied.toFixed(0)} GST за неактивность. Тапайте регулярно!`)
           }
+        } else {
+          // Сервер не подтвердил тап (throttle / нет энергии / сетевая
+          // ошибка / истёкшая подпись). Откатываем локальное изменение,
+          // иначе при следующем loadTapState серверный state "украдёт" GST.
+          useGameStore.getState().revertTap(earned)
         }
       })
     } else {
