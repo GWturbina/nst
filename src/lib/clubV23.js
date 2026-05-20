@@ -488,11 +488,17 @@ export async function claimDrainedPool(poolId) {
  * @param {string} name — название пула
  * @param {number|string} targetUSDT — цель сбора в USDT
  * @param {string} metaUrl — IPFS/HTTP URL с фотками+метаданными
+ * @param {number} minLevel — минимальный уровень GlobalWay для участия (0-255, uint8)
  * @returns {Promise<{poolId: number, receipt: object}>} ID созданного пула + квитанция
  */
-export async function createPool(name, targetUSDT, metaUrl = '') {
+export async function createPool(name, targetUSDT, metaUrl = '', minLevel = 4) {
   const c = getContract('ClubPools', CLUBPOOLS_ABI)
-  const tx = await c.createPool(String(name), parse(targetUSDT), String(metaUrl || ''))
+  // ★ ФИКС: ABI ClubPools.createPool принимает 4 параметра:
+  // (string name, uint256 targetUSDT, string metaUrl, uint8 minLevel).
+  // Раньше передавали 3 — ethers падал с "no matching fragment".
+  // minLevel — uint8, ограничиваем диапазон чтобы не уронить транзакцию.
+  const ml = Math.max(0, Math.min(255, parseInt(minLevel) || 4))
+  const tx = await c.createPool(String(name), parse(targetUSDT), String(metaUrl || ''), ml)
   const receipt = await tx.wait()
 
   // Парсим event PoolCreated чтобы получить присвоенный poolId
@@ -530,15 +536,15 @@ export async function createPool(name, targetUSDT, metaUrl = '') {
  * АЛИАС старого имени для совместимости с LotsAdmin.
  * Старый вызов: createLotOnChain(targetUSDT, sharePrice, minGwLevel, secret, opts{name, fundraisingDays})
  *
- * В новой модели sharePrice/minGwLevel/secret/fundraisingDays игнорируются —
- * они задаются константами в контракте. Передаём только name + targetUSDT + metaUrl.
+ * В новой модели sharePrice/secret/fundraisingDays игнорируются —
+ * они задаются константами в контракте. Передаём name + targetUSDT + metaUrl + minGwLevel.
  *
  * @returns {Promise<{poolId: number, receipt: object}>} — для совместимости с LotsAdmin
  */
 export async function createLotOnChain(targetUSDT, sharePrice, minGwLevel, secret, opts = {}) {
   const name = opts.name || `Pool ${Date.now()}`
   const metaUrl = opts.metaUrl || opts.photoUrl || ''
-  return await createPool(name, targetUSDT, metaUrl)
+  return await createPool(name, targetUSDT, metaUrl, minGwLevel)
 }
 
 /**
