@@ -194,14 +194,23 @@ export async function POST(request) {
       return NextResponse.json({ ok: false, error: 'sharePrice должен быть > 0' }, { status: 400 })
     }
 
-    // ─── Расчёт цели сбора с учётом распределения 85/5/10 ───
-    // Контракт автоматически делит каждый платёж партнёра:
-    //   85% → котёл пула (на камень)
-    //   5%  → реклама (adsFundAddr)
-    //   10% → маркетинг (9 уровней + фикс)
-    // Чтобы в котле оказался gemCost — партнёрам нужно вложить
-    // ВСЕГО (gemCost / 0.85). Эту сумму и передаём в контракт как targetUSDT.
-    const lotPrice = Math.round(gc * 100 / 85 * 100) / 100  // gemCost / 0.85, округление до центов
+    // ─── Расчёт цели сбора ───
+    // Контракт ClubPools v2.6 (см. ClubPoolsV26.sol строки 39-41, 545-548)
+    // автоматически делит каждый платёж партнёра при вызове buyShare:
+    //   80% → treasury пула (на камень, p.treasuryUSDT и p.raisedUSDT)
+    //   10% → реклама (ClubMarketing.addToAds)
+    //   10% → маркетинг (ClubMarketing.distribute, 9 уровней + фикс)
+    //
+    // targetUSDT в контракте — это значение `raisedUSDT` к которому надо прийти.
+    // Когда raisedUSDT >= targetUSDT → пул переходит в Funded.
+    // Чтобы в treasury накопилось ровно gemCost (= то что админ задал на камень) —
+    // target должен быть равен gemCost. Контракт сам соберёт нужное количество
+    // платежей: партнёры заплатят в сумме gemCost / 0.80 = gemCost × 1.25,
+    // из которых 80% уйдёт в treasury (= gemCost), 10% в маркетинг, 10% в ads.
+    //
+    // (Раньше здесь было `gc / 0.85` — наследие старой модели v2.4, когда
+    // распределение было 85/5/10. В v2.5+ это 80/10/10, и формула стала лишней.)
+    const lotPrice = gc  // target = gemCost ровно, без надбавок
 
     // total_shares — декоративное число для UI (показывает дроби в визуализации).
     // На контракт не влияет.
@@ -554,7 +563,7 @@ export async function PATCH(request) {
       }
 
       // 3. ─── Серверная on-chain проверка ───
-      // Передаём lot_price (= gem_cost / 0.85) — именно эту сумму LotsAdmin
+      // Передаём lot_price (= gem_cost) — именно эту сумму LotsAdmin
       // отправляет в контракт как targetUSDT. Если в контракте targetUSDT
       // совпадает с lot_price из БД — значит деплой прошёл корректно.
       const check = await verifyClubLotsCreation({
