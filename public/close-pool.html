@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Diamond Club — Закрытие пула</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, system-ui, sans-serif;
+    background: linear-gradient(180deg, #0a0a20 0%, #1a1040 100%);
+    color: #fff;
+    min-height: 100vh;
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .wrap {
+    max-width: 540px;
+    width: 100%;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,215,0,0.25);
+    border-radius: 24px;
+    padding: 24px;
+  }
+  h1 { font-size: 18px; color: #ffd700; margin-bottom: 6px; }
+  .sub { font-size: 12px; color: #94a3b8; margin-bottom: 16px; line-height: 1.5; }
+  .pool-card {
+    background: rgba(0,0,0,0.3);
+    padding: 14px;
+    border-radius: 12px;
+    margin-bottom: 8px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .pool-card:hover { border-color: rgba(255,215,0,0.4); }
+  .pool-card.selected {
+    border-color: #ffd700;
+    background: rgba(255,215,0,0.08);
+  }
+  .pool-card .pid { font-size: 11px; color: #94a3b8; }
+  .pool-card .row { display: flex; justify-content: space-between; margin-top: 6px; font-size: 12px; }
+  .pool-card .row .k { color: #94a3b8; }
+  .pool-card .row .v { color: #fff; font-family: monospace; }
+  .pool-card .row .v.green { color: #10b981; }
+  .pool-card .row .v.yellow { color: #fbbf24; }
+  .status-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 700;
+    margin-left: 6px;
+  }
+  .status-open    { background: #10b98140; color: #10b981; }
+  .status-funded  { background: #fbbf2440; color: #fbbf24; }
+  .status-ingem   { background: #3b82f640; color: #3b82f6; }
+  .status-cycling { background: #a855f740; color: #a855f7; }
+  .status-cancel  { background: #ef444440; color: #ef4444; }
+  .status-drained { background: #6b728040; color: #9ca3af; }
+
+  input {
+    width: 100%;
+    padding: 12px;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(255,215,0,0.2);
+    color: #fff;
+    border-radius: 10px;
+    font-size: 15px;
+    font-family: monospace;
+    margin-top: 4px;
+  }
+  label { font-size: 12px; color: #94a3b8; margin-top: 14px; display: block; }
+
+  button {
+    width: 100%;
+    padding: 14px;
+    border-radius: 14px;
+    border: none;
+    font-size: 14px;
+    font-weight: 800;
+    cursor: pointer;
+    margin-top: 12px;
+  }
+  .btn-primary { background: linear-gradient(135deg, #ffd700, #f5a623); color: #000; }
+  .btn-secondary { background: rgba(255,255,255,0.1); color: #fff; }
+  .btn-danger { background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .log {
+    margin-top: 14px;
+    padding: 12px;
+    background: #000;
+    border-radius: 8px;
+    font-family: monospace;
+    font-size: 11px;
+    line-height: 1.6;
+    color: #10b981;
+    max-height: 280px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  .log .e { color: #ef4444; }
+  .log .w { color: #f59e0b; }
+  .log .h { color: #fbbf24; font-weight: bold; }
+
+  .info-box {
+    background: rgba(59,130,246,0.1);
+    border: 1px solid rgba(59,130,246,0.3);
+    border-radius: 12px;
+    padding: 12px;
+    margin-top: 12px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #93c5fd;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>📦 Закрытие пула (recordPurchase)</h1>
+  <div class="sub">
+    Списывает указанную сумму с <code>treasuryUSDT</code> в <code>costBasis</code>,
+    меняет статус пула на <b>InGem</b>. Это сигнал что камень закуплен.<br>
+    Подключайся <b>owner</b> или <b>operator</b> кошельком.
+  </div>
+
+  <button class="btn-secondary" id="connect">🔌 Подключить кошелёк</button>
+
+  <div id="connected" style="display:none">
+    <div class="info-box" id="walletInfo"></div>
+
+    <label>Выбери пул:</label>
+    <div id="pools"></div>
+
+    <label>Сумма для записи (USDT):</label>
+    <input id="amount" type="number" step="0.01" placeholder="например 5600 — стоимость камня">
+    <div class="sub" style="margin-top:6px">
+      По умолчанию подставляется <b>стоимость камня</b> из gem_cost.
+      Можно указать любую сумму ≤ treasury.
+      Остаток (treasury - amount) остаётся в пуле как буфер.
+    </div>
+
+    <button class="btn-primary" id="execute" disabled>📦 Записать покупку камня</button>
+
+    <div class="info-box" style="background:rgba(245,158,11,0.1);border-color:rgba(245,158,11,0.3);color:#fcd34d">
+      <b>⚠️ Что произойдёт:</b><br>
+      1. С treasury пула спишется указанная сумма<br>
+      2. Эта сумма добавится в costBasis<br>
+      3. Статус пула станет «InGem»<br>
+      4. Партнёры увидят что камень закуплен
+    </div>
+  </div>
+
+  <div class="log" id="log">Жму «Подключить кошелёк» чтобы начать.</div>
+</div>
+
+<script>
+const POOLS_ADDR = '0xb408278465202dea461c728BF5AA7762f3C5bC78';
+const OPBNB_HEX = '0xCC';
+
+const SEL_OWNER          = '0x8da5cb5b'; // owner()
+const SEL_OPERATORS      = '0x13e7c9d8'; // operators(address)
+const SEL_POOLS_COUNT    = '0x8c788de0'; // poolsCount()
+const SEL_POOLS          = '0xac4afa38'; // pools(uint256) — public mapping getter (без string полей)
+const SEL_RECORD_PURCHASE = '0x4da6eb23'; // recordPurchase(uint256,uint256)
+
+const STATUS = ['Open', 'Funded', 'InGem', 'Cycling', 'Cancelled', 'Drained'];
+const STATUS_CLASS = ['status-open', 'status-funded', 'status-ingem', 'status-cycling', 'status-cancel', 'status-drained'];
+
+const log = document.getElementById('log');
+const poolsEl = document.getElementById('pools');
+const amountEl = document.getElementById('amount');
+const btnExecute = document.getElementById('execute');
+const btnConnect = document.getElementById('connect');
+
+let selectedPool = null;
+let myAddress = null;
+
+function L(t, cls) {
+  const d = document.createElement('div');
+  if (cls) d.className = cls;
+  d.textContent = t;
+  log.appendChild(d);
+  log.scrollTop = log.scrollHeight;
+}
+function clearLog() { log.innerHTML = ''; }
+
+function getProvider() {
+  return window.safepalProvider || window.ethereum;
+}
+
+// Hex helpers
+function hexPad(n) {
+  // n — число или bigint, padding до 64 hex (32 байта)
+  let h = (typeof n === 'bigint' ? n.toString(16) : Number(n).toString(16));
+  return h.padStart(64, '0');
+}
+function addrTo32(addr) {
+  return '000000000000000000000000' + addr.toLowerCase().replace(/^0x/, '');
+}
+function hexToBigInt(hex) {
+  return BigInt(hex.startsWith('0x') ? hex : '0x' + hex);
+}
+function formatUSDT(weiBig) {
+  // USDT 18 decimals → красивая строка с 2 знаками
+  const s = weiBig.toString().padStart(19, '0');
+  const intPart = s.slice(0, -18) || '0';
+  const fracPart = s.slice(-18, -16); // 2 знака
+  return Number(intPart + '.' + fracPart).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function parseUSDT(str) {
+  // "5600.5" → BigInt 5600500000000000000000
+  const [intPart, fracPart = ''] = String(str).replace(',', '.').split('.');
+  const frac18 = (fracPart + '000000000000000000').slice(0, 18);
+  return BigInt(intPart || '0') * BigInt(10**18) + BigInt(frac18 || '0');
+}
+
+async function rpcCall(method, params) {
+  const provider = getProvider();
+  return await provider.request({ method, params });
+}
+
+async function ethCall(data) {
+  const provider = getProvider();
+  return await provider.request({
+    method: 'eth_call',
+    params: [{ to: POOLS_ADDR, data }, 'latest']
+  });
+}
+
+btnConnect.onclick = async () => {
+  clearLog();
+  try {
+    const provider = getProvider();
+    if (!provider) {
+      L('❌ Кошелёк не найден. Открой страницу в SafePal Browser или с подключенным расширением.', 'e');
+      return;
+    }
+    L('⏳ Запрашиваю доступ...');
+    const accounts = await provider.request({ method: 'eth_requestAccounts' });
+    myAddress = accounts[0];
+    L('✅ Подключён: ' + myAddress);
+
+    // Сеть opBNB
+    const chainId = await provider.request({ method: 'eth_chainId' });
+    if (chainId !== OPBNB_HEX) {
+      L('⏳ Переключаю на opBNB...', 'w');
+      await provider.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: OPBNB_HEX }]
+      });
+    }
+    L('✅ Сеть opBNB');
+
+    // Проверка прав
+    L('⏳ Проверяю права...');
+    const ownerHex = await ethCall(SEL_OWNER);
+    const ownerAddr = '0x' + ownerHex.slice(-40);
+
+    const opCheckData = SEL_OPERATORS + addrTo32(myAddress);
+    const isOpHex = await ethCall(opCheckData);
+    const isOp = parseInt(isOpHex, 16) === 1;
+    const isOwner = myAddress.toLowerCase() === ownerAddr.toLowerCase();
+
+    document.getElementById('walletInfo').innerHTML =
+      `<b>Кошелёк:</b> ${myAddress}<br>` +
+      `<b>Роль:</b> ${isOwner ? 'OWNER ✅' : (isOp ? 'OPERATOR ✅' : 'НЕТ ПРАВ ❌')}<br>` +
+      `<b>Owner контракта:</b> ${ownerAddr}`;
+
+    if (!isOwner && !isOp) {
+      L('❌ У этого кошелька нет прав на recordPurchase.', 'e');
+      L('   Переключи в SafePal на owner (' + ownerAddr + ') или operator-кошелёк.', 'e');
+      return;
+    }
+    L('✅ Права: ' + (isOwner ? 'OWNER' : 'OPERATOR'));
+
+    // Загружаем пулы
+    L('⏳ Читаю список пулов...');
+    const cntHex = await ethCall(SEL_POOLS_COUNT);
+    const cnt = parseInt(cntHex, 16);
+    L('   Всего пулов: ' + cnt);
+
+    if (cnt === 0) {
+      L('⚠️ Пулов нет', 'w');
+      return;
+    }
+
+    poolsEl.innerHTML = '';
+    // poolId начинается с 1 (см контракт: poolsCount++; poolId = poolsCount;)
+    for (let i = 1; i <= cnt; i++) {
+      const data = SEL_POOLS + hexPad(i);
+      const res = await ethCall(data);
+      // res — это hex от pools(i) getter
+      // Decoder: каждое поле = 32 байта = 64 hex
+      // Порядок: id, targetUSDT, raisedUSDT, treasuryUSDT, totalDCT, status, createdAt, unlocksAt,
+      //          cyclesCompleted, minLevel, currentItemId, costBasis
+      // (string name и string metaUrl — НЕ возвращаются автогенерированным getter'ом)
+      const hex = res.replace(/^0x/, '');
+      const slice = idx => hex.slice(idx * 64, (idx + 1) * 64);
+
+      const id            = hexToBigInt('0x' + slice(0));
+      const targetUSDT    = hexToBigInt('0x' + slice(1));
+      const raisedUSDT    = hexToBigInt('0x' + slice(2));
+      const treasuryUSDT  = hexToBigInt('0x' + slice(3));
+      const totalDCT      = hexToBigInt('0x' + slice(4));
+      const status        = parseInt('0x' + slice(5));
+      // createdAt, unlocksAt пропускаем
+      // cyclesCompleted, minLevel пропускаем
+      // currentItemId пропускаем
+      const costBasis     = hexToBigInt('0x' + slice(11));
+
+      const statusName = STATUS[status] || ('?' + status);
+      const statusCls = STATUS_CLASS[status] || 'status-cancel';
+
+      const card = document.createElement('div');
+      card.className = 'pool-card';
+      card.dataset.poolId = id.toString();
+      card.dataset.treasury = treasuryUSDT.toString();
+      card.innerHTML =
+        `<div class="pid">Pool #${id} <span class="status-badge ${statusCls}">${statusName}</span></div>` +
+        `<div class="row"><span class="k">Цель (target):</span><span class="v">$${formatUSDT(targetUSDT)}</span></div>` +
+        `<div class="row"><span class="k">Собрано (raised):</span><span class="v green">$${formatUSDT(raisedUSDT)}</span></div>` +
+        `<div class="row"><span class="k">В treasury (доступно):</span><span class="v yellow">$${formatUSDT(treasuryUSDT)}</span></div>` +
+        `<div class="row"><span class="k">Уже потрачено (costBasis):</span><span class="v">$${formatUSDT(costBasis)}</span></div>` +
+        `<div class="row"><span class="k">Выпущено DCT:</span><span class="v">${formatUSDT(totalDCT)}</span></div>`;
+
+      card.onclick = () => {
+        document.querySelectorAll('.pool-card').forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+        selectedPool = { id: id, treasury: treasuryUSDT };
+        // По умолчанию подставляем весь treasury
+        amountEl.value = formatUSDT(treasuryUSDT).replace(/\s/g, '').replace(',', '.');
+        btnExecute.disabled = false;
+        L('✓ Выбран pool #' + id + ', treasury $' + formatUSDT(treasuryUSDT));
+      };
+      poolsEl.appendChild(card);
+    }
+    L('✅ Готово. Выбери пул и сумму.');
+
+    document.getElementById('connected').style.display = 'block';
+    btnConnect.style.display = 'none';
+  } catch (err) {
+    L('❌ ' + (err?.message || err), 'e');
+  }
+};
+
+btnExecute.onclick = async () => {
+  if (!selectedPool) { L('❌ Сначала выбери пул', 'e'); return; }
+  const amountStr = amountEl.value;
+  if (!amountStr || parseFloat(amountStr) <= 0) { L('❌ Введи сумму > 0', 'e'); return; }
+
+  let amountWei;
+  try { amountWei = parseUSDT(amountStr); }
+  catch (e) { L('❌ Невалидная сумма', 'e'); return; }
+
+  if (amountWei > selectedPool.treasury) {
+    L(`❌ Сумма $${amountStr} больше чем treasury $${formatUSDT(selectedPool.treasury)}`, 'e');
+    return;
+  }
+  if (amountWei <= 0n) {
+    L('❌ Сумма должна быть > 0', 'e');
+    return;
+  }
+
+  btnExecute.disabled = true;
+  try {
+    L('━━━━━━━━━━━━━━━━━━━━━━━━━', 'h');
+    L('⏳ recordPurchase(' + selectedPool.id + ', ' + amountStr + ' USDT)');
+    L('   Подпиши транзакцию в SafePal!', 'w');
+
+    const data = SEL_RECORD_PURCHASE + hexPad(selectedPool.id) + hexPad(amountWei);
+    const txHash = await rpcCall('eth_sendTransaction', [{
+      from: myAddress,
+      to: POOLS_ADDR,
+      data: data
+    }]);
+    L('✅ TX отправлен: ' + txHash);
+    L('   bscscan: https://opbnb.bscscan.com/tx/' + txHash);
+
+    L('⏳ Жду подтверждения...');
+    let receipt = null;
+    for (let i = 0; i < 30; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      receipt = await rpcCall('eth_getTransactionReceipt', [txHash]);
+      if (receipt) break;
+    }
+    if (!receipt) {
+      L('⚠️ Тайм-аут. Проверь на bscscan.', 'w');
+      btnExecute.disabled = false;
+      return;
+    }
+    if (receipt.status === '0x0') {
+      L('❌ Транзакция упала. Проверь tx на bscscan для причины.', 'e');
+      btnExecute.disabled = false;
+      return;
+    }
+    L('━━━━━━━━━━━━━━━━━━━━━━━━━', 'h');
+    L('✅✅✅ ГОТОВО!', 'w');
+    L('Пул #' + selectedPool.id + ' переведён в статус InGem.');
+    L('С treasury списано $' + amountStr + '. В costBasis добавлено $' + amountStr + '.');
+    L('');
+    L('Теперь:');
+    L('• Партнёры увидят что камень закуплен');
+    L('• В фронте раздел "Камни" покажет новую запись');
+    L('• Можно делать ещё recordPurchase для докупки камней в этот пул');
+    btnExecute.textContent = '✓ Готово';
+  } catch (err) {
+    L('❌ ' + (err?.message || err), 'e');
+    if (err?.data?.message) L('   ' + err.data.message, 'e');
+    btnExecute.disabled = false;
+  }
+};
+</script>
+</body>
+</html>
