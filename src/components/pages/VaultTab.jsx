@@ -13,6 +13,7 @@ import { useState, useEffect } from 'react'
 import useGameStore from '@/lib/store'
 import * as Club from '@/lib/clubV23'
 import HelpButton from '@/components/ui/HelpButton'
+import GoldReserveSection from '@/components/pages/GoldReserveSection'
 
 export default function VaultTab() {
   const { wallet, dct, dctFree, dctLocked, dctPrice, t } = useGameStore()
@@ -95,6 +96,9 @@ export default function VaultTab() {
               </div>
             </div>
           )}
+
+          {/* ═══ Золотой пул (резервный фонд) ═══ */}
+          <GoldReserveSection />
 
           {/* Резерв клуба */}
           <div className="p-3 rounded-2xl border" style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}>
