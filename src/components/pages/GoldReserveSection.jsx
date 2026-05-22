@@ -9,9 +9,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import useGameStore from '@/lib/store'
 import * as Gold from '@/lib/goldReserve'
+import GoldReserveTermsModal from '@/components/ui/GoldReserveTermsModal'
 
 export default function GoldReserveSection() {
   const { wallet, isAdmin } = useGameStore()
+  const [showTerms, setShowTerms] = useState(false)
 
   const [fund, setFund] = useState(null)
   const [me, setMe] = useState(null)
@@ -91,6 +93,8 @@ export default function GoldReserveSection() {
 
   return (
     <div className="space-y-3">
+      <GoldReserveTermsModal isOpen={showTerms} onClose={() => setShowTerms(false)} />
+
       <div className="p-4 rounded-2xl border" style={card}>
         <div className="flex items-center justify-between mb-1">
           <div className="text-[13px] font-black text-gold-400">💰 Золотой пул</div>
@@ -104,6 +108,10 @@ export default function GoldReserveSection() {
           Резервный фонд клуба. Вкладываешь USDT — получаешь долю и прибыль с оборота.
           1 USDT = 1 доля. Выход возможен через 6 месяцев.
         </div>
+        <button onClick={() => setShowTerms(true)}
+          className="mt-2 text-[11px] font-bold text-gold-400 underline decoration-gold-400/40">
+          📖 Условия программы
+        </button>
       </div>
 
       {msg && (
