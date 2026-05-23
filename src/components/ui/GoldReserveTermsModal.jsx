@@ -28,12 +28,12 @@ export default function GoldReserveTermsModal({ isOpen, onClose }) {
   return (
     <div
       className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-3"
-      style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)' }}
+      style={{ background: 'rgba(0,0,0,0.85)' }}
       onClick={onClose}
     >
       <div
         className="max-w-[480px] w-full rounded-3xl overflow-hidden flex flex-col"
-        style={{ background: 'var(--bg-card, #14141f)', border: '1px solid rgba(255,215,0,0.25)', maxHeight: '88vh' }}
+        style={{ background: '#0d1a2e', border: '1px solid rgba(255,215,0,0.25)', maxHeight: '88vh' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Шапка */}
