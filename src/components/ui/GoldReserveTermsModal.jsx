@@ -11,13 +11,21 @@
  *   - кнопка снизу (зафиксирована)
  * Контент ограничен по ширине (max-w) и центрирован — на десктопе колонка по центру.
  */
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
 export default function GoldReserveTermsModal({ isOpen, onClose }) {
+  // Реальная высота экрана в пикселях — WebView не может её переврать,
+  // в отличие от 100vh / 100% / inset-0, которые раздувают контейнер и ломают скролл.
+  const [screenH, setScreenH] = useState(0)
   useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden'
-      return () => { document.body.style.overflow = '' }
+    if (!isOpen) return
+    const update = () => setScreenH(window.innerHeight)
+    update()
+    window.addEventListener('resize', update)
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('resize', update)
+      document.body.style.overflow = ''
     }
   }, [isOpen])
 
@@ -30,7 +38,7 @@ export default function GoldReserveTermsModal({ isOpen, onClose }) {
   const wrapStyle = { maxWidth: 500 }
 
   return (
-    <div className="fixed inset-0 z-[80] flex flex-col" style={{ background: '#0d1a2e' }}>
+    <div className="fixed inset-0 z-[80] flex flex-col" style={{ background: '#0d1a2e', height: screenH ? `${screenH}px` : '100vh' }}>
       {/* Шапка — зафиксирована */}
       <div className={`${wrap} pt-5 pb-3 flex items-center justify-between`}
         style={{ ...wrapStyle, borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
@@ -41,7 +49,7 @@ export default function GoldReserveTermsModal({ isOpen, onClose }) {
       </div>
 
       {/* Контент — скроллится */}
-      <div className={`${wrap} py-4 overflow-y-auto`} style={{ ...wrapStyle, flex: '1 1 auto', minHeight: 0 }}>
+      <div className={`${wrap} py-4`} style={{ ...wrapStyle, flex: '1 1 auto', minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
         <div className={p} style={{ marginBottom: 16 }}>
           <b className="text-white">Золотой пул</b> — это совместный оборотный фонд клуба.
           Участники объединяют средства, а клуб работает ими над своими активами:
