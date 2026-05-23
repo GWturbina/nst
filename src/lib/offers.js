@@ -2,15 +2,18 @@
 /**
  * offers.js — сервисный слой для эксклюзивных предложений (Золотой пул).
  *
- * Цена НЕ считается автоматически (бриллианты индивидуальны) — показывается
- * "от $X" или "по запросу", реальную цену клуб называет после заявки.
- * Загрузка фото — через готовый showcaseStorage (bucket "showcase").
+ * Адрес и подпись берём из сохранённого хранилища (getAuthParams/authFetch) —
+ * работает после перезагрузки страницы. Подпись валидна 24ч (как в заказах).
+ * Цена не считается автоматически. Фото грузятся через showcaseStorage.
  */
-import web3 from './web3'
-import { authFetch } from './authClient'
+import { authFetch, getAuthParams } from './authClient'
 import { uploadShowcaseFile, compressImage } from './showcaseStorage'
 
-// Уровень привилегии (для показа — НЕ для расчёта цены)
+function myWallet() {
+  return getAuthParams()?.wallet || null
+}
+
+// Уровень привилегии (для показа)
 export function getTier(depositUsdt) {
   const d = parseFloat(depositUsdt) || 0
   if (d >= 1000) return { label: '$1000+', note: 'до 35% от рынка (себестоимость)' }
@@ -19,16 +22,17 @@ export function getTier(depositUsdt) {
   return null
 }
 
-// ─── Загрузка фото (несколько), со сжатием. Возвращает {photos:[{url,path}], errors:[]} ───
+// ─── Загрузка фото (несколько) со сжатием. Возвращает {photos:[{url,path}], errors:[]} ───
 export async function uploadPhotos(fileList) {
-  if (!web3.address) return { photos: [], errors: ['Кошелёк не подключён'] }
+  const wallet = myWallet()
+  if (!wallet) return { photos: [], errors: ['Переподключите кошелёк'] }
   const files = Array.from(fileList || [])
   const photos = []
   const errors = []
   for (const file of files) {
     let f = file
     try { if (file.type?.startsWith('image/')) f = await compressImage(file) } catch { f = file }
-    const r = await uploadShowcaseFile(f, web3.address)
+    const r = await uploadShowcaseFile(f, wallet)
     if (r?.ok) photos.push({ url: r.url, path: r.path })
     else errors.push(`${file.name}: ${r?.error || 'ошибка'}`)
   }
@@ -46,31 +50,30 @@ export async function getOffers() {
 
 // ─── Заявка «Хочу» (пользователь) ───
 export async function sendRequest(offerId, depositUsdt) {
+  const auth = getAuthParams()
+  if (!auth) return { ok: false, error: 'Переподключите кошелёк' }
   try {
     const res = await authFetch('/api/offers', {
       method: 'POST',
-      body: { action: 'request', wallet: web3.address, offerId, depositUsdt: depositUsdt ?? null },
+      body: { action: 'request', wallet: auth.wallet, offerId, depositUsdt: depositUsdt ?? null },
     })
     return await res.json()
   } catch (e) { return { ok: false, error: e?.message || 'Ошибка отправки заявки' } }
 }
 
-// ─── Админ: вызов со свежей подписью ───
+// ─── Админ: используем сохранённую подпись (authFetch), adminWallet из хранилища ───
 async function adminPost(action, data = {}) {
-  if (!web3.address) return { ok: false, error: 'Кошелёк не подключён' }
-  let auth
-  try { auth = await web3.signAuthMessage() } catch { return { ok: false, error: 'Нужна подпись кошелька' } }
+  const auth = getAuthParams()
+  if (!auth) return { ok: false, error: 'Переподключите кошелёк (нужна подпись)' }
   try {
-    const res = await fetch('/api/offers', {
+    const res = await authFetch('/api/offers', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, adminWallet: web3.address, authSig: auth.authSig, authTs: auth.authTs, ...data }),
+      body: { action, adminWallet: auth.wallet, ...data },
     })
     return await res.json()
   } catch (e) { return { ok: false, error: e?.message || 'Ошибка' } }
 }
 
-// offer = { title, carat, color, clarity, priceFrom, description, photos:[url], photoPaths:[path], videos:[url] }
 export const adminCreateOffer = (offer) => adminPost('create', offer)
 export const adminCloseOffer = (offerId) => adminPost('close', { offerId })
 export const adminListRequests = () => adminPost('list_requests', {})
