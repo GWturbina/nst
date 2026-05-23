@@ -2,97 +2,76 @@
 /**
  * offers.js — сервисный слой для эксклюзивных предложений (Золотой пул).
  *
- * Использует существующие хелперы проекта (web3, authClient) — ничего не меняет.
- *  - GET список предложений — публичный
- *  - Заявка «Хочу» — пользователь (сохранённая подпись, 24ч)
- *  - Админские действия — свежая подпись (5 мин), как при создании лотов
- *
- * Импорт:
- *   import * as Offers from '@/lib/offers'
+ * Цена НЕ считается автоматически (бриллианты индивидуальны) — показывается
+ * "от $X" или "по запросу", реальную цену клуб называет после заявки.
+ * Загрузка фото — через готовый showcaseStorage (bucket "showcase").
  */
 import web3 from './web3'
 import { authFetch } from './authClient'
+import { uploadShowcaseFile, compressImage } from './showcaseStorage'
 
-// ─── Уровни привилегий и персональная цена ───
-// Базовая цена (% от рынка) по уровню вложения. С тапалкой — ещё ниже (примечание).
+// Уровень привилегии (для показа — НЕ для расчёта цены)
 export function getTier(depositUsdt) {
   const d = parseFloat(depositUsdt) || 0
-  if (d >= 1000) return { pct: 37, label: '$1000+', note: 'с тапалкой до 35% (себестоимость)' }
-  if (d >= 500)  return { pct: 39, label: '$500–999', note: 'с тапалкой до 37%' }
-  if (d >= 100)  return { pct: 44, label: '$100–499', note: 'с тапалкой до 40%' }
-  return null // меньше $100 — привилегии нет
+  if (d >= 1000) return { label: '$1000+', note: 'до 35% от рынка (себестоимость)' }
+  if (d >= 500)  return { label: '$500–999', note: 'до 37% от рынка' }
+  if (d >= 100)  return { label: '$100–499', note: 'до 40% от рынка' }
+  return null
 }
 
-// Персональная цена камня для вкладчика
-export function personalPrice(marketPrice, depositUsdt) {
-  const t = getTier(depositUsdt)
-  if (!t) return null
-  const price = (parseFloat(marketPrice) || 0) * t.pct / 100
-  return Math.round(price * 100) / 100
+// ─── Загрузка фото (несколько), со сжатием. Возвращает {photos:[{url,path}], errors:[]} ───
+export async function uploadPhotos(fileList) {
+  if (!web3.address) return { photos: [], errors: ['Кошелёк не подключён'] }
+  const files = Array.from(fileList || [])
+  const photos = []
+  const errors = []
+  for (const file of files) {
+    let f = file
+    try { if (file.type?.startsWith('image/')) f = await compressImage(file) } catch { f = file }
+    const r = await uploadShowcaseFile(f, web3.address)
+    if (r?.ok) photos.push({ url: r.url, path: r.path })
+    else errors.push(`${file.name}: ${r?.error || 'ошибка'}`)
+  }
+  return { photos, errors }
 }
 
-// ─── GET список активных предложений (публичный) ───
+// ─── GET список активных предложений ───
 export async function getOffers() {
   try {
     const res = await fetch('/api/offers')
     const data = await res.json()
     return data?.ok ? (data.offers || []) : []
-  } catch {
-    return []
-  }
+  } catch { return [] }
 }
 
-// ─── Заявка «Хочу» (пользователь, сохранённая подпись 24ч) ───
-export async function sendRequest(offerId, depositUsdt, price) {
+// ─── Заявка «Хочу» (пользователь) ───
+export async function sendRequest(offerId, depositUsdt) {
   try {
     const res = await authFetch('/api/offers', {
       method: 'POST',
-      body: {
-        action: 'request',
-        wallet: web3.address,
-        offerId,
-        depositUsdt: depositUsdt ?? null,
-        personalPrice: price ?? null,
-      },
+      body: { action: 'request', wallet: web3.address, offerId, depositUsdt: depositUsdt ?? null },
     })
     return await res.json()
-  } catch (e) {
-    return { ok: false, error: e?.message || 'Ошибка отправки заявки' }
-  }
+  } catch (e) { return { ok: false, error: e?.message || 'Ошибка отправки заявки' } }
 }
 
-// ─── Админ: вызов со свежей подписью (5 мин) ───
+// ─── Админ: вызов со свежей подписью ───
 async function adminPost(action, data = {}) {
   if (!web3.address) return { ok: false, error: 'Кошелёк не подключён' }
   let auth
-  try {
-    auth = await web3.signAuthMessage() // свежая подпись (запросит SafePal)
-  } catch {
-    return { ok: false, error: 'Нужна подпись кошелька' }
-  }
+  try { auth = await web3.signAuthMessage() } catch { return { ok: false, error: 'Нужна подпись кошелька' } }
   try {
     const res = await fetch('/api/offers', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action,
-        adminWallet: web3.address,
-        authSig: auth.authSig,
-        authTs: auth.authTs,
-        ...data,
-      }),
+      body: JSON.stringify({ action, adminWallet: web3.address, authSig: auth.authSig, authTs: auth.authTs, ...data }),
     })
     return await res.json()
-  } catch (e) {
-    return { ok: false, error: e?.message || 'Ошибка' }
-  }
+  } catch (e) { return { ok: false, error: e?.message || 'Ошибка' } }
 }
 
-// Создать предложение
+// offer = { title, carat, color, clarity, priceFrom, description, photos:[url], photoPaths:[path], videos:[url] }
 export const adminCreateOffer = (offer) => adminPost('create', offer)
-// Закрыть предложение (убрать из показа)
 export const adminCloseOffer = (offerId) => adminPost('close', { offerId })
-// Список всех заявок
 export const adminListRequests = () => adminPost('list_requests', {})
-// Отметить заявку обработанной
 export const adminProcessRequest = (requestId) => adminPost('process_request', { requestId })
