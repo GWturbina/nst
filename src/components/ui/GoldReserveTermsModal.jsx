@@ -12,11 +12,14 @@
  * Контент ограничен по ширине (max-w) и центрирован — на десктопе колонка по центру.
  */
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 export default function GoldReserveTermsModal({ isOpen, onClose }) {
   // Реальная высота экрана в пикселях — WebView не может её переврать,
   // в отличие от 100vh / 100% / inset-0, которые раздувают контейнер и ломают скролл.
   const [screenH, setScreenH] = useState(0)
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
   useEffect(() => {
     if (!isOpen) return
     const update = () => setScreenH(window.innerHeight)
@@ -29,7 +32,7 @@ export default function GoldReserveTermsModal({ isOpen, onClose }) {
     }
   }, [isOpen])
 
-  if (!isOpen) return null
+  if (!isOpen || !mounted) return null
 
   const h = 'text-[13px] font-black text-gold-400 mb-1.5'
   const p = 'text-[12px] text-slate-300 leading-relaxed'
@@ -37,7 +40,7 @@ export default function GoldReserveTermsModal({ isOpen, onClose }) {
   const wrap = 'w-full mx-auto px-5'
   const wrapStyle = { maxWidth: 500 }
 
-  return (
+  const modalContent = (
     <div className="fixed inset-0 z-[80] flex flex-col" style={{ background: '#0d1a2e', height: screenH ? `${screenH}px` : '100vh' }}>
       {/* Шапка — зафиксирована */}
       <div className={`${wrap} pt-5 pb-3 flex items-center justify-between`}
@@ -173,4 +176,6 @@ export default function GoldReserveTermsModal({ isOpen, onClose }) {
       </div>
     </div>
   )
+
+  return createPortal(modalContent, document.body)
 }
