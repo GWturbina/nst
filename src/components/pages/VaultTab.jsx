@@ -14,6 +14,7 @@ import useGameStore from '@/lib/store'
 import * as Club from '@/lib/clubV23'
 import HelpButton from '@/components/ui/HelpButton'
 import GoldReserveSection from '@/components/pages/GoldReserveSection'
+import OffersSection from '@/components/pages/OffersSection'
 
 export default function VaultTab() {
   const { wallet, dct, dctFree, dctLocked, dctPrice, t } = useGameStore()
@@ -99,6 +100,9 @@ export default function VaultTab() {
 
           {/* ═══ Золотой пул (резервный фонд) ═══ */}
           <GoldReserveSection />
+
+          {/* ═══ Эксклюзивные предложения ═══ */}
+          <OffersSection />
 
           {/* Резерв клуба */}
           <div className="p-3 rounded-2xl border" style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}>
