@@ -9,9 +9,11 @@ import { useState, useEffect, useCallback } from 'react'
 import useGameStore from '@/lib/store'
 import * as Offers from '@/lib/offers'
 import * as Gold from '@/lib/goldReserve'
+import MediaLightbox, { ytId } from '@/components/ui/MediaLightbox'
 
 export default function OffersSection() {
   const { wallet, isAdmin } = useGameStore()
+  const [lightbox, setLightbox] = useState(null) // { items, startIndex }
 
   const [offers, setOffers] = useState([])
   const [myDeposit, setMyDeposit] = useState(0)
@@ -95,15 +97,12 @@ export default function OffersSection() {
   const card = { background: 'var(--bg-card)', borderColor: 'rgba(56,189,248,0.18)' }
   const inputCls = 'w-full px-3 py-2 rounded-lg text-sm bg-black/40 border border-sky-400/20 text-white outline-none focus:border-sky-400/50'
 
-  const ytId = (url) => url?.match(/(?:v=|youtu\.be\/|embed\/)([\w-]{11})/)?.[1]
-  const renderVideo = (url, i) => {
-    const id = ytId(url)
-    if (id) return (
-      <div key={i} className="rounded-lg overflow-hidden mt-2" style={{ aspectRatio: '16/9' }}>
-        <iframe width="100%" height="100%" src={`https://www.youtube.com/embed/${id}`} title="video" frameBorder="0" allowFullScreen />
-      </div>
-    )
-    return <a key={i} href={url} target="_blank" rel="noreferrer" className="block mt-1 text-[11px] font-bold text-sky-400 underline">▶️ Смотреть видео</a>
+  // Собрать медиа предложения в единый список для лайтбокса
+  const buildMedia = (offer) => {
+    const media = []
+    if (Array.isArray(offer.photos)) offer.photos.forEach(url => media.push({ type: 'photo', url }))
+    if (Array.isArray(offer.videos)) offer.videos.forEach(url => media.push({ type: 'video', url }))
+    return media
   }
 
   return (
@@ -207,17 +206,34 @@ export default function OffersSection() {
               </div>
             )}
 
-            {/* Галерея фото */}
-            {Array.isArray(offer.photos) && offer.photos.length > 0 && (
-              <div className="flex gap-2 overflow-x-auto mt-2">
-                {offer.photos.map((url, i) => (
-                  <img key={i} src={url} alt="" className="rounded-lg object-cover shrink-0" style={{ height: 180, maxWidth: '85%' }} />
-                ))}
-              </div>
-            )}
-
-            {/* Видео */}
-            {Array.isArray(offer.videos) && offer.videos.map((url, i) => renderVideo(url, i))}
+            {/* Медиа: миниатюры (фото + видео), тап → полноэкранная галерея */}
+            {(() => {
+              const media = buildMedia(offer)
+              if (!media.length) return null
+              return (
+                <div className="flex gap-2 overflow-x-auto mt-2">
+                  {media.map((m, i) => (
+                    <button key={i} onClick={() => setLightbox({ items: media, startIndex: i })}
+                      className="relative shrink-0 rounded-lg overflow-hidden" style={{ height: 110, width: 110 }}>
+                      {m.type === 'photo' ? (
+                        <img src={m.url} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <>
+                          <img
+                            src={ytId(m.url) ? `https://img.youtube.com/vi/${ytId(m.url)}/hqdefault.jpg` : ''}
+                            alt="" className="w-full h-full object-cover"
+                            style={{ background: '#000' }} />
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white"
+                              style={{ background: 'rgba(0,0,0,0.6)' }}>▶</div>
+                          </div>
+                        </>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )
+            })()}
 
             {offer.description && <div className="text-[11px] text-slate-300 leading-relaxed mt-2">{offer.description}</div>}
 
@@ -259,6 +275,9 @@ export default function OffersSection() {
             ))}
           </div>
         </div>
+      )}
+      {lightbox && (
+        <MediaLightbox items={lightbox.items} startIndex={lightbox.startIndex} onClose={() => setLightbox(null)} />
       )}
     </div>
   )
