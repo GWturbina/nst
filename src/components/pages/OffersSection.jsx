@@ -1,10 +1,9 @@
 'use client'
 /**
  * OffersSection — раздел "Эксклюзивные предложения" в Сейфе (под Золотым пулом).
- *
- * Виден только вкладчикам фонда от $100 (привилегия из условий).
- * Партнёр: список предложений с фото/видео, СВОЯ персональная цена, кнопка «Хочу».
- * Owner (isAdmin): форма создания предложения + список заявок.
+ * Виден вкладчикам фонда от $100 и админу.
+ * Цена — "от $X" или "по запросу" (без автосчёта). Реальную цену клуб даёт после заявки.
+ * Фото — загрузка с устройства (несколько) + запасная вставка ссылкой. Видео — ссылки.
  */
 import { useState, useEffect, useCallback } from 'react'
 import useGameStore from '@/lib/store'
@@ -18,11 +17,16 @@ export default function OffersSection() {
   const [myDeposit, setMyDeposit] = useState(0)
   const [requests, setRequests] = useState([])
   const [busy, setBusy] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [msg, setMsg] = useState(null)
   const [showCreate, setShowCreate] = useState(false)
 
-  // форма создания
-  const [form, setForm] = useState({ title: '', carat: '', color: '', clarity: '', marketPrice: '', description: '', photoUrl: '', videoUrl: '' })
+  // форма
+  const [form, setForm] = useState({ title: '', carat: '', color: '', clarity: '', priceFrom: '', description: '' })
+  const [photos, setPhotos] = useState([])   // [{url, path}]
+  const [videos, setVideos] = useState([])   // [url]
+  const [photoLink, setPhotoLink] = useState('')
+  const [videoLink, setVideoLink] = useState('')
 
   const flash = (type, text) => { setMsg({ type, text }); setTimeout(() => setMsg(null), 6000) }
 
@@ -41,8 +45,6 @@ export default function OffersSection() {
   useEffect(() => { load() }, [load])
 
   const tier = Offers.getTier(myDeposit)
-
-  // Партнёр не вкладчик от $100 и не админ → раздел не показываем вообще
   if (!isAdmin && !tier) return null
 
   const run = async (fn, okText) => {
@@ -55,15 +57,37 @@ export default function OffersSection() {
     finally { setBusy(false) }
   }
 
-  const handleRequest = (offer) => {
-    const price = Offers.personalPrice(offer.market_price, myDeposit)
-    run(() => Offers.sendRequest(offer.id, myDeposit, price), 'Заявка отправлена! Клуб свяжется с вами')
+  // загрузка фото с устройства
+  const handleFiles = async (e) => {
+    const files = e.target.files
+    if (!files?.length) return
+    setUploading(true); setMsg(null)
+    const r = await Offers.uploadPhotos(files)
+    if (r.photos?.length) setPhotos(prev => [...prev, ...r.photos])
+    if (r.errors?.length) flash('err', r.errors.join('; '))
+    setUploading(false)
+    e.target.value = ''
   }
+  const addPhotoLink = () => { if (photoLink.trim()) { setPhotos(prev => [...prev, { url: photoLink.trim(), path: null }]); setPhotoLink('') } }
+  const removePhoto = (i) => setPhotos(prev => prev.filter((_, idx) => idx !== i))
+  const addVideo = () => { if (videoLink.trim()) { setVideos(prev => [...prev, videoLink.trim()]); setVideoLink('') } }
+  const removeVideo = (i) => setVideos(prev => prev.filter((_, idx) => idx !== i))
+
+  const handleRequest = (offer) => run(() => Offers.sendRequest(offer.id, myDeposit), 'Заявка отправлена! Клуб свяжется с вами')
 
   const handleCreate = () => {
-    if (!form.title || !form.marketPrice) return flash('err', 'Заполни название и рыночную цену')
-    run(() => Offers.adminCreateOffer(form), 'Предложение создано')
-      .then(ok => { if (ok) { setForm({ title: '', carat: '', color: '', clarity: '', marketPrice: '', description: '', photoUrl: '', videoUrl: '' }); setShowCreate(false) } })
+    if (!form.title) return flash('err', 'Укажи название')
+    run(() => Offers.adminCreateOffer({
+      ...form,
+      photos: photos.map(p => p.url),
+      photoPaths: photos.filter(p => p.path).map(p => p.path),
+      videos,
+    }), 'Предложение создано').then(ok => {
+      if (ok) {
+        setForm({ title: '', carat: '', color: '', clarity: '', priceFrom: '', description: '' })
+        setPhotos([]); setVideos([]); setShowCreate(false)
+      }
+    })
   }
   const handleClose = (id) => run(() => Offers.adminCloseOffer(id), 'Предложение закрыто')
   const handleProcess = (id) => run(() => Offers.adminProcessRequest(id), 'Заявка обработана')
@@ -71,26 +95,15 @@ export default function OffersSection() {
   const card = { background: 'var(--bg-card)', borderColor: 'rgba(56,189,248,0.18)' }
   const inputCls = 'w-full px-3 py-2 rounded-lg text-sm bg-black/40 border border-sky-400/20 text-white outline-none focus:border-sky-400/50'
 
-  // Встраивание видео
-  const renderVideo = (url, type) => {
-    if (!url) return null
-    if (type === 'youtube') {
-      const id = url.match(/(?:v=|youtu\.be\/|embed\/)([\w-]{11})/)?.[1]
-      if (!id) return null
-      return (
-        <div className="rounded-lg overflow-hidden mt-2" style={{ aspectRatio: '16/9' }}>
-          <iframe width="100%" height="100%" src={`https://www.youtube.com/embed/${id}`}
-            title="video" frameBorder="0" allowFullScreen />
-        </div>
-      )
-    }
-    // TikTok и прочее — ссылкой (надёжнее в WebView чем их embed)
-    return (
-      <a href={url} target="_blank" rel="noreferrer"
-        className="inline-block mt-2 text-[11px] font-bold text-sky-400 underline">
-        ▶️ Смотреть видео
-      </a>
+  const ytId = (url) => url?.match(/(?:v=|youtu\.be\/|embed\/)([\w-]{11})/)?.[1]
+  const renderVideo = (url, i) => {
+    const id = ytId(url)
+    if (id) return (
+      <div key={i} className="rounded-lg overflow-hidden mt-2" style={{ aspectRatio: '16/9' }}>
+        <iframe width="100%" height="100%" src={`https://www.youtube.com/embed/${id}`} title="video" frameBorder="0" allowFullScreen />
+      </div>
     )
+    return <a key={i} href={url} target="_blank" rel="noreferrer" className="block mt-1 text-[11px] font-bold text-sky-400 underline">▶️ Смотреть видео</a>
   }
 
   return (
@@ -102,39 +115,74 @@ export default function OffersSection() {
           {tier && <div className="text-[10px] text-slate-400">ваш уровень: <b className="text-sky-400">{tier.label}</b></div>}
         </div>
         <div className="text-[10px] text-slate-400 leading-relaxed mt-1">
-          Камни по вашей внутренней цене. Заявка ни к чему не обязывает — клуб свяжется с вами.
+          Камни по внутренней клубной цене. Оставь заявку — клуб свяжется и назовёт точную цену для тебя.
+          {tier?.note && <> Твой уровень: <b className="text-sky-400">{tier.note}</b>.</>}
         </div>
       </div>
 
       {msg && (
-        <div className={`p-2.5 rounded-lg text-[11px] font-bold text-center ${
-          msg.type === 'ok' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'
-        }`}>{msg.text}</div>
+        <div className={`p-2.5 rounded-lg text-[11px] font-bold text-center ${msg.type === 'ok' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>{msg.text}</div>
       )}
 
       {/* Админ: кнопка создания */}
       {isAdmin && (
-        <button onClick={() => setShowCreate(v => !v)}
-          className="w-full py-2.5 rounded-xl text-[12px] font-bold bg-purple-500/20 text-purple-400">
+        <button onClick={() => setShowCreate(v => !v)} className="w-full py-2.5 rounded-xl text-[12px] font-bold bg-purple-500/20 text-purple-400">
           {showCreate ? '✕ Скрыть форму' : '➕ Создать предложение'}
         </button>
       )}
 
-      {/* Админ: форма создания */}
+      {/* Админ: форма */}
       {isAdmin && showCreate && (
         <div className="p-4 rounded-2xl border-2 space-y-2" style={{ background: 'var(--bg-card)', borderColor: 'rgba(168,85,247,0.4)' }}>
           <div className="text-[11px] font-black text-purple-400 mb-1">Новое предложение</div>
-          <input placeholder="Название (напр. Round Brilliant 1.5ct)" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className={inputCls} />
+          <input placeholder="Название (напр. Бриллиант Fancy Intense Yellow 1.8ct)" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className={inputCls} />
           <div className="flex gap-2">
             <input placeholder="караты" value={form.carat} onChange={e => setForm({ ...form, carat: e.target.value })} className={inputCls} />
-            <input placeholder="цвет (D)" value={form.color} onChange={e => setForm({ ...form, color: e.target.value })} className={inputCls} />
-            <input placeholder="чистота (VVS1)" value={form.clarity} onChange={e => setForm({ ...form, clarity: e.target.value })} className={inputCls} />
+            <input placeholder="цвет" value={form.color} onChange={e => setForm({ ...form, color: e.target.value })} className={inputCls} />
+            <input placeholder="чистота" value={form.clarity} onChange={e => setForm({ ...form, clarity: e.target.value })} className={inputCls} />
           </div>
-          <input type="number" placeholder="Рыночная цена $ (от неё считается цена для вкладчика)" value={form.marketPrice} onChange={e => setForm({ ...form, marketPrice: e.target.value })} className={inputCls} />
-          <input placeholder="Ссылка на фото" value={form.photoUrl} onChange={e => setForm({ ...form, photoUrl: e.target.value })} className={inputCls} />
-          <input placeholder="Ссылка на видео (YouTube / TikTok)" value={form.videoUrl} onChange={e => setForm({ ...form, videoUrl: e.target.value })} className={inputCls} />
+          <input placeholder="Цена от $ (необязательно — оставь пустым для «по запросу»)" value={form.priceFrom} onChange={e => setForm({ ...form, priceFrom: e.target.value })} className={inputCls} />
+
+          {/* Фото: загрузка + ссылка */}
+          <div className="p-2 rounded-lg" style={{ background: 'rgba(255,255,255,0.03)' }}>
+            <div className="text-[10px] font-bold text-slate-300 mb-1">Фото ({photos.length})</div>
+            <label className="block w-full py-2 rounded-lg text-[12px] font-bold text-center text-sky-400 bg-sky-500/10 cursor-pointer">
+              {uploading ? 'Загрузка...' : '📷 Загрузить фото с устройства'}
+              <input type="file" accept="image/*" multiple onChange={handleFiles} disabled={uploading} className="hidden" />
+            </label>
+            <div className="flex gap-2 mt-1.5">
+              <input placeholder="или вставь ссылку на фото" value={photoLink} onChange={e => setPhotoLink(e.target.value)} className="flex-1 px-2 py-1.5 rounded-lg text-[11px] bg-black/40 border border-sky-400/20 text-white outline-none" />
+              <button onClick={addPhotoLink} className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-sky-500/20 text-sky-400">+</button>
+            </div>
+            {photos.length > 0 && (
+              <div className="flex gap-1.5 mt-2 overflow-x-auto">
+                {photos.map((p, i) => (
+                  <div key={i} className="relative shrink-0">
+                    <img src={p.url} alt="" className="rounded-lg object-cover" style={{ width: 64, height: 64 }} />
+                    <button onClick={() => removePhoto(i)} className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold">✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Видео: ссылки */}
+          <div className="p-2 rounded-lg" style={{ background: 'rgba(255,255,255,0.03)' }}>
+            <div className="text-[10px] font-bold text-slate-300 mb-1">Видео ({videos.length})</div>
+            <div className="flex gap-2">
+              <input placeholder="ссылка YouTube / TikTok" value={videoLink} onChange={e => setVideoLink(e.target.value)} className="flex-1 px-2 py-1.5 rounded-lg text-[11px] bg-black/40 border border-sky-400/20 text-white outline-none" />
+              <button onClick={addVideo} className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-sky-500/20 text-sky-400">+</button>
+            </div>
+            {videos.map((v, i) => (
+              <div key={i} className="flex items-center justify-between mt-1 text-[10px] text-slate-400">
+                <span className="truncate">{v}</span>
+                <button onClick={() => removeVideo(i)} className="text-red-400 ml-2">удалить</button>
+              </div>
+            ))}
+          </div>
+
           <textarea placeholder="Описание" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={2} className={inputCls} />
-          <button onClick={handleCreate} disabled={busy} className="w-full py-2.5 rounded-lg text-[13px] font-black text-black disabled:opacity-50"
+          <button onClick={handleCreate} disabled={busy || uploading} className="w-full py-2.5 rounded-lg text-[13px] font-black disabled:opacity-50"
             style={{ background: 'linear-gradient(135deg,#a855f7,#7c3aed)', color: '#fff' }}>
             {busy ? '...' : '✅ Опубликовать (подпишите в кошельке)'}
           </button>
@@ -143,58 +191,56 @@ export default function OffersSection() {
 
       {/* Список предложений */}
       {offers.length === 0 ? (
-        <div className="p-4 rounded-2xl border text-center text-[11px] text-slate-500" style={card}>
-          Сейчас активных предложений нет
-        </div>
+        <div className="p-4 rounded-2xl border text-center text-[11px] text-slate-500" style={card}>Сейчас активных предложений нет</div>
       ) : (
-        offers.map(offer => {
-          const price = Offers.personalPrice(offer.market_price, myDeposit)
-          return (
-            <div key={offer.id} className="p-4 rounded-2xl border" style={card}>
-              <div className="flex items-start justify-between">
-                <div className="text-[14px] font-black text-white">{offer.title}</div>
-                {isAdmin && (
-                  <button onClick={() => handleClose(offer.id)} disabled={busy}
-                    className="text-[10px] font-bold text-red-400 px-2 py-1 rounded bg-red-500/10">закрыть</button>
-                )}
-              </div>
-              {(offer.carat || offer.color || offer.clarity) && (
-                <div className="text-[10px] text-slate-400 mt-0.5">
-                  {offer.carat && `${offer.carat} ct`}{offer.color && ` • ${offer.color}`}{offer.clarity && ` • ${offer.clarity}`}
-                </div>
-              )}
-              {offer.photo_url && (
-                <img src={offer.photo_url} alt={offer.title} className="w-full rounded-lg mt-2 object-cover" style={{ maxHeight: 220 }} />
-              )}
-              {renderVideo(offer.video_url, offer.video_type)}
-              {offer.description && <div className="text-[11px] text-slate-300 leading-relaxed mt-2">{offer.description}</div>}
-
-              {/* Цены */}
-              <div className="grid grid-cols-2 gap-2 mt-3">
-                <div className="text-center p-2 rounded-lg bg-black/20">
-                  <div className="text-[13px] font-bold text-slate-400 line-through">${parseFloat(offer.market_price).toFixed(0)}</div>
-                  <div className="text-[8px] text-slate-500">рынок</div>
-                </div>
-                <div className="text-center p-2 rounded-lg bg-sky-500/10">
-                  <div className="text-[15px] font-black text-sky-400">{price !== null ? `$${price.toFixed(0)}` : '—'}</div>
-                  <div className="text-[8px] text-slate-500">ваша цена{tier ? ` (${tier.pct}%)` : ''}</div>
-                </div>
-              </div>
-              {tier?.note && <div className="text-[9px] text-slate-500 text-center mt-1">{tier.note}</div>}
-
-              {tier && (
-                <button onClick={() => handleRequest(offer)} disabled={busy}
-                  className="w-full mt-3 py-2.5 rounded-lg text-[13px] font-black text-black disabled:opacity-50"
-                  style={{ background: 'linear-gradient(135deg,#38bdf8,#0ea5e9)' }}>
-                  {busy ? '...' : '💎 Хочу — отправить заявку'}
-                </button>
+        offers.map(offer => (
+          <div key={offer.id} className="p-4 rounded-2xl border" style={card}>
+            <div className="flex items-start justify-between">
+              <div className="text-[14px] font-black text-white">{offer.title}</div>
+              {isAdmin && (
+                <button onClick={() => handleClose(offer.id)} disabled={busy} className="text-[10px] font-bold text-red-400 px-2 py-1 rounded bg-red-500/10">закрыть</button>
               )}
             </div>
-          )
-        })
+            {(offer.carat || offer.color || offer.clarity) && (
+              <div className="text-[10px] text-slate-400 mt-0.5">
+                {offer.carat && `${offer.carat} ct`}{offer.color && ` • ${offer.color}`}{offer.clarity && ` • ${offer.clarity}`}
+              </div>
+            )}
+
+            {/* Галерея фото */}
+            {Array.isArray(offer.photos) && offer.photos.length > 0 && (
+              <div className="flex gap-2 overflow-x-auto mt-2">
+                {offer.photos.map((url, i) => (
+                  <img key={i} src={url} alt="" className="rounded-lg object-cover shrink-0" style={{ height: 180, maxWidth: '85%' }} />
+                ))}
+              </div>
+            )}
+
+            {/* Видео */}
+            {Array.isArray(offer.videos) && offer.videos.map((url, i) => renderVideo(url, i))}
+
+            {offer.description && <div className="text-[11px] text-slate-300 leading-relaxed mt-2">{offer.description}</div>}
+
+            {/* Цена */}
+            <div className="mt-3 p-2.5 rounded-lg text-center bg-sky-500/10">
+              <div className="text-[14px] font-black text-sky-400">
+                {offer.price_from ? `для участников: от $${parseFloat(offer.price_from).toFixed(0)}` : 'Цена по запросу'}
+              </div>
+              <div className="text-[9px] text-slate-500 mt-0.5">точную цену клуб назовёт после заявки</div>
+            </div>
+
+            {tier && (
+              <button onClick={() => handleRequest(offer)} disabled={busy}
+                className="w-full mt-2 py-2.5 rounded-lg text-[13px] font-black text-black disabled:opacity-50"
+                style={{ background: 'linear-gradient(135deg,#38bdf8,#0ea5e9)' }}>
+                {busy ? '...' : '💎 Хочу — оставить заявку'}
+              </button>
+            )}
+          </div>
+        ))
       )}
 
-      {/* Админ: список заявок */}
+      {/* Админ: заявки */}
       {isAdmin && requests.length > 0 && (
         <div className="p-4 rounded-2xl border-2" style={{ background: 'var(--bg-card)', borderColor: 'rgba(168,85,247,0.4)' }}>
           <div className="text-[11px] font-black text-purple-400 mb-2">📥 Заявки ({requests.filter(r => r.status === 'new').length} новых)</div>
@@ -203,18 +249,11 @@ export default function OffersSection() {
               <div key={r.id} className="p-2 rounded-lg bg-black/30 text-[10px]">
                 <div className="flex justify-between items-center">
                   <span className="font-bold text-white">{r.dc_offers?.title || `#${r.offer_id}`}</span>
-                  <span className={r.status === 'new' ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
-                    {r.status === 'new' ? '🟢 новая' : '⚪ обработана'}
-                  </span>
+                  <span className={r.status === 'new' ? 'text-emerald-400 font-bold' : 'text-slate-500'}>{r.status === 'new' ? '🟢 новая' : '⚪ обработана'}</span>
                 </div>
-                <div className="text-slate-400 mt-0.5">
-                  {r.wallet?.slice(0, 6)}...{r.wallet?.slice(-4)} • вложил ${parseFloat(r.deposit_usdt || 0).toFixed(0)} • его цена ${parseFloat(r.personal_price || 0).toFixed(0)}
-                </div>
+                <div className="text-slate-400 mt-0.5">{r.wallet?.slice(0, 6)}...{r.wallet?.slice(-4)} • вложил ${parseFloat(r.deposit_usdt || 0).toFixed(0)} (уровень)</div>
                 {r.status === 'new' && (
-                  <button onClick={() => handleProcess(r.id)} disabled={busy}
-                    className="mt-1 text-[9px] font-bold text-purple-400 px-2 py-0.5 rounded bg-purple-500/10">
-                    отметить обработанной
-                  </button>
+                  <button onClick={() => handleProcess(r.id)} disabled={busy} className="mt-1 text-[9px] font-bold text-purple-400 px-2 py-0.5 rounded bg-purple-500/10">отметить обработанной</button>
                 )}
               </div>
             ))}
