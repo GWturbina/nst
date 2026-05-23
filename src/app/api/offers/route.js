@@ -11,7 +11,7 @@ import { NextResponse } from 'next/server'
 import { verifyWallet } from '@/lib/authHelper'
 import { checkOrigin } from '@/lib/checkOrigin'
 
-const ADMIN_TTL_SEC = 300
+const ADMIN_TTL_SEC = 86400 // 24ч — используем сохранённую подпись (authFetch), как в заказах
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY
