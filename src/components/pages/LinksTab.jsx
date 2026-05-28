@@ -3,20 +3,27 @@ import { useState } from 'react'
 import useGameStore from '@/lib/store'
 import HelpButton from '@/components/ui/HelpButton'
 
+// ═══ ВРЕМЕННЫЙ ПЕРЕКЛЮЧАТЕЛЬ ═══
+// false — блок «Личная ссылка (быстрая регистрация)» скрыт от глаз (вирусный маркетинг отключён).
+// Чтобы вернуть обратно — поставь true. Код блока полностью сохранён.
+const SHOW_INVITE_LINK = false
+
 export default function LinksTab() {
   const { wallet, sponsorId, t } = useGameStore()
   const [copiedType, setCopiedType] = useState(null)
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://gws.ink'
 
-  const inviteLink = sponsorId
-    ? `${baseUrl}/invite?ref=${sponsorId}`
-    : wallet ? `${baseUrl}/invite?ref=${wallet.slice(2, 10)}` : ''
+  // ★ ФИКС: реф-ссылки формируются ТОЛЬКО при числовом sponsorId (odixId).
+  // Раньше при пустом ID срабатывал fallback wallet.slice(2,10) — hex-обрезок
+  // адреса (напр. 5f01ddc9), который фильтры /^\d+$/ по всей системе и смарт-контракт
+  // отбрасывают → спонсор терялся. Теперь без валидного ID ссылка не отдаётся.
+  const hasValidId = sponsorId && /^\d+$/.test(String(sponsorId))
+
+  const inviteLink = hasValidId ? `${baseUrl}/invite?ref=${sponsorId}` : ''
 
   // Рекламная ссылка — с лендингом и превью-картинкой
-  const adLink = sponsorId
-    ? `${baseUrl}/?ref=${sponsorId}`
-    : wallet ? `${baseUrl}/?ref=${wallet.slice(2, 10)}` : ''
+  const adLink = hasValidId ? `${baseUrl}/?ref=${sponsorId}` : ''
 
   const tgBotLink = sponsorId
     ? `https://t.me/DiamondClubGWSBot?start=${sponsorId}`
@@ -69,7 +76,7 @@ export default function LinksTab() {
               <div className="text-[9px] text-slate-500">с красивым превью</div>
             </div>
             <div className="text-[10px] text-slate-400 mb-2">Для рекламы, соц.сетей, холодной аудитории. Показывается лендинг с картинкой.</div>
-            <div className="text-[10px] text-white break-all mb-2 p-2 rounded-lg bg-black/30 font-mono">{adLink || '—'}</div>
+            <div className="text-[10px] text-white break-all mb-2 p-2 rounded-lg bg-black/30 font-mono">{adLink || '⏳ ID загружается — обнови страницу'}</div>
             <button onClick={() => copy(adLink, 'ad')} disabled={!adLink}
               className="w-full py-2.5 rounded-xl text-[11px] font-bold text-blue-300 bg-blue-500/15 border border-blue-500/30 transition-all mb-2">
               {copiedType === 'ad' ? '✅ Скопировано!' : '📋 Копировать рекламную ссылку'}
@@ -93,11 +100,12 @@ export default function LinksTab() {
             </div>
           </div>
 
-          {/* ═══ ЛИЧНАЯ ССЫЛКА (сразу регистрация без лендинга) ═══ */}
+          {/* ═══ ЛИЧНАЯ ССЫЛКА (сразу регистрация без лендинга) — ВРЕМЕННО СКРЫТА ═══ */}
+          {SHOW_INVITE_LINK && (
           <div className="p-3 rounded-2xl border" style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}>
             <div className="text-[11px] font-bold mb-1" style={{ color: '#10b981' }}>🔗 Личная ссылка (быстрая регистрация)</div>
             <div className="text-[10px] text-slate-400 mb-2">Для друзей, родных. Сразу форма контакта, без лендинга.</div>
-            <div className="text-[10px] text-white break-all mb-2 p-2 rounded-lg bg-white/5 font-mono">{inviteLink || '—'}</div>
+            <div className="text-[10px] text-white break-all mb-2 p-2 rounded-lg bg-white/5 font-mono">{inviteLink || '⏳ ID загружается — обнови страницу'}</div>
             <button onClick={() => copy(inviteLink, 'invite')} disabled={!inviteLink}
               className="w-full py-2.5 rounded-xl text-[11px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 transition-all mb-2">
               {copiedType === 'invite' ? '✅ Скопировано!' : '📋 Копировать личную ссылку'}
@@ -120,6 +128,7 @@ export default function LinksTab() {
               </a>
             </div>
           </div>
+          )}
 
           {/* ═══ Telegram Bot — одна кнопка запуска ═══ */}
           {tgBotLink && (
