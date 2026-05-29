@@ -139,7 +139,7 @@ export default function ClubLotsSection() {
 
   // ═══ Фильтрация ═══
   const activeLots = lots.filter(l => {
-    if (l.contract_lot_id == null) return l.status === 'active'  // ещё не задеплоен
+    if (l.contract_lot_id == null) return false  // показываем только реально задеплоенные пулы
     const pool = pools[l.contract_lot_id]
     if (!pool) return false
     return [0, 1, 2, 3].includes(pool.status)  // Open, Funded, InGem, Cycling
@@ -151,7 +151,7 @@ export default function ClubLotsSection() {
   })
 
   const historyLots = lots.filter(l => {
-    if (l.contract_lot_id == null) return ['cancelled', 'completed'].includes(l.status)
+    if (l.contract_lot_id == null) return false  // показываем только реально задеплоенные пулы
     const pool = pools[l.contract_lot_id]
     if (!pool) return false
     return [4, 5, 6, 7].includes(pool.status)  // Frozen, Unlocked, Cancelled, Drained
