@@ -135,16 +135,21 @@ export async function getBNBPrice() {
 // ═══════════════════════════════════════════════════
 // РЕГИСТРАЦИЯ / УРОВНИ
 // ═══════════════════════════════════════════════════
-// Регистрация ВСЕГДА идёт через GlobalWay.register() —
-// это вход в иерархию партнёрской программы (matrixRegistry → odixId).
-// NSSPlatform используется только для покупки уровней Diamond Club
-// и тап-маркетинга, но НЕ для базовой регистрации в систему.
-// GlobalWayBridge.registerUser() имеет модификатор onlyProjectOrDirector
-// и НЕ может быть вызван пользователем напрямую — это только для серверной
-// регистрации из внешних проектов (CardGift, GWAD).
+// ★ РЕГИСТРАЦИЯ ИДЁТ ЧЕРЕЗ NSSPlatform.register(sponsorId) — НЕ через GlobalWay.
+// Это проверенный рабочий вход для самостоятельной регистрации с лендинга/кабинета.
+// NSSPlatform.register():
+//   1) require(!isNSSRegistered[msg.sender], "Already registered in NSS")
+//   2) sponsorAddress = matrixRegistry.getAddressById(sponsorId)
+//      require(sponsorAddress != address(0), "Sponsor not found")
+//   3) если уже в MatrixRegistry — берёт существующий odixId,
+//      иначе регистрирует через GlobalWayBridge.registerUser(PROJECT_ID, msg.sender, sponsorId)
+//   4) регистрирует в NST/CGT и платит реферальный бонус спонсору.
+// ВАЖНО: для работы шага 3 в GlobalWayBridge поле projectWallet["NSS"]
+// должно указывать на адрес NSSPlatform (иначе onlyProjectOrDirector → revert).
+// GlobalWay.register() здесь НЕ используется (приводил к "нет такого спонсора").
 
 export async function register(sponsorId = 0) {
-  const gw = getContract('GlobalWay')
+  const nss = getContract('NSSPlatform')
 
   // ★ ФИКС: Pre-check через MatrixRegistry — ЕДИНСТВЕННЫЙ источник правды.
   // GlobalWay.isUserRegistered хранит локальный кэш, который НЕ обновляется
@@ -172,7 +177,7 @@ export async function register(sponsorId = 0) {
     // Игнорируем другие ошибки проверки — пробуем register всё равно
   }
 
-  const tx = await gw.register(sponsorId)
+  const tx = await nss.register(sponsorId)
   return await tx.wait()
 }
 
