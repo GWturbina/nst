@@ -205,7 +205,10 @@ export default function AutoRegisterModal() {
       // из-за чего юзер с реальным балансом получал ложное "Недостаточно BNB".
       // Если RPC недоступен — pre-check пропускаем, контракт сам ревёртнет
       // с insufficient funds (это обрабатывается в catch ниже).
-      const MIN_BNB = 0.001
+      // opBNB: газ очень дешёвый (регистрация ~0.00001–0.00005 BNB).
+      // Порог 0.001 был завышен (оценка уровня BSC mainnet) и ложно
+      // блокировал кошельки с реальным, достаточным балансом.
+      const MIN_BNB = 0.0002
       let currentBnb = parseFloat(useGameStore.getState().bnb || '0')
       let bnbFromRpc = false
       try {
