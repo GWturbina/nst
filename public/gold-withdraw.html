@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Вывод Золотого пула на Завод</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.4/ethers.umd.min.js"></script>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; padding: 24px;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    background: radial-gradient(1200px 600px at 50% -10%, #1a1608, #0b0d12 60%);
+    color: #e8eaed; display: flex; justify-content: center;
+  }
+  .card {
+    width: 100%; max-width: 520px; background: rgba(20,22,28,.9);
+    border: 1px solid rgba(255,215,0,.18); border-radius: 20px;
+    padding: 22px; box-shadow: 0 20px 60px rgba(0,0,0,.5);
+  }
+  h1 { font-size: 18px; margin: 0 0 4px; color: #ffd24a; }
+  .sub { font-size: 12px; color: #9aa0aa; margin-bottom: 18px; line-height: 1.5; }
+  label { display: block; font-size: 11px; color: #9aa0aa; margin: 12px 0 5px; font-weight: 600; }
+  input {
+    width: 100%; padding: 11px 12px; border-radius: 11px; font-size: 13px;
+    background: rgba(0,0,0,.45); border: 1px solid rgba(255,255,255,.12);
+    color: #fff; outline: none;
+  }
+  input:focus { border-color: rgba(255,210,74,.55); }
+  input[readonly] { color: #b7bcc4; }
+  .row { display: flex; gap: 8px; align-items: flex-end; }
+  .row input { flex: 1; }
+  button {
+    border: 0; border-radius: 11px; font-weight: 800; cursor: pointer;
+    padding: 12px 14px; font-size: 13px; transition: opacity .15s;
+  }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .btn-connect { width: 100%; background: linear-gradient(135deg,#ffd700,#f5a623); color: #111; margin-bottom: 8px; }
+  .btn-max { background: rgba(59,130,246,.22); color: #7db4ff; white-space: nowrap; padding: 11px 14px; }
+  .btn-go { width: 100%; background: linear-gradient(135deg,#22c55e,#15803d); color: #fff; margin-top: 16px; font-size: 14px; padding: 14px; }
+  .stat { display: flex; justify-content: space-between; font-size: 12px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,.06); }
+  .stat b { color: #fff; }
+  .box { background: rgba(0,0,0,.3); border: 1px solid rgba(255,255,255,.08); border-radius: 12px; padding: 12px 14px; margin: 14px 0; }
+  .msg { margin-top: 14px; padding: 11px 12px; border-radius: 11px; font-size: 12px; font-weight: 600; line-height: 1.5; word-break: break-word; }
+  .ok { background: rgba(34,197,94,.15); color: #6ee7a0; }
+  .err { background: rgba(239,68,68,.15); color: #fca5a5; }
+  .warn { background: rgba(245,158,11,.15); color: #fcd34d; }
+  a { color: #7db4ff; }
+  .mono { font-family: ui-monospace, monospace; font-size: 11px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>💰 Вывод Золотого пула на Завод</h1>
+  <div class="sub">
+    Прямой вызов <span class="mono">withdrawToClub</span> контракта GoldReserve через SafePal.
+    Контракт не обязан быть верифицированным. Приватный ключ не запрашивается.
+  </div>
+
+  <button id="connect" class="btn-connect">Подключить SafePal</button>
+  <div id="acct" class="msg warn" style="display:none"></div>
+
+  <div class="box" id="info" style="display:none">
+    <div class="stat"><span>Owner контракта</span><b id="i-owner" class="mono">—</b></div>
+    <div class="stat"><span>Вы подключены как</span><b id="i-you" class="mono">—</b></div>
+    <div class="stat"><span>USDT на контракте</span><b id="i-usdt">—</b></div>
+    <div class="stat" style="border:0"><span>Доступно к выводу</span><b id="i-avail">—</b></div>
+  </div>
+
+  <label>Адрес Завода (получатель)</label>
+  <input id="to" value="0x7e19faaf9ae5acb994517adac12cdc092e36aaf4" />
+
+  <label>Сумма USDT</label>
+  <div class="row">
+    <input id="amount" type="text" placeholder="например 1480" />
+    <button id="max" class="btn-max">Вся касса</button>
+  </div>
+
+  <label>Назначение</label>
+  <input id="purpose" value="pereezd zakupka zavod" />
+
+  <button id="go" class="btn-go" disabled>📤 Вывести на Завод</button>
+
+  <div id="msg"></div>
+</div>
+
+<script>
+const GOLD = "0xbf9627599B79118ce2F053F65680Db7F686194D9";
+const USDT = "0x9e5AAC1Ba1a2e6aEd6b32689DFcF62A509Ca96f3";
+const CHAIN_HEX = "0xcc"; // 204 opBNB
+
+const GOLD_ABI = [
+  "function owner() view returns (address)",
+  "function fundBalance() view returns (uint256)",
+  "function availableLiquidity() view returns (uint256)",
+  "function withdrawToClub(address to, uint256 amount, string purpose)"
+];
+const USDT_ABI = ["function balanceOf(address) view returns (uint256)"];
+
+let provider, signer, account, availRaw = 0n;
+
+const $ = (id) => document.getElementById(id);
+const show = (el) => el.style.display = "";
+const money = (wei) => Number(ethers.formatEther(wei)).toLocaleString("ru-RU", {minimumFractionDigits:2, maximumFractionDigits:2});
+function say(type, html) { const m = $("msg"); m.className = "msg " + type; m.innerHTML = html; }
+
+async function ensureChain() {
+  const eth = window.ethereum;
+  const cur = await eth.request({ method: "eth_chainId" });
+  if (cur === CHAIN_HEX) return;
+  try {
+    await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: CHAIN_HEX }] });
+  } catch (e) {
+    if (e.code === 4902) {
+      await eth.request({ method: "wallet_addEthereumChain", params: [{
+        chainId: CHAIN_HEX, chainName: "opBNB Mainnet",
+        rpcUrls: ["https://opbnb-mainnet-rpc.bnbchain.org"],
+        nativeCurrency: { name: "BNB", symbol: "BNB", decimals: 18 },
+        blockExplorerUrls: ["https://opbnb.bscscan.com"]
+      }]});
+    } else { throw e; }
+  }
+}
+
+async function refresh() {
+  const read = new ethers.Contract(GOLD, GOLD_ABI, provider);
+  const usdt = new ethers.Contract(USDT, USDT_ABI, provider);
+  const [owner, avail, bal] = await Promise.all([
+    read.owner(), read.availableLiquidity(), usdt.balanceOf(GOLD)
+  ]);
+  availRaw = avail;
+  $("i-owner").textContent = owner;
+  $("i-you").textContent = account;
+  $("i-usdt").textContent = "$" + money(bal);
+  $("i-avail").textContent = "$" + money(avail);
+  show($("info"));
+
+  const isOwner = owner.toLowerCase() === account.toLowerCase();
+  if (!isOwner) {
+    say("err", "⚠️ Подключённый адрес НЕ является owner этого контракта. "
+      + "Вывод не пройдёт. Переключите в SafePal аккаунт-владельца и нажмите «Подключить» снова.");
+    $("go").disabled = true;
+  } else {
+    say("ok", "✅ Вы owner. Можно выводить. Проверьте адрес Завода и сумму, затем «Вывести на Завод».");
+    $("go").disabled = false;
+  }
+}
+
+$("connect").onclick = async () => {
+  try {
+    if (!window.ethereum) { say("err", "Кошелёк не найден. Откройте эту страницу в браузере с расширением SafePal (или во встроенном браузере SafePal)."); return; }
+    say("warn", "Подтвердите подключение в кошельке…");
+    provider = new ethers.BrowserProvider(window.ethereum);
+    await window.ethereum.request({ method: "eth_requestAccounts" });
+    await ensureChain();
+    provider = new ethers.BrowserProvider(window.ethereum); // пересоздать после смены сети
+    signer = await provider.getSigner();
+    account = await signer.getAddress();
+    const a = $("acct"); a.textContent = "Подключено: " + account; show(a);
+    await refresh();
+  } catch (e) {
+    say("err", "Ошибка подключения: " + (e.shortMessage || e.message || e));
+  }
+};
+
+$("max").onclick = () => {
+  if (availRaw > 0n) { $("amount").value = ethers.formatEther(availRaw); }
+};
+
+$("go").onclick = async () => {
+  try {
+    const to = $("to").value.trim();
+    const purpose = $("purpose").value.trim() || "withdraw";
+    const raw = $("amount").value.trim();
+    if (!ethers.isAddress(to)) { say("err", "Неверный адрес Завода."); return; }
+    if (!raw || Number(raw) <= 0) { say("err", "Введите сумму больше 0."); return; }
+
+    // если сумма совпадает с «всей кассой» — берём точное wei без округления
+    let amountWei = ethers.parseEther(raw);
+    if (amountWei > availRaw) amountWei = availRaw;
+
+    say("warn", "Отправляю транзакцию… подтвердите в SafePal.");
+    $("go").disabled = true;
+    const c = new ethers.Contract(GOLD, GOLD_ABI, signer);
+    const tx = await c.withdrawToClub(to, amountWei, purpose);
+    say("warn", "Транзакция отправлена, жду подтверждения…<br><span class='mono'>" + tx.hash + "</span>");
+    await tx.wait();
+    say("ok", "✅ Готово! Выведено $" + money(amountWei) + " на Завод.<br>"
+      + "<a href='https://opbnb.bscscan.com/tx/" + tx.hash + "' target='_blank'>Открыть транзакцию в эксплорере</a>");
+    await refresh();
+  } catch (e) {
+    const reason = e.reason || e.shortMessage || e.message || String(e);
+    say("err", "Не удалось: " + reason);
+    $("go").disabled = false;
+  }
+};
+</script>
+</body>
+</html>
